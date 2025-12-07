@@ -1,34 +1,36 @@
-// Eenvoudige in-memory lijst van gridboxen
-// Later vervangen we dit door Firestore.
+const { firestore } = require("./db");
 
-const boxes = [
-  {
-    id: "heist-1",
-    locationName: "Heist",
-    number: 1,
-    status: "online",
-    description: "Gridbox Heist #1",
-    cameraEnabled: true
-  },
-  {
-    id: "mol-1",
-    locationName: "Winkel Mol",
-    number: 1,
-    status: "online",
-    description: "Gridbox Mol #1",
-    cameraEnabled: true
-  }
-];
+const COLLECTION = "boxes";
 
-function getAllBoxes() {
-  return boxes;
+// Alle boxen ophalen
+async function getAllBoxes() {
+  const snapshot = await firestore.collection(COLLECTION).get();
+  return snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data()
+  }));
 }
 
-function getBoxById(id) {
-  return boxes.find((b) => b.id === id);
+// Eén box ophalen
+async function getBoxById(id) {
+  const doc = await firestore.collection(COLLECTION).doc(id).get();
+  if (!doc.exists) return null;
+
+  return {
+    id: doc.id,
+    ...doc.data()
+  };
+}
+
+// Box aanmaken of bijwerken
+async function upsertBox(id, data) {
+  await firestore.collection(COLLECTION).doc(id).set(data, { merge: true });
+  return getBoxById(id);
 }
 
 module.exports = {
   getAllBoxes,
-  getBoxById
+  getBoxById,
+  upsertBox
 };
+
