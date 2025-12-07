@@ -1,8 +1,8 @@
+// src/boxes.js
 const { firestore } = require("./db");
 
 const COLLECTION = "boxes";
 
-// Alle boxen ophalen
 async function getAllBoxes() {
   const snapshot = await firestore.collection(COLLECTION).get();
   return snapshot.docs.map((doc) => ({
@@ -11,7 +11,6 @@ async function getAllBoxes() {
   }));
 }
 
-// Eén box ophalen
 async function getBoxById(id) {
   const doc = await firestore.collection(COLLECTION).doc(id).get();
   if (!doc.exists) return null;
@@ -22,7 +21,6 @@ async function getBoxById(id) {
   };
 }
 
-// Box aanmaken of bijwerken
 async function upsertBox(id, data) {
   await firestore.collection(COLLECTION).doc(id).set(data, { merge: true });
   return getBoxById(id);
@@ -33,4 +31,3 @@ module.exports = {
   getBoxById,
   upsertBox
 };
-
