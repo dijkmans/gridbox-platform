@@ -1,143 +1,93 @@
-// src/shares.js
-const db = require("./db");
+// api/src/shares.js
 
-let mockShares = [];
+const express = require("express");
+const {
+  createShare,
+  listSharesForBox,
+  findActiveShare,
+} = require("./db");
 
-// eenvoudige 6-cijferige code
-function generateCode() {
+const router = express.Router();
+
+function generateShareCode() {
+  // Simpele 6-cijferige code
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-function buildShare(boxId, phoneNumber) {
-  return {
-    boxId,
-    phoneNumber,
-    code: generateCode(),
-    status: "active",
-    createdAt: new Date().toISOString(),
-  };
-}
+// POST /api/shares
+// Maak een nieuwe share voor een box + gsm nummer
+router.post("/", async (req, res) => {
+  try {
+    const { boxId, phoneNumber } = req.body;
 
-// nieuwe share aanmaken
-async function createShare(boxId, phoneNumber) {
-  const base = buildShare(boxId, phoneNumber);
-
-  // eerst Firestore proberen
-  if (db && typeof db.collection === "function") {
-    try {
-      const docRef = await db.collection("shares").add(base);
-      return { id: docRef.id, ...base };
-    } catch (err) {
-      console.error(
-        "Fout bij opslaan share in Firestore, val terug op mock:",
-        err.message
-      );
+    if (!boxId || !phoneNumber) {
+      return res
+        .status(400)
+        .json({ error: "boxId en phoneNumber zijn verplicht" });
     }
-  } else {
-    console.warn(
-      "Geen Firestore client gevonden, gebruik in-memory mock voor shares"
-    );
+
+    const share = await createShare({
+      boxId,
+      phoneNumber,
+      code: generateShareCode(),
+    });
+
+    res.status(201).json(share);
+  } catch (err) {
+    console.error("Fout bij aanmaken share:", err);
+    res.status(500).json({ error: "Interne serverfout" });
   }
+});
 
-  // fallback voor lokaal ontwikkelen
-  const mockId = `mock-${mockShares.length + 1}`;
-  const share = { id: mockId, ...base };
-  mockShares.push(share);
-  return share;
-}
+// POST /api/shares/verify
+// Controleer of dit gsm nummer deze box mag openen
+router.post("/verify", async (req, res) => {
+  try {
+    const { boxId, phoneNumber } = req.body;
 
-// alle shares voor één box ophalen
-async function getSharesForBox(boxId) {
-  // echte Firestore
-  if (db && typeof db.collection === "function") {
-    try {
-      const snapshot = await db
-        .collection("shares")
-        .where("boxId", "==", boxId)
-        .get();
-
-      const shares = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      // nieuwste eerst
-      shares.sort((a, b) => {
-        const aDate = a.createdAt || "";
-        const bDate = b.createdAt || "";
-        return bDate.localeCompare(aDate);
-      });
-
-      return shares;
-    } catch (err) {
-      console.error(
-        "Fout bij lezen shares uit Firestore, val terug op mock:",
-        err.message
-      );
+    if (!boxId || !phoneNumber) {
+      return res
+        .status(400)
+        .json({ error: "boxId en phoneNumber zijn verplicht" });
     }
-  }
 
-  // mock data
-  return mockShares
-    .filter((s) => s.boxId === boxId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
+    const share = await findActiveShare(boxId, phoneNumber);
 
-// checken of een share bestaat voor box + gsm (code is optioneel)
-async function verifyShare(boxId, phoneNumber, code) {
-  // Firestore
-  if (db && typeof db.collection === "function") {
-    try {
-      const snapshot = await db
-        .collection("shares")
-        .where("boxId", "==", boxId)
-        .get();
-
-      const shares = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      const match = shares.find(
-        (s) =>
-          s.status === "active" &&
-          s.phoneNumber === phoneNumber &&
-          (!code || s.code === code)
-      );
-
-      if (match) {
-        return { valid: true, share: match };
-      }
-
-      return { valid: false };
-    } catch (err) {
-      console.error(
-        "Fout bij verifyShare in Firestore, val terug op mock:",
-        err.message
-      );
+    if (!share) {
+      return res
+        .status(404)
+        .json({ allowed: false, reason: "no-active-share" });
     }
+
+    // Hier kunnen we later bv. status op "used" zetten
+    res.json({
+      allowed: true,
+      shareId: share.id,
+      boxId: share.boxId,
+      phoneNumber: share.phoneNumber,
+      code: share.code,
+      status: share.status,
+    });
+  } catch (err) {
+    console.error("Fout bij verify share:", err);
+    res.status(500).json({ error: "Interne serverfout" });
   }
+});
 
-  // mock fallback
-  const match = mockShares.find(
-    (s) =>
-      s.boxId === boxId &&
-      s.status === "active" &&
-      s.phoneNumber === phoneNumber &&
-      (!code || s.code === code)
-  );
-
-  if (match) {
-    return { valid: true, share: match };
+// GET /api/boxes/:boxId/shares
+// Lijst alle shares voor één box
+async function listSharesForBoxHandler(req, res) {
+  try {
+    const { boxId } = req.params;
+    const shares = await listSharesForBox(boxId);
+    res.json(shares);
+  } catch (err) {
+    console.error("Fout bij ophalen shares voor box:", err);
+    res.status(500).json({ error: "Interne serverfout" });
   }
-
-  return { valid: false };
 }
 
 module.exports = {
-  createShare,
-  getSharesForBox,
-  verifyShare,
+  router,
+  listSharesForBoxHandler,
 };
-
-

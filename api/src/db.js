@@ -1,113 +1,117 @@
-// src/db.js
-// Eenvoudige DB-laag voor boxes en shares
-// - In Cloud Run: Firestore
-// - Lokaal: in-memory mock (geen Firestore nodig)
+// api/src/db.js
 
 const { Firestore } = require("@google-cloud/firestore");
 
-// Cloud Run zet env variabele K_SERVICE
-const isCloudRun = !!process.env.K_SERVICE;
+// In Cloud Run staat K_SERVICE altijd gezet.
+// Lokaal gebruiken we dan enkel de mock data.
+const runningOnCloudRun = !!process.env.K_SERVICE;
 
 let firestore = null;
-if (isCloudRun) {
+if (runningOnCloudRun) {
   firestore = new Firestore();
-  console.log("DB: using Firestore (Cloud Run mode)");
-} else {
-  console.log("DB: using in-memory MOCK database (local dev)");
 }
 
-// In-memory mock data voor lokaal gebruik
-const mockState = {
-  boxes: [
+// Lokale mock data voor ontwikkeling
+const localBoxes = new Map([
+  [
+    "heist-1",
     {
       id: "heist-1",
       locationName: "Heist",
       number: 1,
       status: "online",
-      description: "Gridbox Heist #1",
+      description: "Gridbox Heist #1 (lokale mock)",
       cameraEnabled: true,
-      locationId: "Powergrid-Heist"
-    }
+    },
   ],
-  shares: []
-};
+]);
 
-// Helpers
-function generateCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
+const localShares = [];
 
+// ----------------------------------------------------
 // BOXES
-async function listBoxes() {
-  if (!isCloudRun) {
-    return mockState.boxes;
+// ----------------------------------------------------
+async function getBox(boxId) {
+  // Lokaal: gebruik mock data
+  if (!firestore) {
+    const box = localBoxes.get(boxId);
+    return box ? { ...box } : null;
   }
 
-  const snapshot = await firestore.collection("boxes").get();
-  const results = [];
-  snapshot.forEach(doc => {
-    results.push({ id: doc.id, ...doc.data() });
-  });
-  return results;
-}
-
-async function getBoxById(id) {
-  if (!isCloudRun) {
-    return mockState.boxes.find(b => b.id === id) || null;
-  }
-
-  const doc = await firestore.collection("boxes").doc(id).get();
+  // In Cloud Run: lees uit Firestore
+  const doc = await firestore.collection("boxes").doc(boxId).get();
   if (!doc.exists) return null;
   return { id: doc.id, ...doc.data() };
 }
 
+// ----------------------------------------------------
 // SHARES
+// ----------------------------------------------------
 async function listSharesForBox(boxId) {
-  if (!isCloudRun) {
-    return mockState.shares.filter(s => s.boxId === boxId);
+  if (!firestore) {
+    return localShares.filter((s) => s.boxId === boxId);
   }
 
-  const snapshot = await firestore
+  const snap = await firestore
     .collection("shares")
     .where("boxId", "==", boxId)
-    .orderBy("createdAt", "desc")
     .get();
 
-  const results = [];
-  snapshot.forEach(doc => results.push({ id: doc.id, ...doc.data() }));
-  return results;
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-async function createShare({ boxId, phoneNumber }) {
+async function createShare({ boxId, phoneNumber, code }) {
   const base = {
     boxId,
     phoneNumber,
-    code: generateCode(),
+    code,
     status: "active",
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
   };
 
-  if (!isCloudRun) {
+  if (!firestore) {
     const share = {
-      id: `mock-${mockState.shares.length + 1}`,
-      ...base
+      id: `mock-${localShares.length + 1}`,
+      ...base,
     };
-    mockState.shares.push(share);
+    localShares.push(share);
     return share;
   }
 
-  const docRef = await firestore.collection("shares").add({
-    ...base,
-    createdAt: Firestore.Timestamp.fromDate(new Date())
-  });
+  const ref = await firestore.collection("shares").add(base);
+  return { id: ref.id, ...base };
+}
 
-  const doc = await docRef.get();
+async function findActiveShare(boxId, phoneNumber) {
+  if (!firestore) {
+    return (
+      localShares.find(
+        (s) =>
+          s.boxId === boxId &&
+          s.phoneNumber === phoneNumber &&
+          s.status === "active"
+      ) || null
+    );
+  }
+
+  const snap = await firestore
+    .collection("shares")
+    .where("boxId", "==", boxId)
+    .where("phoneNumber", "==", phoneNumber)
+    .where("status", "==", "active")
+    .limit(1)
+    .get();
+
+  if (snap.empty) return null;
+
+  const doc = snap.docs[0];
   return { id: doc.id, ...doc.data() };
 }
 
 module.exports = {
-  listBoxes,
-  getBoxById,
+  getBox,
   listSharesForBox,
-  createShare
+  createShare,
+  findActiveShare,
 };
+
