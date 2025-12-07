@@ -1,111 +1,113 @@
 // src/db.js
+// Eenvoudige DB-laag voor boxes en shares
+// - In Cloud Run: Firestore
+// - Lokaal: in-memory mock (geen Firestore nodig)
 
-// In Cloud Run zetten we NODE_ENV=production.
-// Lokaal is NODE_ENV meestal niet gezet => dan gebruiken we mock data.
-const isProd = process.env.NODE_ENV === "production";
+const { Firestore } = require("@google-cloud/firestore");
+
+// Cloud Run zet env variabele K_SERVICE
+const isCloudRun = !!process.env.K_SERVICE;
 
 let firestore = null;
-
-if (isProd) {
-  const { Firestore } = require("@google-cloud/firestore");
+if (isCloudRun) {
   firestore = new Firestore();
-  console.log("DB: Firestore modus (production)");
+  console.log("DB: using Firestore (Cloud Run mode)");
 } else {
-  console.log("DB: MOCK modus (lokaal, zonder Firestore)");
+  console.log("DB: using in-memory MOCK database (local dev)");
 }
 
-// Mock data voor lokaal testen
-const mockBoxes = [
-  {
-    id: "heist-1",
-    locationName: "Heist",
-    number: 1,
-    status: "online",
-    description: "Gridbox Heist #1 (mock)",
-    cameraEnabled: true,
-  },
-];
-
-const mockShares = [];
+// In-memory mock data voor lokaal gebruik
+const mockState = {
+  boxes: [
+    {
+      id: "heist-1",
+      locationName: "Heist",
+      number: 1,
+      status: "online",
+      description: "Gridbox Heist #1",
+      cameraEnabled: true,
+      locationId: "Powergrid-Heist"
+    }
+  ],
+  shares: []
+};
 
 // Helpers
 function generateCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString(); // 6 cijfers
+  return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-// ---------- Boxes ----------
-
+// BOXES
 async function listBoxes() {
-  if (!isProd) {
-    return mockBoxes;
+  if (!isCloudRun) {
+    return mockState.boxes;
   }
 
   const snapshot = await firestore.collection("boxes").get();
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+  const results = [];
+  snapshot.forEach(doc => {
+    results.push({ id: doc.id, ...doc.data() });
+  });
+  return results;
 }
 
 async function getBoxById(id) {
-  if (!isProd) {
-    return mockBoxes.find((b) => b.id === id) || null;
+  if (!isCloudRun) {
+    return mockState.boxes.find(b => b.id === id) || null;
   }
 
   const doc = await firestore.collection("boxes").doc(id).get();
-  if (!doc.exists) {
-    return null;
-  }
-  return {
-    id: doc.id,
-    ...doc.data(),
-  };
+  if (!doc.exists) return null;
+  return { id: doc.id, ...doc.data() };
 }
 
-// ---------- Shares ----------
+// SHARES
+async function listSharesForBox(boxId) {
+  if (!isCloudRun) {
+    return mockState.shares.filter(s => s.boxId === boxId);
+  }
+
+  const snapshot = await firestore
+    .collection("shares")
+    .where("boxId", "==", boxId)
+    .orderBy("createdAt", "desc")
+    .get();
+
+  const results = [];
+  snapshot.forEach(doc => results.push({ id: doc.id, ...doc.data() }));
+  return results;
+}
 
 async function createShare({ boxId, phoneNumber }) {
-  const createdAt = new Date();
-  const code = generateCode();
+  const base = {
+    boxId,
+    phoneNumber,
+    code: generateCode(),
+    status: "active",
+    createdAt: new Date().toISOString()
+  };
 
-  if (!isProd) {
-    // Lokaal: gewoon in geheugen bewaren
+  if (!isCloudRun) {
     const share = {
-      id: `mock-${mockShares.length + 1}`,
-      boxId,
-      phoneNumber,
-      code,
-      status: "active",
-      createdAt: createdAt.toISOString(),
+      id: `mock-${mockState.shares.length + 1}`,
+      ...base
     };
-    mockShares.push(share);
-    console.log("MOCK share aangemaakt:", share);
+    mockState.shares.push(share);
     return share;
   }
 
-  // Production: Firestore
-  const sharesRef = firestore.collection("shares");
-  const shareDoc = sharesRef.doc(); // automatisch ID
+  const docRef = await firestore.collection("shares").add({
+    ...base,
+    createdAt: Firestore.Timestamp.fromDate(new Date())
+  });
 
-  const payload = {
-    boxId,
-    phoneNumber,
-    code,
-    status: "active",
-    createdAt,
-  };
-
-  await shareDoc.set(payload);
-
-  return {
-    id: shareDoc.id,
-    ...payload,
-    createdAt: createdAt.toISOString(),
-  };
+  const doc = await docRef.get();
+  return { id: doc.id, ...doc.data() };
 }
 
 module.exports = {
   listBoxes,
   getBoxById,
-  createShare,
+  listSharesForBox,
+  createShare
 };
