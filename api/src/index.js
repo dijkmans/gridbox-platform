@@ -1,50 +1,36 @@
 // src/index.js
 const express = require("express");
-const { getAllBoxes, getBoxById } = require("./boxes");
+const boxesRouter = require("./boxes");
+const sharesRouter = require("./shares");
 
 const app = express();
-const port = process.env.PORT || 8080;
+const PORT = process.env.PORT || 8080;
 
-// Zodat Cloud Run healthchecks slagen
-app.get("/health", (req, res) => {
+// JSON body parsing
+app.use(express.json());
+
+// Health check
+app.get("/api/health", (req, res) => {
   res.json({ status: "ok", service: "gridbox-api" });
 });
 
-// Alle boxen
-app.get("/api/boxes", async (req, res, next) => {
-  try {
-    const boxes = await getAllBoxes();
-    res.json({ boxes });
-  } catch (err) {
-    next(err);
-  }
+// Routes
+app.use("/api/boxes", boxesRouter);
+app.use("/api/shares", sharesRouter);
+
+// 404 fallback
+app.use((req, res) => {
+  res.status(404).json({ error: "Niet gevonden" });
 });
 
-// Eén box op id (zoals heist-1)
-app.get("/api/boxes/:id", async (req, res, next) => {
-  try {
-    const boxId = req.params.id;
-    const box = await getBoxById(boxId);
-
-    if (!box) {
-      return res.status(404).json({ error: "Box niet gevonden" });
-    }
-
-    res.json(box);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Fallback error handler
+// Error handler
 app.use((err, req, res, next) => {
-  console.error("Onverwachte fout:", err);
+  console.error("Onverwerkte fout in API:", err);
   res.status(500).json({ error: "Interne serverfout" });
 });
 
-app.listen(port, () => {
-  console.log(`Gridbox API luistert op poort ${port}`);
+app.listen(PORT, () => {
+  console.log(`Gridbox API luistert op poort ${PORT}`);
 });
 
 module.exports = app;
-
