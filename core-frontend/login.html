@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title id="pageTitle">Login – Gridbox</title>
 
+  <!-- Tenant stylesheet (wordt door auth.js dynamisch vervangen indien nodig) -->
+  <link id="tenantStylesheet" rel="stylesheet" href="css/styles.css">
+
   <style>
     body {
       margin: 0;
@@ -25,6 +28,8 @@
     .login-box h2 {
       margin-top: 0;
       margin-bottom: 20px;
+      font-size: 24px;
+      color: #0c67bd;
     }
     .formrow {
       margin-bottom: 14px;
@@ -34,6 +39,8 @@
     input {
       padding: 10px;
       font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
     }
     .btn {
       padding: 12px;
@@ -44,11 +51,16 @@
       cursor: pointer;
       width: 100%;
       margin-top: 10px;
+      border-radius: 4px;
+    }
+    .btn:hover {
+      background: #0a57a3;
     }
     #errorMsg {
       color: red;
       height: 18px;
       margin-bottom: 6px;
+      font-size: 14px;
     }
   </style>
 </head>
@@ -72,11 +84,7 @@
     <button class="btn" id="btnLogin">Inloggen</button>
   </div>
 
-  <script type="module">
-    import { loadTenantBranding } from "./js/auth.js";
-    loadTenantBranding();
-  </script>
-
+  <!-- Laad login-functies + tenant-branding -->
   <script type="module" src="js/auth.js"></script>
 </body>
 </html>
