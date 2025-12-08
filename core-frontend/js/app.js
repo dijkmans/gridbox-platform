@@ -1,6 +1,6 @@
 // =====================================================
 // APP.JS
-// Dynamische frontend voor Gridbox Dashboard
+// Dynamische frontend voor Gridbox Dashboard (DEMO MODE)
 // =====================================================
 
 import { api } from "./api.js";
@@ -16,7 +16,7 @@ const logoutBtn = document.getElementById("logoutBtn");
 const panelShares = document.getElementById("shares");
 const panelPlanner = document.getElementById("planner");
 
-// Picture modal
+// Pictures modal
 const pm = document.getElementById("pictureModal");
 const pmImg = document.getElementById("pmImage");
 const pmPrev = document.getElementById("pmPrev");
@@ -38,6 +38,11 @@ async function init() {
 
   const groups = await api.getBoxes();
   renderGroups(groups);
+
+  // ⭐ planner knoppen automatisch koppelen
+  document.querySelectorAll("[data-plan-group]").forEach(btn => {
+    btn.onclick = () => openPlannerForGroup(btn.dataset.planGroup);
+  });
 
   filterDropdown.addEventListener("change", () => filterGroups(groups));
   searchInput.addEventListener("input", () => filterGroups(groups));
@@ -95,16 +100,9 @@ function renderGroups(groups) {
     `;
 
     const list = section.querySelector(".gb-list");
-
-    group.boxes.forEach(box => {
-      list.appendChild(createBoxCard(box, group.group));
-    });
+    group.boxes.forEach(box => list.appendChild(createBoxCard(box, group.group)));
 
     sectionsContainer.appendChild(section);
-
-    // planner knop koppelen
-    section.querySelector(".gb-groupbtn").onclick = () =>
-      openPlannerForGroup(group.group);
   });
 }
 
@@ -172,7 +170,6 @@ function filterGroups(groups) {
 
   document.querySelectorAll(".gb-section").forEach(section => {
     const group = section.dataset.group;
-
     let visible = true;
 
     if (selected !== "all" && group !== selected) visible = false;
@@ -236,20 +233,20 @@ async function openSharesPanel(boxId) {
     };
 
     await api.addShare(boxId, body);
-    openSharesPanel(boxId);
+    openSharesPanel(boxId); // vernieuwen
   };
 }
 
 // -----------------------------------------------------
-// 8. EVENTS
+// 8. EVENTS PANEL (placeholder)
 // -----------------------------------------------------
 
 async function openEventsPanel(boxId) {
-  alert("Events komen hier (tijdlijn, pictogrammen, geschiedenis)");
+  alert("Events komen hier (tijdlijn, iconen, geschiedenis)");
 }
 
 // -----------------------------------------------------
-// 9. PICTURES (FULLSCREEN VIEWER)
+// 9. PICTURES FULLSCREEN VIEWER
 // -----------------------------------------------------
 
 async function openPicturesPanel(boxId) {
@@ -266,23 +263,19 @@ async function openPicturesPanel(boxId) {
 }
 
 function setupPictureModal() {
-  pmClose.onclick = () => {
-    pm.hidden = true;
-  };
-
+  pmClose.onclick = () => (pm.hidden = true);
   pmPrev.onclick = () => showPicture(pictureIndex - 1);
   pmNext.onclick = () => showPicture(pictureIndex + 1);
 }
 
 function showPicture(index) {
   if (index < 0 || index >= pictureList.length) return;
-
   pictureIndex = index;
   pmImg.src = pictureList[pictureIndex].url;
 }
 
 // -----------------------------------------------------
-// 10. PLANNER
+// 10. PLANNER PANEL
 // -----------------------------------------------------
 
 async function openPlannerForGroup(groupName) {
