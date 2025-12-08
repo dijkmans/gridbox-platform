@@ -13,6 +13,7 @@
   --brand-muted: #6c6c6c;
   --bg-light: #f7f7f7;
   --bg-panel: #ffffff;
+
   --border-color: rgba(0,0,0,0.12);
   --radius: 6px;
   --shadow: 0 2px 10px rgba(0,0,0,0.08);
@@ -61,7 +62,6 @@ body {
   gap: 12px;
 }
 
-toolbar input[type="search"],
 #search {
   padding: 8px 12px;
   border: 1px solid var(--border-color);
@@ -90,7 +90,7 @@ toolbar input[type="search"],
 }
 
 /* --------------------------------------------
-   5. Kaarten (Gridbox cards)
+   5. Gridbox kaarten
 -------------------------------------------- */
 .gb-list {
   display: grid;
@@ -129,7 +129,7 @@ toolbar input[type="search"],
 }
 
 /* --------------------------------------------
-   6. Action buttons
+   6. Buttons
 -------------------------------------------- */
 .gb-actions {
   display: flex;
@@ -172,7 +172,7 @@ toolbar input[type="search"],
 }
 
 /* --------------------------------------------
-   7. Panels (Shares + Planner)
+   7. Panels (Shares, Planner, Events)
 -------------------------------------------- */
 .panel {
   position: fixed;
@@ -219,7 +219,7 @@ input, textarea, select {
 }
 
 /* --------------------------------------------
-   8. Tabelvorm (Shares & Planning)
+   8. Tabellen (Shares & Planning)
 -------------------------------------------- */
 table {
   width: 100%;
@@ -242,7 +242,103 @@ td:last-child {
 }
 
 /* --------------------------------------------
-   9. Responsive gedrag
+   9. EVENTS PANEL – Tijdlijn UI
+-------------------------------------------- */
+.events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 6px;
+}
+
+.event-item {
+  display: flex;
+  align-items: center;
+  background: #f4f4f4;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border-left: 5px solid #ccc;
+  gap: 12px;
+}
+
+.event-time {
+  font-weight: bold;
+  width: 70px;
+}
+
+.event-icon {
+  font-size: 22px;
+  width: 32px;
+  text-align: center;
+}
+
+.event-text {
+  flex-grow: 1;
+  font-size: 14px;
+}
+
+/* Kleurcodering */
+.event-open   { border-color: #28a745; }
+.event-close  { border-color: #007bff; }
+.event-error  { border-color: #dc3545; }
+.event-camera { border-color: #6f42c1; }
+.event-sms    { border-color: #ff8800; }
+.event-app    { border-color: #17a2b8; }
+
+/* --------------------------------------------
+   10. PICTURE VIEWER (fullscreen)
+-------------------------------------------- */
+.picture-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 50;
+}
+
+.picture-modal img {
+  max-width: 90%;
+  max-height: 90%;
+  border-radius: var(--radius);
+}
+
+.pm-close,
+.pm-prev,
+.pm-next {
+  position: absolute;
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: white;
+  font-size: 32px;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: 0.2s;
+}
+
+.pm-close {
+  top: 20px;
+  right: 20px;
+}
+
+.pm-prev {
+  left: 20px;
+}
+
+.pm-next {
+  right: 20px;
+}
+
+.pm-close:hover,
+.pm-prev:hover,
+.pm-next:hover {
+  background: rgba(255,255,255,0.4);
+}
+
+/* --------------------------------------------
+   11. Responsive gedrag
 -------------------------------------------- */
 @media (max-width: 768px) {
   .toolbar {
