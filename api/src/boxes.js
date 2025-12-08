@@ -2,9 +2,11 @@
 
 const { getBox } = require("./db");
 
+// Handler voor GET /api/boxes/:boxId
 async function getBoxHandler(req, res) {
   try {
     const { boxId } = req.params;
+
     const box = await getBox(boxId);
 
     if (!box) {
