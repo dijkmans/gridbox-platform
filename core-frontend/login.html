@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login – Gridbox</title>
+
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #f5f5f5;
+      font-family: Arial, sans-serif;
+    }
+    .login-box {
+      background: white;
+      width: 340px;
+      padding: 28px;
+      border-radius: 6px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+    }
+    .login-box h2 {
+      margin-top: 0;
+      margin-bottom: 20px;
+    }
+    .formrow {
+      margin-bottom: 14px;
+      display: flex;
+      flex-direction: column;
+    }
+    input {
+      padding: 10px;
+      font-size: 16px;
+    }
+    .btn {
+      padding: 12px;
+      font-size: 16px;
+      background: #0c67bd;
+      color: white;
+      border: none;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
+    }
+    #errorMsg {
+      color: red;
+      height: 18px;
+      margin-bottom: 6px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="login-box">
+    <h2 id="brandName">Gridbox</h2>
+
+    <div id="errorMsg"></div>
+
+    <div class="formrow">
+      <label>Gebruikersnaam</label>
+      <input id="username" type="text">
+    </div>
+
+    <div class="formrow">
+      <label>Wachtwoord</label>
+      <input id="password" type="password">
+    </div>
+
+    <button class="btn" id="btnLogin">Inloggen</button>
+  </div>
+
+  <script type="module" src="js/auth.js"></script>
+</body>
+</html>
