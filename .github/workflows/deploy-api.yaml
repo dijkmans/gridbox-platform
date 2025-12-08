@@ -25,11 +25,15 @@ jobs:
         with:
           project_id: gridbox-platform
 
-      - name: Deploy API to Cloud Run
+      - name: Build Docker image
         working-directory: api
         run: |
+          gcloud builds submit --tag europe-west1-docker.pkg.dev/gridbox-platform/api/gridbox-api .
+
+      - name: Deploy to Cloud Run
+        run: |
           gcloud run deploy gridbox-api \
-            --source . \
+            --image europe-west1-docker.pkg.dev/gridbox-platform/api/gridbox-api \
             --region europe-west1 \
             --platform managed \
             --allow-unauthenticated
