@@ -27,7 +27,9 @@
     <div id="sections" aria-live="polite"></div>
   </div>
 
-  <!-- Shares paneel -->
+  <!-- ========================================= -->
+  <!-- SHARES PANEL -->
+  <!-- ========================================= -->
   <aside id="shares" class="panel" aria-hidden="true" role="dialog">
     <header>
       <button id="sharesClose" class="gb-btn--ghost">Sluiten</button>
@@ -52,14 +54,22 @@
 
       <table id="sharesTable">
         <thead>
-          <tr><th>Tijdstip</th><th>Telefoon</th><th>Comment</th><th>Status</th><th></th></tr>
+          <tr>
+            <th>Tijdstip</th>
+            <th>Telefoon</th>
+            <th>Comment</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
         </thead>
         <tbody></tbody>
       </table>
     </div>
   </aside>
 
-  <!-- Planner -->
+  <!-- ========================================= -->
+  <!-- PLANNER PANEL -->
+  <!-- ========================================= -->
   <aside id="planner" class="panel" aria-hidden="true" role="dialog">
     <header>
       <button id="plannerClose" class="gb-btn--ghost">Sluiten</button>
@@ -82,12 +92,37 @@
 
       <h4>Openstaande planningen</h4>
       <table id="planTable">
-        <thead><tr><th>Datum</th><th>Telefoon</th><th>Box</th><th>Comment</th><th>Status</th><th></th></tr></thead>
+        <thead>
+          <tr>
+            <th>Datum</th>
+            <th>Telefoon</th>
+            <th>Box</th>
+            <th>Comment</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
         <tbody></tbody>
       </table>
     </div>
   </aside>
 
+  <!-- ========================================= -->
+  <!-- FULLSCREEN PICTURE VIEWER -->
+  <!-- ========================================= -->
+  <div id="pictureModal" class="picture-modal" hidden>
+    <div class="pm-backdrop"></div>
+
+    <button class="pm-close" id="pmClose">×</button>
+    <button class="pm-prev" id="pmPrev">‹</button>
+    <button class="pm-next" id="pmNext">›</button>
+
+    <img id="pmImage" src="" alt="Camerabeeld" />
+  </div>
+
+  <!-- ========================================= -->
+  <!-- SCRIPTS -->
+  <!-- ========================================= -->
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
