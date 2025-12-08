@@ -1,20 +1,23 @@
-# Gebruik officiële Node.js runtime
-FROM node:18
+# Gebruik lichte, stabiele Node 18 runtime
+FROM node:18-slim
 
-# Maak app directory
+# Zet werkdirectory
 WORKDIR /app
 
-# Kopieer package files
+# Kopieer package bestanden eerst (beter caching!)
 COPY package*.json ./
 
-# Installeer dependencies
+# Installeer dependencies, production only
 RUN npm install --omit=dev
 
-# Kopieer app source code
+# Kopieer volledige app
 COPY . .
 
-# Cloud Run verplicht port 8080
+# Cloud Run verplicht poort 8080
 ENV PORT=8080
 
-# App starten
+# Zorg dat Express luistert op alle interfaces
+ENV HOST=0.0.0.0
+
+# Start app
 CMD ["npm", "start"]
