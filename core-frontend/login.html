@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Login – Gridbox</title>
+  <title id="pageTitle">Login – Gridbox</title>
 
   <style>
     body {
@@ -61,16 +61,21 @@
 
     <div class="formrow">
       <label>Gebruikersnaam</label>
-      <input id="username" type="text">
+      <input id="username" type="text" autocomplete="username">
     </div>
 
     <div class="formrow">
       <label>Wachtwoord</label>
-      <input id="password" type="password">
+      <input id="password" type="password" autocomplete="current-password">
     </div>
 
     <button class="btn" id="btnLogin">Inloggen</button>
   </div>
+
+  <script type="module">
+    import { loadTenantBranding } from "./js/auth.js";
+    loadTenantBranding();
+  </script>
 
   <script type="module" src="js/auth.js"></script>
 </body>
