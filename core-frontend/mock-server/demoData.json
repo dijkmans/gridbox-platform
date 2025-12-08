@@ -1,0 +1,58 @@
+{
+  "groups": [
+    {
+      "group": "Winkel Geel",
+      "boxes": [
+        {
+          "id": "geel-7",
+          "boxNumber": 7,
+          "lastOpenedText": "21 minutes ago",
+          "shares": [
+            { "time": "10:12", "phone": "+32470000123", "comment": "Ophaling fiets", "status": "ok" },
+            { "time": "09:50", "phone": "+32470000999", "comment": "Levering onderdeel", "status": "ok" }
+          ],
+          "events": [
+            { "timestamp": "10:12", "type": "open", "source": "sms", "status": "ok" },
+            { "timestamp": "10:13", "type": "close", "source": "auto", "status": "ok" },
+            { "timestamp": "10:15", "type": "error", "source": "sensor", "status": "jammed" },
+            { "timestamp": "10:16", "type": "camera", "source": "system", "status": "snapshot taken" },
+            { "timestamp": "10:17", "type": "open", "source": "app", "status": "manual override" }
+          ],
+          "pictures": [
+            { "url": "https://picsum.photos/500?1" },
+            { "url": "https://picsum.photos/500?2" },
+            { "url": "https://picsum.photos/500?3" }
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Winkel Bocholt",
+      "boxes": [
+        {
+          "id": "bocholt-3",
+          "boxNumber": 3,
+          "lastOpenedText": "2 hours ago",
+          "shares": [
+            { "time": "08:14", "phone": "+32477888999", "comment": "", "status": "ok" }
+          ],
+          "events": [
+            { "timestamp": "08:14", "type": "open", "source": "app", "status": "ok" }
+          ],
+          "pictures": [
+            { "url": "https://picsum.photos/500?4" },
+            { "url": "https://picsum.photos/500?5" }
+          ]
+        },
+        {
+          "id": "bocholt-4",
+          "boxNumber": 4,
+          "lastOpenedText": "5 hours ago",
+          "shares": [],
+          "events": [],
+          "pictures": []
+        }
+      ]
+    }
+  ]
+}
