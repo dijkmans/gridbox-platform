@@ -1,0 +1,260 @@
+/* ============================================
+   GRIDBOX FRONTEND – BASISSTIJL
+   Modern, clean, responsive, multi-tenant ready
+   ============================================ */
+
+/* --------------------------------------------
+   1. Kleuren en variabelen
+-------------------------------------------- */
+:root {
+  --brand-primary: #0c67bd;
+  --brand-primary-light: #1c7fe0;
+  --brand-text: #1a1a1a;
+  --brand-muted: #6c6c6c;
+  --bg-light: #f7f7f7;
+  --bg-panel: #ffffff;
+  --border-color: rgba(0,0,0,0.12);
+  --radius: 6px;
+  --shadow: 0 2px 10px rgba(0,0,0,0.08);
+  --transition: 0.2s ease;
+}
+
+/* --------------------------------------------
+   2. Basislayout
+-------------------------------------------- */
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  color: var(--brand-text);
+  background: var(--bg-light);
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 14px;
+}
+
+/* --------------------------------------------
+   3. Toolbar (bovenbalk)
+-------------------------------------------- */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-panel);
+  padding: 14px 20px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+}
+
+.brand {
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--brand-primary);
+}
+
+.toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+toolbar input[type="search"],
+#search {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  width: 200px;
+}
+
+/* --------------------------------------------
+   4. Groepen en secties
+-------------------------------------------- */
+.gb-section {
+  margin-bottom: 28px;
+}
+
+.gb-section__title {
+  margin-bottom: 12px;
+}
+
+.gb-groupbtn {
+  font-size: 18px;
+  font-weight: bold;
+  background: none;
+  border: none;
+  color: var(--brand-primary);
+  cursor: pointer;
+}
+
+/* --------------------------------------------
+   5. Kaarten (Gridbox cards)
+-------------------------------------------- */
+.gb-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 18px;
+}
+
+.gb-card {
+  background: var(--bg-panel);
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gb-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gb-site {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.gb-box {
+  color: var(--brand-muted);
+}
+
+.gb-time {
+  font-size: 13px;
+  color: var(--brand-muted);
+}
+
+/* --------------------------------------------
+   6. Action buttons
+-------------------------------------------- */
+.gb-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gb-btn {
+  padding: 10px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--brand-primary);
+  color: white;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.gb-btn:hover {
+  background: var(--brand-primary-light);
+}
+
+.gb-btn--ghost {
+  padding: 8px 10px;
+  background: none;
+  border: 1px solid var(--brand-primary);
+  border-radius: var(--radius);
+  color: var(--brand-primary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.gb-btn--ghost:hover {
+  background: var(--brand-primary);
+  color: white;
+}
+
+.gb-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* --------------------------------------------
+   7. Panels (Shares + Planner)
+-------------------------------------------- */
+.panel {
+  position: fixed;
+  top: 0;
+  right: -430px;
+  width: 420px;
+  height: 100vh;
+  background: var(--bg-panel);
+  box-shadow: -4px 0 10px rgba(0,0,0,0.15);
+  padding-bottom: 40px;
+  border-left: 1px solid var(--border-color);
+  overflow-y: auto;
+  transition: 0.3s ease-in-out;
+  z-index: 20;
+}
+
+.panel.open {
+  right: 0;
+}
+
+.panel header {
+  display: flex;
+  align-items: center;
+  padding: 14px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-light);
+}
+
+.panel .body {
+  padding: 14px;
+}
+
+.formrow {
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+input, textarea, select {
+  padding: 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+}
+
+/* --------------------------------------------
+   8. Tabelvorm (Shares & Planning)
+-------------------------------------------- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 14px;
+}
+
+thead {
+  background: var(--bg-light);
+}
+
+th, td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 14px;
+}
+
+td:last-child {
+  width: 40px;
+}
+
+/* --------------------------------------------
+   9. Responsive gedrag
+-------------------------------------------- */
+@media (max-width: 768px) {
+  .toolbar {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  #search {
+    width: 100%;
+  }
+
+  .panel {
+    width: 100%;
+  }
+}
