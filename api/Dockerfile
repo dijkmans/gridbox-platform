@@ -1,14 +1,20 @@
+# Gebruik officiële Node.js runtime
 FROM node:18
 
+# Maak app directory
 WORKDIR /app
 
+# Kopieer package files
 COPY package*.json ./
-RUN npm install --production
 
+# Installeer dependencies
+RUN npm install --omit=dev
+
+# Kopieer app source code
 COPY . .
 
+# Cloud Run verplicht port 8080
 ENV PORT=8080
 
-EXPOSE 8080
-
-CMD ["node", "src/index.js"]
+# App starten
+CMD ["npm", "start"]
