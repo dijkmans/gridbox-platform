@@ -7,6 +7,12 @@
 
   <!-- Branding (kan door klant worden vervangen) -->
   <link id="brandStyles" rel="stylesheet" href="css/styles.css">
+
+  <!-- DEMO MODE auto-login -->
+  <script>
+    localStorage.setItem("token", "demo");
+    localStorage.setItem("tenant", JSON.stringify({ brandName: "Gridbox DEMO" }));
+  </script>
 </head>
 
 <body>
@@ -104,6 +110,23 @@
         </thead>
         <tbody></tbody>
       </table>
+    </div>
+  </aside>
+
+  <!-- ========================================= -->
+  <!-- EVENTS PANEL -->
+  <!-- ========================================= -->
+  <aside id="eventsPanel" class="panel" aria-hidden="true" role="dialog">
+    <header>
+      <button id="eventsClose" class="gb-btn--ghost">Sluiten</button>
+      <h3 id="eventsTitle">Events</h3>
+      <div style="margin-left:auto; display:flex; gap:8px;">
+        <button id="eventsRefresh" class="gb-btn--ghost">Refresh</button>
+      </div>
+    </header>
+
+    <div class="body">
+      <div id="eventsList" class="events-list"></div>
     </div>
   </aside>
 
