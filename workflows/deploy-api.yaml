@@ -1,0 +1,29 @@
+name: Deploy API to Cloud Run
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "api/**"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: gridbox-platform
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Deploy API to Cloud Run
+      working-directory: api
+      run: |
+        gcloud run deploy gridbox-api \
+          --source . \
+          --region europe-west1 \
+          --allow-unauthenticated
