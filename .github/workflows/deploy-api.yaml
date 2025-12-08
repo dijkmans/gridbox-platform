@@ -2,9 +2,7 @@ name: Deploy API to Cloud Run
 
 on:
   push:
-    branches: ["main"]
-    paths:
-      - "api/**"
+    branches: [ "main" ]  # elke commit op main triggert deployment
 
 jobs:
   deploy:
@@ -25,16 +23,16 @@ jobs:
       - name: Build Docker image
         working-directory: api
         run: |
-          docker build -t europe-west1-docker.pkg.dev/gridbox-platform/gridbox-api:latest .
+          docker build -t europe-west1-docker.pkg.dev/gridbox-platform/gridbox-api/api:latest .
 
       - name: Push Docker image
         run: |
-          docker push europe-west1-docker.pkg.dev/gridbox-platform/gridbox-api:latest
+          docker push europe-west1-docker.pkg.dev/gridbox-platform/gridbox-api/api:latest
 
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy gridbox-api \
-            --image europe-west1-docker.pkg.dev/gridbox-platform/gridbox-api:latest \
+            --image europe-west1-docker.pkg.dev/gridbox-platform/gridbox-api/api:latest \
             --region europe-west1 \
             --platform managed \
             --allow-unauthenticated
