@@ -16,6 +16,16 @@ const logoutBtn = document.getElementById("logoutBtn");
 const panelShares = document.getElementById("shares");
 const panelPlanner = document.getElementById("planner");
 
+// Picture modal
+const pm = document.getElementById("pictureModal");
+const pmImg = document.getElementById("pmImage");
+const pmPrev = document.getElementById("pmPrev");
+const pmNext = document.getElementById("pmNext");
+const pmClose = document.getElementById("pmClose");
+
+let pictureList = [];
+let pictureIndex = 0;
+
 // -----------------------------------------------------
 // INITIALISATIE
 // -----------------------------------------------------
@@ -23,22 +33,17 @@ const panelPlanner = document.getElementById("planner");
 init();
 
 async function init() {
-  // Branding toepassen
   applyTenantBranding();
-
-  // Logout knop koppelen
   logoutBtn.addEventListener("click", logout);
 
-  // Groepen en boxen ophalen
   const groups = await api.getBoxes();
   renderGroups(groups);
 
-  // Filters en zoeken activeren
   filterDropdown.addEventListener("change", () => filterGroups(groups));
   searchInput.addEventListener("input", () => filterGroups(groups));
 
-  // Panels voorzien van sluitknoppen
   setupPanelClosers();
+  setupPictureModal();
 }
 
 // -----------------------------------------------------
@@ -49,13 +54,11 @@ function applyTenantBranding() {
   const tenant = getTenant();
   if (!tenant) return;
 
-  // Naam in banner
   if (tenant.brandName) {
     document.getElementById("brandName").textContent = tenant.brandName;
     document.getElementById("pageTitle").textContent = tenant.brandName + " Dashboard";
   }
 
-  // Klant-specifiek stylesheet
   if (tenant.stylesheet) {
     document.getElementById("brandStyles").href = tenant.stylesheet;
   }
@@ -68,7 +71,6 @@ function applyTenantBranding() {
 function renderGroups(groups) {
   sectionsContainer.innerHTML = "";
 
-  // Dropdown vullen met groepen
   filterDropdown.innerHTML = `<option value="all">Alle groepen</option>`;
 
   groups.forEach(group => {
@@ -78,7 +80,6 @@ function renderGroups(groups) {
     filterDropdown.appendChild(opt);
   });
 
-  // Per groep een sectie maken
   groups.forEach(group => {
     const section = document.createElement("section");
     section.classList.add("gb-section");
@@ -95,12 +96,15 @@ function renderGroups(groups) {
 
     const list = section.querySelector(".gb-list");
 
-    // Boxen toevoegen
     group.boxes.forEach(box => {
       list.appendChild(createBoxCard(box, group.group));
     });
 
     sectionsContainer.appendChild(section);
+
+    // planner knop koppelen
+    section.querySelector(".gb-groupbtn").onclick = () =>
+      openPlannerForGroup(group.group);
   });
 }
 
@@ -139,7 +143,7 @@ function createBoxCard(box, groupName) {
 }
 
 // -----------------------------------------------------
-// 4. ACTIES OP EEN BOX (knoppen)
+// 4. BOX ACTIES
 // -----------------------------------------------------
 
 function setupCardActions(card, box, groupName) {
@@ -150,7 +154,7 @@ function setupCardActions(card, box, groupName) {
 
   btnToggle.addEventListener("click", async () => {
     await api.toggleBox(box.id);
-    alert("Box geopend of gesloten.");
+    alert("Box geopend of gesloten");
   });
 
   btnEvents.addEventListener("click", () => openEventsPanel(box.id));
@@ -159,7 +163,7 @@ function setupCardActions(card, box, groupName) {
 }
 
 // -----------------------------------------------------
-// 5. FILTER EN ZOEKEN
+// 5. FILTER / ZOEKEN
 // -----------------------------------------------------
 
 function filterGroups(groups) {
@@ -171,10 +175,8 @@ function filterGroups(groups) {
 
     let visible = true;
 
-    // Filter op groep
     if (selected !== "all" && group !== selected) visible = false;
 
-    // Zoekfunctie
     if (visible && search.length > 0) {
       const text = section.textContent.toLowerCase();
       if (!text.includes(search)) visible = false;
@@ -185,7 +187,7 @@ function filterGroups(groups) {
 }
 
 // -----------------------------------------------------
-// 6. PANELEN SLUITEN / OPENEN
+// 6. PANEL MANAGEMENT
 // -----------------------------------------------------
 
 function setupPanelClosers() {
@@ -206,20 +208,16 @@ function closePanel(panel) {
 // -----------------------------------------------------
 
 async function openSharesPanel(boxId) {
+  openPanel(panelShares);
+  document.getElementById("shareBox").value = boxId;
+
   const tableBody = document.querySelector("#sharesTable tbody");
   tableBody.innerHTML = "";
 
-  // Box id invullen
-  document.getElementById("shareBox").value = boxId;
-
-  openPanel(panelShares);
-
-  // Shares ophalen
   const shares = await api.getShares(boxId);
 
   shares.forEach(s => {
     const tr = document.createElement("tr");
-
     tr.innerHTML = `
       <td>${s.time}</td>
       <td>${s.phone}</td>
@@ -227,11 +225,9 @@ async function openSharesPanel(boxId) {
       <td>${s.status}</td>
       <td>×</td>
     `;
-
     tableBody.appendChild(tr);
   });
 
-  // Share toevoegen
   document.getElementById("shareAdd").onclick = async () => {
     const body = {
       phone: document.getElementById("sharePhone").value,
@@ -240,28 +236,53 @@ async function openSharesPanel(boxId) {
     };
 
     await api.addShare(boxId, body);
-    openSharesPanel(boxId); // vernieuwen
+    openSharesPanel(boxId);
   };
 }
 
 // -----------------------------------------------------
-// 8. EVENTS PANEL (voor nu placeholder)
+// 8. EVENTS
 // -----------------------------------------------------
 
 async function openEventsPanel(boxId) {
-  alert("EVENTS tonen (later uitbreiden)");
+  alert("Events komen hier (tijdlijn, pictogrammen, geschiedenis)");
 }
 
 // -----------------------------------------------------
-// 9. PICTURES PANEL (voor nu placeholder)
+// 9. PICTURES (FULLSCREEN VIEWER)
 // -----------------------------------------------------
 
 async function openPicturesPanel(boxId) {
-  alert("Foto’s bekijken (later uitbreiden)");
+  pictureList = await api.getPictures(boxId);
+  pictureIndex = 0;
+
+  if (!pictureList.length) {
+    alert("Geen foto's beschikbaar");
+    return;
+  }
+
+  showPicture(0);
+  pm.hidden = false;
+}
+
+function setupPictureModal() {
+  pmClose.onclick = () => {
+    pm.hidden = true;
+  };
+
+  pmPrev.onclick = () => showPicture(pictureIndex - 1);
+  pmNext.onclick = () => showPicture(pictureIndex + 1);
+}
+
+function showPicture(index) {
+  if (index < 0 || index >= pictureList.length) return;
+
+  pictureIndex = index;
+  pmImg.src = pictureList[pictureIndex].url;
 }
 
 // -----------------------------------------------------
-// 10. PLANNING PANEL
+// 10. PLANNER
 // -----------------------------------------------------
 
 async function openPlannerForGroup(groupName) {
@@ -275,7 +296,6 @@ async function openPlannerForGroup(groupName) {
 
   rows.forEach(r => {
     const tr = document.createElement("tr");
-
     tr.innerHTML = `
       <td>${r.date}</td>
       <td>${r.phone}</td>
@@ -284,7 +304,6 @@ async function openPlannerForGroup(groupName) {
       <td>${r.status}</td>
       <td>×</td>
     `;
-
     tbody.appendChild(tr);
   });
 }
