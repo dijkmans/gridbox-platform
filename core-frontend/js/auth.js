@@ -4,7 +4,8 @@
 // ============================================
 
 // Zet dit op jouw echte Cloud Run URL
-export const API_BASE = "https://jouw-cloud-run-url/api";
+export const API_BASE = "http://localhost:3001/api";
+
 
 // Bepalen of we op de loginpagina staan
 const isLoginPage =
