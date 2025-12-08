@@ -2,7 +2,7 @@ name: Deploy API to Cloud Run
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
     paths:
       - "api/**"
 
@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Authenticate to Google Cloud
@@ -19,7 +19,7 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Configure Docker auth
+      - name: Configure Docker Auth
         run: gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
 
       - name: Build Docker image
