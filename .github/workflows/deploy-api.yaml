@@ -15,27 +15,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Authenticate to Google Cloud
+      - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker europe-west1-docker.pkg.dev
+      - name: Configure Docker auth
+        run: |
+          gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
 
       - name: Build Docker image
         working-directory: api
         run: |
-          docker build -t europe-west1-docker.pkg.dev/gridbox-platform/cloudrun/gridbox-api:latest .
+          docker build -t europe-west1-docker.pkg.dev/gridbox-platform/gridbox-api/gridbox-api:latest .
 
       - name: Push Docker image
         run: |
-          docker push europe-west1-docker.pkg.dev/gridbox-platform/cloudrun/gridbox-api:latest
+          docker push europe-west1-docker.pkg.dev/gridbox-platform/gridbox-api/gridbox-api:latest
 
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy gridbox-api \
-            --image europe-west1-docker.pkg.dev/gridbox-platform/cloudrun/gridbox-api:latest \
+            --image europe-west1-docker.pkg.dev/gridbox-platform/gridbox-api/gridbox-api:latest \
             --region europe-west1 \
             --platform managed \
             --allow-unauthenticated
