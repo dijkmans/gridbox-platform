@@ -19,54 +19,66 @@ const panelPlanner = document.getElementById("planner");
 // -----------------------------------------------------
 // INITIALISATIE
 // -----------------------------------------------------
+
 init();
 
 async function init() {
+  // Branding toepassen
   applyTenantBranding();
 
+  // Logout knop koppelen
   logoutBtn.addEventListener("click", logout);
 
+  // Groepen en boxen ophalen
   const groups = await api.getBoxes();
   renderGroups(groups);
 
+  // Filters en zoeken activeren
   filterDropdown.addEventListener("change", () => filterGroups(groups));
   searchInput.addEventListener("input", () => filterGroups(groups));
 
+  // Panels voorzien van sluitknoppen
   setupPanelClosers();
 }
 
 // -----------------------------------------------------
 // 1. TENANT BRANDING
 // -----------------------------------------------------
+
 function applyTenantBranding() {
   const tenant = getTenant();
   if (!tenant) return;
 
+  // Naam in banner
   if (tenant.brandName) {
     document.getElementById("brandName").textContent = tenant.brandName;
     document.getElementById("pageTitle").textContent = tenant.brandName + " Dashboard";
   }
 
+  // Klant-specifiek stylesheet
   if (tenant.stylesheet) {
     document.getElementById("brandStyles").href = tenant.stylesheet;
   }
 }
 
 // -----------------------------------------------------
-// 2. RENDEREN VAN GROEPEN
+// 2. GROEPEN RENDEREN
 // -----------------------------------------------------
+
 function renderGroups(groups) {
   sectionsContainer.innerHTML = "";
 
-  // Drop-down vullen
+  // Dropdown vullen met groepen
   filterDropdown.innerHTML = `<option value="all">Alle groepen</option>`;
-  groups.forEach(g => {
+
+  groups.forEach(group => {
     const opt = document.createElement("option");
-    opt.value = g.group;
-    opt.textContent = g.group;
+    opt.value = group.group;
+    opt.textContent = group.group;
     filterDropdown.appendChild(opt);
   });
 
+  // Per groep een sectie maken
   groups.forEach(group => {
     const section = document.createElement("section");
     section.classList.add("gb-section");
@@ -83,6 +95,7 @@ function renderGroups(groups) {
 
     const list = section.querySelector(".gb-list");
 
+    // Boxen toevoegen
     group.boxes.forEach(box => {
       list.appendChild(createBoxCard(box, group.group));
     });
@@ -92,8 +105,9 @@ function renderGroups(groups) {
 }
 
 // -----------------------------------------------------
-// 3. MAKEN VAN EEN BOX-CARD
+// 3. BOX-CARD AANMAKEN
 // -----------------------------------------------------
+
 function createBoxCard(box, groupName) {
   const card = document.createElement("article");
   card.classList.add("gb-card");
@@ -125,8 +139,9 @@ function createBoxCard(box, groupName) {
 }
 
 // -----------------------------------------------------
-// 4. ACTIES OP EEN BOX
+// 4. ACTIES OP EEN BOX (knoppen)
 // -----------------------------------------------------
+
 function setupCardActions(card, box, groupName) {
   const btnToggle = card.querySelector('[data-action="toggle"]');
   const btnEvents = card.querySelector('[data-action="events"]');
@@ -146,6 +161,7 @@ function setupCardActions(card, box, groupName) {
 // -----------------------------------------------------
 // 5. FILTER EN ZOEKEN
 // -----------------------------------------------------
+
 function filterGroups(groups) {
   const selected = filterDropdown.value;
   const search = searchInput.value.toLowerCase();
@@ -155,9 +171,10 @@ function filterGroups(groups) {
 
     let visible = true;
 
+    // Filter op groep
     if (selected !== "all" && group !== selected) visible = false;
 
-    // Zoekfilter
+    // Zoekfunctie
     if (visible && search.length > 0) {
       const text = section.textContent.toLowerCase();
       if (!text.includes(search)) visible = false;
@@ -168,8 +185,9 @@ function filterGroups(groups) {
 }
 
 // -----------------------------------------------------
-// 6. PANELEN - gedeelde functionaliteit
+// 6. PANELEN SLUITEN / OPENEN
 // -----------------------------------------------------
+
 function setupPanelClosers() {
   document.getElementById("sharesClose").onclick = () => closePanel(panelShares);
   document.getElementById("plannerClose").onclick = () => closePanel(panelPlanner);
@@ -186,17 +204,22 @@ function closePanel(panel) {
 // -----------------------------------------------------
 // 7. SHARES PANEL
 // -----------------------------------------------------
+
 async function openSharesPanel(boxId) {
   const tableBody = document.querySelector("#sharesTable tbody");
   tableBody.innerHTML = "";
 
+  // Box id invullen
   document.getElementById("shareBox").value = boxId;
+
   openPanel(panelShares);
 
+  // Shares ophalen
   const shares = await api.getShares(boxId);
 
   shares.forEach(s => {
     const tr = document.createElement("tr");
+
     tr.innerHTML = `
       <td>${s.time}</td>
       <td>${s.phone}</td>
@@ -204,9 +227,11 @@ async function openSharesPanel(boxId) {
       <td>${s.status}</td>
       <td>×</td>
     `;
+
     tableBody.appendChild(tr);
   });
 
+  // Share toevoegen
   document.getElementById("shareAdd").onclick = async () => {
     const body = {
       phone: document.getElementById("sharePhone").value,
@@ -215,27 +240,30 @@ async function openSharesPanel(boxId) {
     };
 
     await api.addShare(boxId, body);
-    openSharesPanel(boxId);
+    openSharesPanel(boxId); // vernieuwen
   };
 }
 
 // -----------------------------------------------------
-// 8. EVENTS PANEL
+// 8. EVENTS PANEL (voor nu placeholder)
 // -----------------------------------------------------
+
 async function openEventsPanel(boxId) {
-  alert("EVENTS tonen (kan later uitgebreid worden)");
+  alert("EVENTS tonen (later uitbreiden)");
 }
 
 // -----------------------------------------------------
-// 9. PICTURES PANEL
+// 9. PICTURES PANEL (voor nu placeholder)
 // -----------------------------------------------------
+
 async function openPicturesPanel(boxId) {
-  alert("Foto’s ophalen (kan later geïntegreerd worden)");
+  alert("Foto’s bekijken (later uitbreiden)");
 }
 
 // -----------------------------------------------------
 // 10. PLANNING PANEL
 // -----------------------------------------------------
+
 async function openPlannerForGroup(groupName) {
   document.getElementById("planGroup").value = groupName;
   openPanel(panelPlanner);
@@ -247,6 +275,7 @@ async function openPlannerForGroup(groupName) {
 
   rows.forEach(r => {
     const tr = document.createElement("tr");
+
     tr.innerHTML = `
       <td>${r.date}</td>
       <td>${r.phone}</td>
@@ -255,6 +284,7 @@ async function openPlannerForGroup(groupName) {
       <td>${r.status}</td>
       <td>×</td>
     `;
+
     tbody.appendChild(tr);
   });
 }
