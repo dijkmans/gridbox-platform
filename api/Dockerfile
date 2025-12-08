@@ -4,20 +4,20 @@ FROM node:18-slim
 # Zet werkdirectory
 WORKDIR /app
 
-# Kopieer package bestanden eerst (beter caching!)
+# Kopieer package bestanden eerst (cache-optimalisatie)
 COPY package*.json ./
 
-# Installeer dependencies, production only
+# Installeer enkel production dependencies
 RUN npm install --omit=dev
 
-# Kopieer volledige app
+# Kopieer volledige applicatie
 COPY . .
 
-# Cloud Run verplicht poort 8080
+# Cloud Run verplicht dat de applicatie luistert op poort 8080
 ENV PORT=8080
 
-# Zorg dat Express luistert op alle interfaces
+# Belangrijk: laat Express luisteren op alle interfaces
 ENV HOST=0.0.0.0
 
-# Start app
+# Start de app
 CMD ["npm", "start"]
