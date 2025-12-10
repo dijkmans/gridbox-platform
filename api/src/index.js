@@ -7,6 +7,7 @@ const cors = require("cors");
 // Routers
 const boxesRouter = require("./routes/boxes");
 const sharesRouter = require("./routes/shares");
+const smsRouter = require("./routes/sms"); // NIEUW
 
 // ------------------------------------------------------
 // App setup
@@ -34,6 +35,7 @@ function isTwilioRequest(req) {
 }
 
 app.use((req, res, next) => {
+  // Twilio mag zonder API-key
   if (req.path === "/api/sms-webhook" || isTwilioRequest(req)) {
     return next();
   }
@@ -53,8 +55,14 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", service: "gridbox-api" });
 });
 
+// BOX routes
 app.use("/api/boxes", boxesRouter);
+
+// SHARE routes
 app.use("/api/shares", sharesRouter);
+
+// SMS webhook route (NIEUW)
+app.use("/api/sms-webhook", smsRouter);
 
 // ------------------------------------------------------
 // Start server
