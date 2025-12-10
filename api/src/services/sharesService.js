@@ -4,7 +4,7 @@ const {
   createShare: dbCreateShare,
   listSharesForBox: dbListSharesForBox,
   findActiveShare: dbFindActiveShare
-} = require("./db"); // fix: correcte pad
+} = require("../db"); // correcte pad
 
 // Check of Firestore actief moet zijn
 const runningOnCloudRun = !!process.env.K_SERVICE;
