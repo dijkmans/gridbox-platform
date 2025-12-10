@@ -1,5 +1,3 @@
-// api/src/routes/shares.js
-
 const express = require("express");
 const router = express.Router();
 
@@ -82,22 +80,4 @@ router.post("/verify", async (req, res) => {
   }
 });
 
-// ---------------------------------------------------------
-// GET /api/boxes/:boxId/shares
-// Haal alle shares op voor een specifieke box
-// ---------------------------------------------------------
-async function listSharesForBoxHandler(req, res) {
-  try {
-    const { boxId } = req.params;
-    const shares = await listSharesForBox(boxId);
-    res.json(shares);
-  } catch (error) {
-    console.error("Fout bij ophalen shares:", error);
-    res.status(500).json({ error: "Interne serverfout" });
-  }
-}
-
-module.exports = {
-  router,
-  listSharesForBoxHandler
-};
+module.exports = router;
