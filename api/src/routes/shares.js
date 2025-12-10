@@ -1,60 +1,71 @@
+// api/src/routes/shares.js
+
 const express = require("express");
 const router = express.Router();
 
-// Services (later Firestore, nu mock of echte db-functies)
 const {
   createShare,
   listSharesForBox,
-  findActiveShare
+  findActiveShare,
+  generateCode
 } = require("../services/sharesService");
 
-// Genereer een eenvoudige 6-cijferige toegangscode
-function generateShareCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+// -------------------------------------------------------------
+// Helper: Validate request data
+// -------------------------------------------------------------
+function validateShareInput(boxId, phoneNumber) {
+  if (!boxId || typeof boxId !== "string") {
+    return "boxId is verplicht en moet een string zijn";
+  }
+  if (!phoneNumber || typeof phoneNumber !== "string") {
+    return "phoneNumber is verplicht en moet een string zijn";
+  }
+  return null;
 }
 
-// ---------------------------------------------------------
+// -------------------------------------------------------------
 // POST /api/shares
-// Maak een nieuwe share aan voor een box + telefoonnummer
-// ---------------------------------------------------------
+// Nieuwe share aanmaken (toegangscode genereren)
+// -------------------------------------------------------------
 router.post("/", async (req, res) => {
   try {
     const { boxId, phoneNumber } = req.body;
 
-    if (!boxId || !phoneNumber) {
-      return res
-        .status(400)
-        .json({ error: "boxId en phoneNumber zijn verplicht" });
+    const error = validateShareInput(boxId, phoneNumber);
+    if (error) {
+      return res.status(400).json({ error });
     }
 
-    const newShare = {
+    const share = {
       boxId,
       phoneNumber,
-      code: generateShareCode(),
+      code: generateCode(),
+      status: "active",
       createdAt: new Date().toISOString()
     };
 
-    const saved = await createShare(newShare);
+    const saved = await createShare(share);
 
-    res.status(201).json(saved);
-  } catch (error) {
-    console.error("Fout bij aanmaken share:", error);
-    res.status(500).json({ error: "Interne serverfout" });
+    console.log(`Share aangemaakt voor box ${boxId}, nummer ${phoneNumber}`);
+
+    return res.status(201).json(saved);
+  } catch (err) {
+    console.error("Fout bij aanmaken share:", err);
+    return res.status(500).json({ error: "Interne serverfout" });
   }
 });
 
-// ---------------------------------------------------------
+// -------------------------------------------------------------
 // POST /api/shares/verify
-// Controleer of deze gebruiker toegang heeft tot de box
-// ---------------------------------------------------------
+// Check of een telefoonnummer toegang heeft tot een box
+// -------------------------------------------------------------
 router.post("/verify", async (req, res) => {
   try {
     const { boxId, phoneNumber } = req.body;
 
-    if (!boxId || !phoneNumber) {
-      return res
-        .status(400)
-        .json({ error: "boxId en phoneNumber zijn verplicht" });
+    const error = validateShareInput(boxId, phoneNumber);
+    if (error) {
+      return res.status(400).json({ error });
     }
 
     const share = await findActiveShare(boxId, phoneNumber);
@@ -66,17 +77,36 @@ router.post("/verify", async (req, res) => {
       });
     }
 
-    res.json({
+    console.log(`Share toegestaan voor ${phoneNumber} op box ${boxId}`);
+
+    return res.json({
       allowed: true,
       shareId: share.id,
       boxId: share.boxId,
       phoneNumber: share.phoneNumber,
       code: share.code,
-      status: share.status || "active"
+      status: share.status
     });
-  } catch (error) {
-    console.error("Fout bij verify share:", error);
-    res.status(500).json({ error: "Interne serverfout" });
+  } catch (err) {
+    console.error("Fout bij verify:", err);
+    return res.status(500).json({ error: "Interne serverfout" });
+  }
+});
+
+// -------------------------------------------------------------
+// GET /api/shares/box/:boxId
+// Alle shares ophalen voor één box
+// -------------------------------------------------------------
+router.get("/box/:boxId", async (req, res) => {
+  try {
+    const { boxId } = req.params;
+
+    const shares = await listSharesForBox(boxId);
+
+    return res.json(shares);
+  } catch (err) {
+    console.error("Fout bij ophalen shares voor box:", err);
+    return res.status(500).json({ error: "Interne serverfout" });
   }
 });
 
