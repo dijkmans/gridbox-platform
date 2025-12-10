@@ -7,6 +7,7 @@ const express = require("express");
 const cors = require("cors");
 
 // Routers
+// Belangrijk: juiste paden naar de map "routes"
 const boxesRouter = require("./routes/boxes");
 const sharesRouter = require("./routes/shares");
 
@@ -31,7 +32,7 @@ function isTwilioRequest(req) {
 }
 
 app.use((req, res, next) => {
-  // Twilio mag zonder API-key
+  // Twilio mag zonder API key
   if (req.path === "/api/sms-webhook" || isTwilioRequest(req)) {
     return next();
   }
@@ -48,12 +49,12 @@ app.use((req, res, next) => {
 // ROUTES
 // ------------------------------------------------------
 
-// Healthcheck
+// Healthcheck endpoint
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", service: "gridbox-api" });
 });
 
-// BOX routes (mock openingscommando, shares lijst, enz.)
+// BOX routes (openen, sluiten, shares, lijst ophalen)
 app.use("/api/boxes", boxesRouter);
 
 // SHARE routes (create + verify)
