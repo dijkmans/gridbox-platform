@@ -1,25 +1,36 @@
-// api/src/boxes.js
+const express = require("express");
+const router = express.Router();
 
-const { getBox } = require("./db");
+const boxesService = require("../services/boxesService");
 
-// Handler voor GET /api/boxes/:boxId
-async function getBoxHandler(req, res) {
-  try {
-    const { boxId } = req.params;
+// GET /api/boxes
+router.get("/", async (req, res) => {
+  const boxes = await boxesService.getAll();
+  res.json(boxes);
+});
 
-    const box = await getBox(boxId);
+// GET /api/boxes/:id
+router.get("/:id", async (req, res) => {
+  const box = await boxesService.getById(req.params.id);
+  res.json(box);
+});
 
-    if (!box) {
-      return res.status(404).json({ error: "Box niet gevonden" });
-    }
+// GET /api/boxes/:id/shares
+router.get("/:id/shares", async (req, res) => {
+  const shares = await boxesService.getShares(req.params.id);
+  res.json(shares);
+});
 
-    res.json(box);
-  } catch (err) {
-    console.error("Fout bij ophalen box:", err);
-    res.status(500).json({ error: "Interne serverfout" });
-  }
-}
+// POST /api/boxes/:id/open
+router.post("/:id/open", async (req, res) => {
+  const result = await boxesService.open(req.params.id);
+  res.json(result);
+});
 
-module.exports = {
-  getBoxHandler,
-};
+// POST /api/boxes/:id/close
+router.post("/:id/close", async (req, res) => {
+  const result = await boxesService.close(req.params.id);
+  res.json(result);
+});
+
+module.exports = router;
