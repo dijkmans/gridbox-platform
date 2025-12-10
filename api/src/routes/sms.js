@@ -3,71 +3,57 @@
 const express = require("express");
 const router = express.Router();
 
-const {
-  findActiveShare
-} = require("../services/sharesService");
-
 const boxesService = require("../services/boxesService");
+const sharesService = require("../services/sharesService");
 
-// -------------------------------------------------------------
-// Helpers voor Twilio antwoorden
-// -------------------------------------------------------------
-function twiml(message) {
-  return `
-    <Response>
-      <Message>${message}</Message>
-    </Response>
-  `;
+function normalizePhone(number) {
+  if (!number) return null;
+  return number.replace(/\s+/g, "").trim();
 }
 
-// -------------------------------------------------------------
-// POST /api/sms-webhook
-// Wordt aangesproken door Twilio bij inkomende sms
-// -------------------------------------------------------------
 router.post("/", async (req, res) => {
   try {
-    const from = req.body.From;
+    console.log("📩 SMS webhook:", req.body);
+
+    const from = normalizePhone(req.body.From);
     const body = (req.body.Body || "").trim();
 
-    console.log("Twilio sms ontvangen:", { from, body });
-
-    // Voor nu: we verwachten dat de klant als bericht het boxnummer stuurt.
-    const boxId = body;
-
-    if (!boxId) {
+    if (!from) {
       return res
-        .status(200)
         .type("text/xml")
-        .send(twiml("Ik kon geen boxnummer vinden in je bericht."));
+        .send(`<Response><Message>Ongeldig nummer.</Message></Response>`);
     }
 
-    // Zoek of deze klant een actieve share heeft voor deze box
-    const share = await findActiveShare(boxId, from);
+    // 1. Share zoeken op telefoonnummer
+    const share = await sharesService.findActiveShareByPhone(from);
 
     if (!share) {
       return res
-        .status(200)
         .type("text/xml")
-        .send(twiml("Je hebt geen toegang tot deze box."));
+        .send(`<Response><Message>Geen toegang gevonden.</Message></Response>`);
     }
 
-    // Share bestaat, dus box openen
-    const openResult = await boxesService.open(boxId);
+    // 2. Box openen
+    const openResult = await boxesService.open(share.boxId);
 
-    console.log("Open resultaat:", openResult);
+    if (!openResult.success) {
+      return res
+        .type("text/xml")
+        .send(`<Response><Message>Fout: box kon niet openen.</Message></Response>`);
+    }
 
+    // 3. Antwoord
     return res
-      .status(200)
       .type("text/xml")
-      .send(twiml(`De box ${boxId} wordt geopend. Bedankt.`));
-  } catch (error) {
-    console.error("SMS webhook fout:", error);
+      .send(`<Response><Message>De box is geopend.</Message></Response>`);
 
+  } catch (err) {
+    console.error("SMS webhook fout:", err);
     return res
-      .status(200)
       .type("text/xml")
-      .send(twiml("Er ging iets mis. Probeer later opnieuw."));
+      .send(`<Response><Message>Er ging iets mis.</Message></Response>`);
   }
 });
 
 module.exports = router;
+
