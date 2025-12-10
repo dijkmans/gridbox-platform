@@ -13,10 +13,10 @@ RUN npm install --omit=dev
 # Kopieer volledige applicatie
 COPY . .
 
-# Cloud Run verplicht dat de applicatie luistert op poort 8080
-ENV PORT=8080
+# BELANGRIJK: verwijder deze regel!
+# ENV PORT=8080
 
-# Belangrijk: laat Express luisteren op alle interfaces
+# Zorg dat Express luistert op alle interfaces
 ENV HOST=0.0.0.0
 
 # Start de app
