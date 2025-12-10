@@ -1,6 +1,6 @@
 // api/src/services/boxesService.js
 
-const { getBox, listSharesForBox } = require("./db");
+const { getBox, listSharesForBox } = require("./db.js");
 
 // Lokale fallback mock boxen (als Firestore niet actief is)
 const localBoxes = [
@@ -45,7 +45,6 @@ async function getById(id) {
     return localBoxes.find((b) => b.id === id) || null;
   }
 
-  // Cloud Run → Firestore
   return await getBox(id);
 }
 
