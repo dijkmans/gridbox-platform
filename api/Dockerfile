@@ -1,20 +1,21 @@
-# Gebruik lichte, stabiele Node 18 runtime
+# Gebruik stabiele Node 18 runtime
 FROM node:18-slim
 
 # Zet werkdirectory
 WORKDIR /app
 
-# Kopieer package bestanden eerst (cache-optimalisatie)
-COPY package*.json ./
+# Kopieer alleen de API package bestanden
+COPY api/package*.json ./
 
-# Installeer enkel production dependencies
+# Installeer dependencies
 RUN npm install --omit=dev
 
-# Kopieer volledige applicatie
-COPY . .
+# Kopieer enkel de API source code
+COPY api ./
 
-# Belangrijk: laat Express luisteren op alle interfaces
+# Zorg dat Express luistert op alle interfaces
 ENV HOST=0.0.0.0
+ENV PORT=8080
 
-# Start de app
+# Start server
 CMD ["npm", "start"]
