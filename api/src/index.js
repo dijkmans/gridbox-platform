@@ -1,5 +1,3 @@
-// api/src/index.js
-
 // ------------------------------------------------------
 // Imports
 // ------------------------------------------------------
@@ -15,9 +13,11 @@ const sharesRouter = require("./routes/shares");
 // ------------------------------------------------------
 const app = express();
 
-// Cloud Run geeft altijd een PORT variabele mee.
-// Locally blijft dit standaard 8080.
+// Cloud Run geeft altijd een PORT mee
 const PORT = process.env.PORT || 8080;
+
+// Nodig zodat Cloud Run correct kan luisteren
+const HOST = process.env.HOST || "0.0.0.0";
 
 app.use(cors());
 app.use(express.urlencoded({ extended: false }));
@@ -59,6 +59,6 @@ app.use("/api/shares", sharesRouter);
 // ------------------------------------------------------
 // Start server
 // ------------------------------------------------------
-app.listen(PORT, () => {
-  console.log(`Gridbox API luistert op poort ${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Gridbox API luistert op http://${HOST}:${PORT}`);
 });
