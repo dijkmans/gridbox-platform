@@ -1,72 +1,92 @@
-// ------------------------------------------------------
-// Imports
-// ------------------------------------------------------
-const express = require("express");
-const cors = require("cors");
+// api/src/services/sharesService.js
 
-// Routers
-const boxesRouter = require("./routes/boxes");
-const sharesRouter = require("./routes/shares");
-const smsRouter = require("./routes/sms"); // NIEUW
+const {
+  createShare: dbCreateShare,
+  listSharesForBox: dbListSharesForBox,
+  findActiveShare: dbFindActiveShare
+} = require("./db"); // fix: correcte pad
 
-// ------------------------------------------------------
-// App setup
-// ------------------------------------------------------
-const app = express();
+// Check of Firestore actief moet zijn
+const runningOnCloudRun = !!process.env.K_SERVICE;
 
-// Cloud Run geeft altijd een PORT mee
-const PORT = process.env.PORT || 8080;
+// Lokale mock data wanneer Firestore niet draait
+let localShares = [];
 
-// Nodig zodat Cloud Run correct kan luisteren
-const HOST = process.env.HOST || "0.0.0.0";
+// ---------------------------------------------------------
+// Share aanmaken
+// ---------------------------------------------------------
+async function createShare(share) {
+  if (!runningOnCloudRun) {
+    const mock = {
+      id: `mock-${localShares.length + 1}`,
+      ...share,
+      status: "active",
+      createdAt: new Date().toISOString()
+    };
 
-app.use(cors());
-app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
+    localShares.push(mock);
+    return mock;
+  }
 
-// ------------------------------------------------------
-// API KEY SECURITY
-// ------------------------------------------------------
-const API_KEY = process.env.API_KEY || "DEV_KEY_CHANGE_ME";
-
-function isTwilioRequest(req) {
-  const agent = req.headers["user-agent"] || "";
-  return agent.includes("Twilio");
+  return await dbCreateShare(share);
 }
 
-app.use((req, res, next) => {
-  // Twilio mag zonder API-key
-  if (req.path === "/api/sms-webhook" || isTwilioRequest(req)) {
-    return next();
+// ---------------------------------------------------------
+// Shares ophalen voor een box
+// ---------------------------------------------------------
+async function listSharesForBox(boxId) {
+  if (!runningOnCloudRun) {
+    return localShares.filter(s => s.boxId === boxId);
   }
 
-  const key = req.headers["x-api-key"];
-  if (!key || key !== API_KEY) {
-    return res.status(401).json({ error: "Unauthorized" });
+  return await dbListSharesForBox(boxId);
+}
+
+// ---------------------------------------------------------
+// Share zoeken op telefoonnummer + box
+// ---------------------------------------------------------
+async function findActiveShare(boxId, phoneNumber) {
+  if (!runningOnCloudRun) {
+    return (
+      localShares.find(
+        s =>
+          s.boxId === boxId &&
+          s.phoneNumber === phoneNumber &&
+          s.status === "active"
+      ) || null
+    );
   }
 
-  next();
-});
+  return await dbFindActiveShare(boxId, phoneNumber);
+}
 
-// ------------------------------------------------------
-// ROUTES
-// ------------------------------------------------------
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", service: "gridbox-api" });
-});
+// ---------------------------------------------------------
+// Share zoeken puur op telefoonnummer (nodig voor SMS-webhook)
+// ---------------------------------------------------------
+async function findActiveShareByPhone(phoneNumber) {
+  if (!runningOnCloudRun) {
+    return (
+      localShares.find(
+        s => s.phoneNumber === phoneNumber && s.status === "active"
+      ) || null
+    );
+  }
 
-// BOX routes
-app.use("/api/boxes", boxesRouter);
+  // Firestore variant moet je later implementeren
+  return await dbFindActiveShare(null, phoneNumber);
+}
 
-// SHARE routes
-app.use("/api/shares", sharesRouter);
+// ---------------------------------------------------------
+// Code generator
+// ---------------------------------------------------------
+function generateCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
-// SMS webhook route (NIEUW)
-app.use("/api/sms-webhook", smsRouter);
-
-// ------------------------------------------------------
-// Start server
-// ------------------------------------------------------
-app.listen(PORT, HOST, () => {
-  console.log(`Gridbox API luistert op http://${HOST}:${PORT}`);
-});
+module.exports = {
+  createShare,
+  listSharesForBox,
+  findActiveShare,
+  findActiveShareByPhone,
+  generateCode
+};
