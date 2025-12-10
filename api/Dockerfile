@@ -1,21 +1,38 @@
-# Gebruik stabiele Node 18 runtime
-FROM node:18-slim
+name: Deploy API to Cloud Run
 
-# Zet werkdirectory
-WORKDIR /app
+on:
+  push:
+    branches: ["main"]
 
-# Kopieer alleen de API package bestanden
-COPY api/package*.json ./
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-# Installeer dependencies
-RUN npm install --omit=dev
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-# Kopieer enkel de API source code
-COPY api ./
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-# Zorg dat Express luistert op alle interfaces
-ENV HOST=0.0.0.0
-ENV PORT=8080
+      - name: Configure Docker Auth
+        run: gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
 
-# Start server
-CMD ["npm", "start"]
+      - name: Build Docker image
+        working-directory: api
+        run: |
+          docker build -t europe-west1-docker.pkg.dev/gridbox-platform/gridbox-api/api:latest .
+
+      - name: Push Docker image
+        run: |
+          docker push europe-west1-docker.pkg.dev/gridbox-platform/gridbox-api/api:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy gridbox-api \
+            --image europe-west1-docker.pkg.dev/gridbox-platform/gridbox-api/api:latest \
+            --region europe-west1 \
+            --platform managed \
+            --allow-unauthenticated
