@@ -1,21 +1,24 @@
-// api/src/shares.js
+// api/src/routes/shares.js
 
 const express = require("express");
+const router = express.Router();
+
+// Services (later Firestore, nu mock of echte db-functies)
 const {
   createShare,
   listSharesForBox,
-  findActiveShare,
-} = require("./db");
+  findActiveShare
+} = require("../services/sharesService");
 
-const router = express.Router();
-
+// Genereer een eenvoudige 6-cijferige toegangscode
 function generateShareCode() {
-  // Simpele 6-cijferige code
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+// ---------------------------------------------------------
 // POST /api/shares
-// Maak een nieuwe share voor een box + gsm nummer
+// Maak een nieuwe share aan voor een box + telefoonnummer
+// ---------------------------------------------------------
 router.post("/", async (req, res) => {
   try {
     const { boxId, phoneNumber } = req.body;
@@ -26,21 +29,26 @@ router.post("/", async (req, res) => {
         .json({ error: "boxId en phoneNumber zijn verplicht" });
     }
 
-    const share = await createShare({
+    const newShare = {
       boxId,
       phoneNumber,
       code: generateShareCode(),
-    });
+      createdAt: new Date().toISOString()
+    };
 
-    res.status(201).json(share);
-  } catch (err) {
-    console.error("Fout bij aanmaken share:", err);
+    const saved = await createShare(newShare);
+
+    res.status(201).json(saved);
+  } catch (error) {
+    console.error("Fout bij aanmaken share:", error);
     res.status(500).json({ error: "Interne serverfout" });
   }
 });
 
+// ---------------------------------------------------------
 // POST /api/shares/verify
-// Controleer of dit gsm nummer deze box mag openen
+// Controleer of deze gebruiker toegang heeft tot de box
+// ---------------------------------------------------------
 router.post("/verify", async (req, res) => {
   try {
     const { boxId, phoneNumber } = req.body;
@@ -54,40 +62,42 @@ router.post("/verify", async (req, res) => {
     const share = await findActiveShare(boxId, phoneNumber);
 
     if (!share) {
-      return res
-        .status(404)
-        .json({ allowed: false, reason: "no-active-share" });
+      return res.status(404).json({
+        allowed: false,
+        reason: "no-active-share"
+      });
     }
 
-    // Hier kunnen we later bv. status op "used" zetten
     res.json({
       allowed: true,
       shareId: share.id,
       boxId: share.boxId,
       phoneNumber: share.phoneNumber,
       code: share.code,
-      status: share.status,
+      status: share.status || "active"
     });
-  } catch (err) {
-    console.error("Fout bij verify share:", err);
+  } catch (error) {
+    console.error("Fout bij verify share:", error);
     res.status(500).json({ error: "Interne serverfout" });
   }
 });
 
+// ---------------------------------------------------------
 // GET /api/boxes/:boxId/shares
-// Lijst alle shares voor één box
+// Haal alle shares op voor een specifieke box
+// ---------------------------------------------------------
 async function listSharesForBoxHandler(req, res) {
   try {
     const { boxId } = req.params;
     const shares = await listSharesForBox(boxId);
     res.json(shares);
-  } catch (err) {
-    console.error("Fout bij ophalen shares voor box:", err);
+  } catch (error) {
+    console.error("Fout bij ophalen shares:", error);
     res.status(500).json({ error: "Interne serverfout" });
   }
 }
 
 module.exports = {
   router,
-  listSharesForBoxHandler,
+  listSharesForBoxHandler
 };
