@@ -8,7 +8,6 @@ const sharesService = require("../services/sharesService");
 
 // ---------------------------------------------------------
 // Helper: telefoonnummer normaliseren
-// Twilio levert bv. "+32470123456"
 // ---------------------------------------------------------
 function normalizePhone(number) {
   if (!number) return null;
@@ -17,50 +16,59 @@ function normalizePhone(number) {
 
 // ---------------------------------------------------------
 // POST /api/sms-webhook
-// Ontvangt sms van Twilio en beslist wat te doen
 // ---------------------------------------------------------
 router.post("/", async (req, res) => {
   try {
     console.log("📩 SMS webhook ontvangen:", req.body);
 
     const from = normalizePhone(req.body.From);
-    const body = (req.body.Body || "").trim();
+    const body = (req.body.Body || "").trim().toLowerCase();
 
     if (!from) {
-      console.log("❌ Geen geldig afzendernummer ontvangen");
-      return res.type("text/xml").send(`<Response><Message>Ongeldig nummer.</Message></Response>`);
+      return res
+        .type("text/xml")
+        .send(`<Response><Message>Ongeldig nummer.</Message></Response>`);
     }
 
     // -----------------------------------------------------
-    // 1. Controleer of dit nummer een share heeft
+    // 1. Zoek share via ALLE boxen (findActiveShare werkt op boxId)
     // -----------------------------------------------------
-    const share = await sharesService.findActiveShareByPhone(from);
+    const allBoxes = await boxesService.getAll();
 
-    if (!share) {
+    let activeShare = null;
+
+    for (const box of allBoxes) {
+      const match = await sharesService.findActiveShare(box.id, from);
+      if (match) {
+        activeShare = match;
+        break;
+      }
+    }
+
+    if (!activeShare) {
       console.log("❌ Geen actieve share gevonden voor:", from);
       return res
         .type("text/xml")
         .send(`<Response><Message>Geen toegang voor dit nummer.</Message></Response>`);
     }
 
-    console.log("✔ Actieve share gevonden:", share);
+    console.log("✔ Actieve share gevonden:", activeShare);
 
     // -----------------------------------------------------
     // 2. Box openen (mock)
     // -----------------------------------------------------
-    const openResult = await boxesService.open(share.boxId);
+    const openResult = await boxesService.open(activeShare.boxId);
 
     if (!openResult.success) {
-      console.log("❌ Mislukt om box te openen:", openResult.message);
       return res
         .type("text/xml")
-        .send(`<Response><Message>Fout: kon box niet openen.</Message></Response>`);
+        .send(`<Response><Message>Kon box niet openen.</Message></Response>`);
     }
 
-    console.log("🔓 Box geopend:", share.boxId);
+    console.log("🔓 Box geopend:", activeShare.boxId);
 
     // -----------------------------------------------------
-    // 3. Antwoord naar Twilio
+    // 3. Antwoord terug naar Twilio
     // -----------------------------------------------------
     return res
       .type("text/xml")
