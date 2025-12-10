@@ -13,10 +13,7 @@ RUN npm install --omit=dev
 # Kopieer volledige applicatie
 COPY . .
 
-# BELANGRIJK: verwijder deze regel!
-# ENV PORT=8080
-
-# Zorg dat Express luistert op alle interfaces
+# Belangrijk: laat Express luisteren op alle interfaces
 ENV HOST=0.0.0.0
 
 # Start de app
