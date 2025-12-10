@@ -7,9 +7,9 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 
-// Handlers
-const { getBoxHandler, listSharesForBoxHandler } = require("./boxes");
-const { router: sharesRouter } = require("./shares");
+// Routers
+const boxesRouter = require("./routes/boxes");
+const sharesRouter = require("./routes/shares");
 
 // ------------------------------------------------------
 // App setup
@@ -50,44 +50,19 @@ app.use((req, res, next) => {
 // ROUTES
 // ------------------------------------------------------
 
-// Healthcheck (voor Cloud Run, monitoring, curl-tests)
+// Healthcheck
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", service: "gridbox-api" });
 });
 
-// BOX INFO
-app.get("/api/boxes/:boxId", getBoxHandler);
+// BOX routes (openen, shares ophalen, lijst opvragen, …)
+app.use("/api/boxes", boxesRouter);
 
-// SHARES VAN ÉÉN BOX OPVRAGEN
-app.get("/api/boxes/:boxId/shares", listSharesForBoxHandler);
-
-// SHARE OPERATIES (POST /api/shares en /api/shares/verify)
+// SHARE routes (/api/shares en /api/shares/verify)
 app.use("/api/shares", sharesRouter);
 
 // ------------------------------------------------------
-// NIEUWE ROUTE: BOX OPENEN
-// ------------------------------------------------------
-app.post("/api/boxes/:boxId/open", (req, res) => {
-  const boxId = req.params.boxId;
-
-  console.log(`Box ${boxId} OPEN triggered via API`);
-
-  // TODO:
-  // hier koppelen we latere logica toe:
-  // - via Twilio SMS Raspberry Pi laten openen
-  // - direct een webhook naar de Pi sturen
-  // - via MQTT een "open" opdracht versturen
-  // Voor nu sturen we gewoon een bevestiging terug.
-
-  res.json({
-    success: true,
-    action: "open_box",
-    boxId
-  });
-});
-
-// ------------------------------------------------------
-// START SERVER
+// Start server
 // ------------------------------------------------------
 app.listen(PORT, () => {
   console.log(`Gridbox API luistert op poort ${PORT}`);
