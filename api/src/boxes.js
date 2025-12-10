@@ -12,10 +12,10 @@ const boxesService = require("../services/boxesService");
 router.get("/", async (req, res) => {
   try {
     const boxes = await boxesService.getAll();
-    res.json(boxes);
+    return res.json(boxes);
   } catch (err) {
     console.error("Fout bij ophalen boxen:", err);
-    res.status(500).json({ error: "Interne serverfout" });
+    return res.status(500).json({ error: "Interne serverfout" });
   }
 });
 
@@ -25,18 +25,16 @@ router.get("/", async (req, res) => {
 // ---------------------------------------------------------
 router.get("/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const box = await boxesService.getById(id);
+    const box = await boxesService.getById(req.params.id);
 
     if (!box) {
       return res.status(404).json({ error: "Box niet gevonden" });
     }
 
-    res.json(box);
+    return res.json(box);
   } catch (err) {
     console.error("Fout bij ophalen box:", err);
-    res.status(500).json({ error: "Interne serverfout" });
+    return res.status(500).json({ error: "Interne serverfout" });
   }
 });
 
@@ -46,29 +44,25 @@ router.get("/:id", async (req, res) => {
 // ---------------------------------------------------------
 router.get("/:id/shares", async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const shares = await boxesService.getShares(id);
-    res.json(shares);
+    const shares = await boxesService.getShares(req.params.id);
+    return res.json(shares);
   } catch (err) {
     console.error("Fout bij ophalen shares voor box:", err);
-    res.status(500).json({ error: "Interne serverfout" });
+    return res.status(500).json({ error: "Interne serverfout" });
   }
 });
 
 // ---------------------------------------------------------
 // POST /api/boxes/:id/open
-// Box openen (nu mock, later echte Pi-integratie)
+// Box openen (mock, later Pi-integratie)
 // ---------------------------------------------------------
 router.post("/:id/open", async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const result = await boxesService.open(id);
-    res.json(result);
+    const result = await boxesService.open(req.params.id);
+    return res.json(result);
   } catch (err) {
     console.error("Fout bij openen box:", err);
-    res.status(500).json({ error: "Interne serverfout" });
+    return res.status(500).json({ error: "Interne serverfout" });
   }
 });
 
@@ -78,13 +72,11 @@ router.post("/:id/open", async (req, res) => {
 // ---------------------------------------------------------
 router.post("/:id/close", async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const result = await boxesService.close(id);
-    res.json(result);
+    const result = await boxesService.close(req.params.id);
+    return res.json(result);
   } catch (err) {
     console.error("Fout bij sluiten box:", err);
-    res.status(500).json({ error: "Interne serverfout" });
+    return res.status(500).json({ error: "Interne serverfout" });
   }
 });
 
