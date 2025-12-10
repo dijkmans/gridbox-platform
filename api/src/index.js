@@ -5,7 +5,6 @@
 // ------------------------------------------------------
 const express = require("express");
 const cors = require("cors");
-const bodyParser = require("body-parser");
 
 // Routers
 const boxesRouter = require("./routes/boxes");
@@ -18,22 +17,21 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 app.use(cors());
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
 
 // ------------------------------------------------------
 // API KEY SECURITY (GLOBAL MIDDLEWARE)
 // ------------------------------------------------------
 const API_KEY = process.env.API_KEY || "DEV_KEY_CHANGE_ME";
 
-// detecteer of het verzoek van Twilio komt (geen API-key vereist)
 function isTwilioRequest(req) {
   const agent = req.headers["user-agent"] || "";
   return agent.includes("Twilio");
 }
 
 app.use((req, res, next) => {
-  // Twilio webhooks mogen zonder API-key
+  // Twilio mag zonder API-key
   if (req.path === "/api/sms-webhook" || isTwilioRequest(req)) {
     return next();
   }
@@ -55,10 +53,10 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", service: "gridbox-api" });
 });
 
-// BOX routes (openen, shares ophalen, lijst opvragen, …)
+// BOX routes (mock openingscommando, shares lijst, enz.)
 app.use("/api/boxes", boxesRouter);
 
-// SHARE routes (/api/shares en /api/shares/verify)
+// SHARE routes (create + verify)
 app.use("/api/shares", sharesRouter);
 
 // ------------------------------------------------------
