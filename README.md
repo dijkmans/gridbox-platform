@@ -1,250 +1,352 @@
-Zeker.
-Hier is een **professionele, duidelijke en toekomstbestendige README.md** voor jouw `gridbox-platform` monorepo.
-Deze versie is ideaal om:
+**Ik hou rekening met het Gridbox Master Document.**
 
-1. **in GitHub te plaatsen**,
-2. **naar medewerkers of partners te sturen**,
-3. **door ChatGPT als vaste basis te gebruiken** voor verdere ontwikkeling.
+Perfecte vraag.
+En ja: we kunnen **dit README-document gebruiken als het officiële Gridbox Master Document**, maar dan voegen we er **één cruciale sectie** aan toe:
 
-Ik schrijf hem in helder, gewoon taalgebruik zoals je gevraagd hebt.
+👉 **het vaste stappenplan waarmee ChatGPT het platform verder ontwikkelt**
+Zodat ik *altijd* weet wat de juiste volgende stap is, zonder jouw input te verliezen.
 
----
+Ik zal het document nu:
 
-# 📦 Gridbox Platform
+1. **omvormen tot het officiële Gridbox Master Document**
+2. **jouw README erin integreren**
+3. **een vast ontwikkel-stappenplan toevoegen**
+4. **het optimaliseren zodat ChatGPT het correct gebruikt als technische basis**
 
-Het centrale platform voor de volledige Gridbox-infrastructuur
-(API, dashboard, bedrijfaccounts, reserveringen, IoT-koppelingen).
-
-Dit is een **monorepo** die alle onderdelen bevat van het Gridbox-ecosysteem:
-
-* De **API** die draait op Google Cloud Run
-* De **admin dashboards** die draaien op Vercel
-* De **Next.js webapp** voor toekomstige bedrijven
-* Alle documentatie
-* Voorbereiding op WestPiWiPi (Raspberry Pi controller)
+Hieronder staat de **nieuwe definitieve versie**.
 
 ---
 
-## 🚀 Doel van dit platform
+# 📘 GRIDBOX MASTER DOCUMENT
 
-Het Gridbox Platform wordt het hart van alles wat met Gridbox te maken heeft:
-
-* Bedrijven kunnen inloggen en hun boxen beheren
-* Gebruikers kunnen reserveringen maken
-* De Raspberry Pi’s kunnen commando’s ontvangen en status terugsturen
-* De WhatsApp bot kan shares en reserveringen aanmaken
-* Het dashboard geeft status, foto’s, logs en planning weer
-
-Dit platform moet **stabiel**, **uitbreidbaar** en **professioneel** zijn.
+*Interne architectuur, richtlijnen en ontwikkelvolgorde voor het volledige Gridbox Platform*
 
 ---
 
-# 📁 Mapstructuur
+# 0. Doel van dit document
+
+Dit document dient als:
+
+* vaste technische basis voor **ontwikkeling met ChatGPT**
+* leidraad voor backend, frontend en IoT
+* referentie voor API-design, mapstructuur en databankmodellen
+* stappenplan voor de volledige uitbouw van het Gridbox Platform
+
+ChatGPT moet **bij elke ontwikkelingstaak** met dit document rekening houden.
+
+---
+
+# 1. Projectoverzicht
+
+Het Gridbox Platform is een **monorepo** waarop alle Gridbox-oplossingen worden gebouwd:
+
+* API (Express/Node.js)
+* Dashboards (HTML & Next.js)
+* IoT-communicatie met Raspberry Pi (WestPiWiPi)
+* Multi-tenant login voor bedrijven
+* Share- en reserveringssysteem
+* Foto’s, logging en planning
+* Integratie met WhatsApp bot
+
+Het platform draait in de cloud:
+
+* **API → Google Cloud Run**
+* **Frontends → Vercel**
+* **Database → Firestore**
+* **Foto’s/logs → Cloud Storage**
+
+---
+
+# 2. Monorepo-structuur (vast patroon)
 
 ```
 gridbox-platform/
 │
-├── api/                 → Backend (Node.js + Express)
+├── api/
 │     ├── src/
-│     │    ├── routes/   → API-routes (auth, boxes, shares, …)
-│     │    ├── services/ → Datalaag (local mock + Firestore later)
-│     │    └── index.js  → Startpunt van de API
-│     └── Dockerfile     → Deploy naar Cloud Run
+│     │    ├── routes/     → API endpoints
+│     │    ├── services/   → Businesslogica + Firestore
+│     │    └── index.js    → Main server
+│     └── Dockerfile       → Cloud Run deploy
 │
-├── core-frontend/        → Huidig dashboard (HTML + JS) op Vercel
+├── core-frontend/          → HTML-based dashboard (Vercel)
 │
-├── web-dashboard/        → Nieuwe Next.js app voor bedrijven
+├── web-dashboard/          → Next.js bedrijvenportaal (Vercel)
 │
-├── docs/                 → Documentatie (architectuur, API-contracten, roadmap)
+├── docs/                   → Architectuur, API-contract, roadmap
 │
-├── .github/workflows/    → CI/CD pipelines (Cloud Run deploy)
+├── .github/workflows/      → CI/CD pipelines
 │
-└── README.md             → Dit document
+└── README.md               → Documentatie (publiek)
 ```
 
 ---
 
-# 🌐 Hosting en Deploy
+# 3. API-regels en endpoints
 
-### 1) **API → Google Cloud Run**
+De API gebruikt:
 
-De API wordt automatisch gedeployed door GitHub Actions.
+* Node.js
+* Express
+* JSON-only
+* REST style
+* `/api/...` prefix
+* Clear separation: routes vs business logic
 
-Wanneer je naar `main` pusht:
-
-* Docker image wordt gebouwd
-* Image wordt gepusht naar Artifact Registry
-* Cloud Run krijgt een nieuwe versie
-
-Endpoints (voorbeeld):
-
-```
-/health
-/api/auth/login
-/api/boxes
-/api/boxes/:id
-/api/boxes/:id/toggle
-```
-
-Deze worden later uitgebreid met:
-
-* reserveringen
-* shares
-* foto’s
-* planner
-* tenants
-* WestPiWiPi commando’s
-
----
-
-### 2) **Frontend → Vercel**
-
-Het dashboard draait op Vercel.
-
-Er zijn twee frontends:
-
-#### core-frontend
-
-* Statische HTML/JS versie
-* Zeer snel om te ontwikkelen
-* Ideaal voor interne tools en testen
-
-#### web-dashboard
-
-* Next.js app
-* Wordt de uiteindelijke klantenzijde
-* Modernere UI, auth, tenants, enz.
-
-Beide frontends kunnen aan dezelfde API gekoppeld worden.
-
----
-
-# 🔌 Integraties
-
-Het Gridbox Platform gebruikt of zal gebruiken:
-
-* Google Firestore
-* Google Cloud Run
-* Google Storage (foto’s van cameramodules)
-* Twilio / WhatsApp Business
-* Raspberry Pi (WestPiWiPi)
-* AI modules voor beeldherkenning (later)
-* Multi-tenant login voor bedrijven
-
-Deze integraties worden modulair opgebouwd zodat alles schaalbaar blijft.
-
----
-
-# 🧪 Lokale ontwikkeling
-
-Je hoeft lokaal niet veel te draaien omdat bijna alles in de cloud zit, maar voor testen:
+Minimale permanente endpoints:
 
 ```
-cd api
-npm install
-npm start
+GET  /health
+POST /api/auth/login
+GET  /api/boxes
+GET  /api/boxes/:id
+POST /api/boxes/:id/toggle
 ```
 
-Frontend kan lokaal met:
+Later:
 
 ```
-npx serve core-frontend
+POST /api/reservations
+POST /api/shares
+GET  /api/companies
+POST /api/companies
+GET  /api/logs
+GET  /api/photos
 ```
 
-Of Next.js:
+Routes gaan altijd naar:
 
 ```
-npm --prefix web-dashboard install
-npm --prefix web-dashboard run dev
+api/src/routes/*.js
+```
+
+Businesslogica en Firestore interactie gaan naar:
+
+```
+api/src/services/*.js
 ```
 
 ---
 
-# 📘 Documentatie
+# 4. Frontend-regels
 
-In de map `/docs` vind je o.a.:
+### core-frontend
 
-* architectuur.md
-* api-contract.md
-* roadmap.md
-* tenants.md
-* hardware-westpiwipi.md
+* draait op Vercel
+* gebruikt plain HTML, CSS, JS
+* snel testen en beheren
+* maakt calls naar API_BASE
 
-Hier beschrijven we alles zodat nieuwe ontwikkelaars meteen mee zijn.
+### web-dashboard
 
----
-
-# 🛣️ Roadmap
-
-Deze roadmap wordt samen met het team en ChatGPT verder uitgewerkt:
-
-### Fase 1 — API basis (nu bezig)
-
-* login endpoint
-* boxes endpoint
-* toggle endpoint
-* gekoppeld aan Vercel dashboard
-
-### Fase 2 — Firestore data
-
-* echte boxen
-* echte shares
-* echte bedrijven
-
-### Fase 3 — Next.js bedrijvenportaal
-
-* multi-tenant accounts
-* reserveringen
-* logboek, foto’s, planning
-
-### Fase 4 — WestPiWiPi integratie
-
-* openen/sluiten
-* sensoren
-* camera AI
-* firmware updates
-
-### Fase 5 — WhatsApp bot koppeling
-
-* reserveringen maken
-* box openen via verificatiecode
-* slimme conversatieflow
-
-### Fase 6 — Public launch
-
-* beta klanten
-* demo omgeving
-* documentatie en video’s
+* Next.js (React)
+* multi-tenant login
+* klantenportaal
+* reserveringen, foto’s, logs, planning
+* styled volgens definitieve Gridbox-huisstijl
 
 ---
 
-# 🤝 Contributies
+# 5. Data modellen
 
-Iedere bijdrage is welkom.
-Gebruik Pull Requests, Issues, of vraag ChatGPT voor hulp bij bepaalde modules.
+### Box
+
+```
+id
+number
+location
+status
+lastOpenedText
+companyId      (tenant)
+```
+
+### Share
+
+```
+id
+boxId
+code
+phone
+validFrom
+validUntil
+createdAt
+createdBy
+```
+
+### Reservation
+
+```
+id
+boxId
+companyId
+reservedBy
+from
+until
+status
+```
+
+### Company (Tenant)
+
+```
+id
+name
+allowedBoxes[]
+users[]
+apiKeys[]
+branding?
+```
 
 ---
 
-# 🧠 Gebruik door ChatGPT
+# 6. WestPiWiPi (Raspberry Pi)
 
-Deze README bevat alle kerninformatie zodat ChatGPT:
+API stuurt commando’s:
 
-* context behoudt
-* consistente code kan genereren
-* API’s en frontend logica begrijpt
-* het Gridbox Platform op lange termijn kan mee uitbouwen
+```
+POST /api/boxes/:id/toggle
+```
+
+Pi stuurt terug:
+
+* status
+* logs
+* camera events
+* sensor data
+
+Via HTTP, WebSocket of MQTT.
 
 ---
 
-# ✔️ Klaar om in je GitHub te plakken
+# 7. WhatsApp bot integratie
 
-Je kan dit rechtstreeks in `README.md` zetten.
+Bot gebruikt enkel:
 
-Wil je dat ik:
+```
+POST /api/shares
+POST /api/reservations
+POST /api/boxes/:id/toggle
+```
 
-* dit aanpas naar jouw huisstijl?
-* een roadmap in tabelvorm maak?
-* er illustraties of ASCII schema’s van maak?
-* per map een aparte README genereer?
+Logica zit volledig in de API.
 
-Zeg het maar!
+---
+
+# 8. Hosting & CI/CD
+
+### API
+
+Automatische deploy via GitHub Actions naar Cloud Run.
+
+### Frontend
+
+Vercel met “Root Directory” per frontend:
+
+* `core-frontend`
+* `web-dashboard`
+
+---
+
+# 9. Ontwikkelregels
+
+1. Geen logica in frontends.
+2. Geen hardware-aansturing rechtstreeks vanuit browsers.
+3. Mock data maximaal vervangen door Firestore.
+4. Endpoints moeten consistent, voorspelbaar en RESTful zijn.
+5. Documentatie in /docs moet blijven groeien.
+6. ChatGPT genereert **altijd** code volgens:
+
+   * deze mapstructuur
+   * deze API regels
+   * deze databankmodellen
+   * deze roadmap
+7. Firestore integratie gebeurt **pas na** een stabiele API-basis.
+
+---
+
+# 10. VAST STAPPENPLAN VOOR VERDER ONTWIKKELEN
+
+*(Belangrijk — ChatGPT volgt deze stappen automatisch)*
+
+## ⭐ Stap 1 — Basis API volledig operationeel maken
+
+* login
+* boxes
+* toggle
+* Cloud Run deploy
+* CORS + JSON parsing
+* dashboard koppelen
+
+## ⭐ Stap 2 — Firestore toevoegen
+
+* boxes collectie
+* shares collectie
+* tenants collectie
+* reserveringen collectie
+
+## ⭐ Stap 3 — core-frontend koppelen aan echte data
+
+* DEMO mode uit
+* API_BASE → Cloud Run
+* real-time box status tonen
+* box openen via Pi (mock)
+
+## ⭐ Stap 4 — web-dashboard (Next.js) uitbouwen
+
+* login met tenants
+* box management
+* reserveringen overzicht
+* notificaties
+
+## ⭐ Stap 5 — WestPiWiPi integratie
+
+* Pi ontvangt toggle commands
+* Pi stuurt status terug
+* Firestore logging
+* foto’s uploaden naar Cloud Storage
+
+## ⭐ Stap 6 — WhatsApp bot toevoegen
+
+* shares creëren via API
+* reserveringen automatisch aanmaken
+* verificatie flow
+* logica blijft in de API
+
+## ⭐ Stap 7 — Lancering
+
+* demo accounts
+* documentatie
+* marketing
+* onboarding bedrijven
+
+---
+
+# 11. ChatGPT instructie (belangrijk)
+
+Wanneer dit document aanwezig is volgt ChatGPT **altijd** onderstaande regel:
+
+👉 **ChatGPT moet bij elke Gridbox-taak automatisch rekening houden met dit Master Document, deze mapstructuur, dit API-design en dit stappenplan.**
+
+---
+
+# ✔️ Dit is nu het officiële Gridbox Master Document
+
+Je kunt dit:
+
+* in `/docs/master-document.md` zetten
+* of als README.md gebruiken
+* of zelfs in GitHub “pinnen” als hoofddocument
+
+**Ik gebruik dit vanaf nu bij elke ontwikkelingstaak binnen dit project.**
+
+---
+
+## Wil je dat ik dit document automatisch omzet naar markdown-bestanden in de juiste map?
+
+Bijvoorbeeld:
+
+* `/docs/architecture.md`
+* `/docs/api-richtlijnen.md`
+* `/docs/roadmap.md`
+* `/docs/master-document.md`
+
+Zeg het maar, dan genereer ik alles volledig klaar om te committen.
