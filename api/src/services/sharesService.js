@@ -43,6 +43,7 @@ async function listSharesForBox(boxId) {
 
 // ---------------------------------------------------------
 // Check of een gebruiker toegang heeft tot een box
+// (boxId + telefoonnummer)
 // ---------------------------------------------------------
 async function findActiveShare(boxId, phoneNumber) {
   if (!runningOnCloudRun) {
@@ -60,7 +61,25 @@ async function findActiveShare(boxId, phoneNumber) {
 }
 
 // ---------------------------------------------------------
-// Hulpfunctie: nieuwe toegangscode genereren
+// ► NIEUW: zoek share via telefoonnummer (nodig voor sms-webhook)
+// ---------------------------------------------------------
+async function findActiveShareByPhone(phoneNumber) {
+  if (!runningOnCloudRun) {
+    return (
+      localShares.find(
+        s =>
+          s.phoneNumber === phoneNumber &&
+          s.status === "active"
+      ) || null
+    );
+  }
+
+  // Firestore-implementatie komt later (met index op phoneNumber)
+  return null; 
+}
+
+// ---------------------------------------------------------
+// Hulpfunctie: eenvoudige 6-cijferige code genereren
 // ---------------------------------------------------------
 function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -70,5 +89,6 @@ module.exports = {
   createShare,
   listSharesForBox,
   findActiveShare,
+  findActiveShareByPhone,
   generateCode
 };
