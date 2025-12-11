@@ -1,35 +1,30 @@
-// api/src/routes/shares.js
-
 const express = require("express");
 const router = express.Router();
 const { db } = require("../firebase");
 
-
 // -------------------------------------------------------------
-// Helper: Code genereren
+// Helper: Code genereren (4 cijfers)
 // -------------------------------------------------------------
 function generateCode() {
   return Math.floor(1000 + Math.random() * 9000).toString();
 }
 
-
 // -------------------------------------------------------------
-// Helper: Input validatie
+// Helper: Input controleren
 // -------------------------------------------------------------
 function validateShareInput(boxId, phoneNumber) {
   if (!boxId || typeof boxId !== "string") {
-    return "boxId is verplicht en moet een string zijn";
+    return "boxId is verplicht en moet een tekst zijn";
   }
   if (!phoneNumber || typeof phoneNumber !== "string") {
-    return "phoneNumber is verplicht en moet een string zijn";
+    return "phoneNumber is verplicht en moet een tekst zijn";
   }
   return null;
 }
 
-
 // -------------------------------------------------------------
 // POST /api/shares
-// Nieuwe share aanmaken en opslaan in Firestore
+// Nieuwe share aanmaken
 // -------------------------------------------------------------
 router.post("/", async (req, res) => {
   try {
@@ -44,19 +39,22 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "validUntil is verplicht" });
     }
 
+    const now = new Date();
+    const until = new Date(validUntil);
+
     const share = {
       boxId,
       phoneNumber,
       code: generateCode(),
       status: "pending",
-      validFrom: new Date(),
-      validUntil: new Date(validUntil),
-      createdAt: new Date()
+      validFrom: now,
+      validUntil: until,
+      createdAt: now
     };
 
     const docRef = await db.collection("shares").add(share);
 
-    console.log(`Share aangemaakt voor box ${boxId}, klant ${phoneNumber}`);
+    console.log(`Share aangemaakt voor box ${boxId} voor nummer ${phoneNumber}`);
 
     return res.status(201).json({
       id: docRef.id,
@@ -69,10 +67,9 @@ router.post("/", async (req, res) => {
   }
 });
 
-
 // -------------------------------------------------------------
 // POST /api/shares/verify
-// Controleren of een klant een actieve share heeft
+// Controleren of een klant een geldige share heeft
 // -------------------------------------------------------------
 router.post("/verify", async (req, res) => {
   try {
@@ -95,11 +92,12 @@ router.post("/verify", async (req, res) => {
     if (snapshot.empty) {
       return res.status(404).json({
         allowed: false,
-        reason: "no-active-share"
+        reason: "geen actieve share gevonden"
       });
     }
 
-    const share = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+    const doc = snapshot.docs[0];
+    const share = { id: doc.id, ...doc.data() };
 
     console.log(`Share toegestaan voor ${phoneNumber} op box ${boxId}`);
 
@@ -114,10 +112,9 @@ router.post("/verify", async (req, res) => {
   }
 });
 
-
 // -------------------------------------------------------------
 // GET /api/shares/box/:boxId
-// Alle shares ophalen voor één box
+// Alle shares voor één box ophalen
 // -------------------------------------------------------------
 router.get("/box/:boxId", async (req, res) => {
   try {
