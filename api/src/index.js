@@ -1,29 +1,21 @@
-// ------------------------------------------------------
-// Imports
-// ------------------------------------------------------
+// api/src/index.js
+
 const express = require("express");
 const cors = require("cors");
 
-// Routers
 const boxesRouter = require("./routes/boxes");
 const sharesRouter = require("./routes/shares");
-const smsRouter = require("./routes/smsWebhook"); // <-- BELANGRIJK: juiste bestandsnaam
+const smsRouter = require("./routes/smsWebhook");
 
-// ------------------------------------------------------
-// App setup
-// ------------------------------------------------------
 const app = express();
 
 const PORT = process.env.PORT || 8080;
-const HOST = "0.0.0.0";
+const HOST = process.env.HOST || "0.0.0.0";
 
 app.use(cors());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
-// ------------------------------------------------------
-// API KEY SECURITY
-// ------------------------------------------------------
 const API_KEY = process.env.API_KEY || "DEV_KEY_CHANGE_ME";
 
 function isTwilioRequest(req) {
@@ -32,7 +24,6 @@ function isTwilioRequest(req) {
 }
 
 app.use((req, res, next) => {
-  // Twilio mag zonder API key
   if (req.path === "/api/sms-webhook" || isTwilioRequest(req)) {
     return next();
   }
@@ -45,20 +36,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// ------------------------------------------------------
-// ROUTES
-// ------------------------------------------------------
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", service: "gridbox-api" });
 });
 
 app.use("/api/boxes", boxesRouter);
 app.use("/api/shares", sharesRouter);
-app.use("/api/sms-webhook", smsRouter); // <-- SMS webhook actief
+app.use("/api/sms-webhook", smsRouter);
 
-// ------------------------------------------------------
-// Start server
-// ------------------------------------------------------
 app.listen(PORT, HOST, () => {
   console.log(`Gridbox API luistert op http://${HOST}:${PORT}`);
 });
