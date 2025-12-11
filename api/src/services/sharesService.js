@@ -1,18 +1,19 @@
 // api/src/services/sharesService.js
-
-const {
-  createShare: dbCreateShare,
-  listSharesForBox: dbListSharesForBox,
-  findActiveShare: dbFindActiveShare
-} = require("../db");
+import {
+  createShare as dbCreateShare,
+  listSharesForBox as dbListSharesForBox,
+  findActiveShare as dbFindActiveShare
+} from "../db.js";
 
 const runningOnCloudRun = !!process.env.K_SERVICE;
+
+// Lokale mock data
 let localShares = [];
 
 // ---------------------------------------------------------
 // Nieuwe share aanmaken
 // ---------------------------------------------------------
-async function createShare(share) {
+export async function createShare(share) {
   if (!runningOnCloudRun) {
     const mock = {
       id: `mock-${localShares.length + 1}`,
@@ -31,7 +32,7 @@ async function createShare(share) {
 // ---------------------------------------------------------
 // Alle shares voor een box
 // ---------------------------------------------------------
-async function listSharesForBox(boxId) {
+export async function listSharesForBox(boxId) {
   if (!runningOnCloudRun) {
     return localShares.filter((s) => s.boxId === boxId);
   }
@@ -42,7 +43,7 @@ async function listSharesForBox(boxId) {
 // ---------------------------------------------------------
 // Actieve share zoeken op box + telefoonnummer
 // ---------------------------------------------------------
-async function findActiveShare(boxId, phoneNumber) {
+export async function findActiveShare(boxId, phoneNumber) {
   if (!runningOnCloudRun) {
     return (
       localShares.find(
@@ -58,9 +59,10 @@ async function findActiveShare(boxId, phoneNumber) {
 }
 
 // ---------------------------------------------------------
-// Actieve share zoeken op telefoonnummer (voor SMS-webhook)
+// Actieve share zoeken op enkel telefoonnummer
+// (handig voor SMS-webhook)
 // ---------------------------------------------------------
-async function findActiveShareByPhone(phoneNumber) {
+export async function findActiveShareByPhone(phoneNumber) {
   if (!runningOnCloudRun) {
     return (
       localShares.find(
@@ -69,21 +71,12 @@ async function findActiveShareByPhone(phoneNumber) {
     );
   }
 
-  // Firestore-variant kan je later verfijnen
   return await dbFindActiveShare(null, phoneNumber);
 }
 
 // ---------------------------------------------------------
-// Code generator
+// Code generator (6 cijfers)
 // ---------------------------------------------------------
-function generateCode() {
+export function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
-
-module.exports = {
-  createShare,
-  listSharesForBox,
-  findActiveShare,
-  findActiveShareByPhone,
-  generateCode
-};
