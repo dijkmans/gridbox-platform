@@ -4,16 +4,13 @@ const {
   createShare: dbCreateShare,
   listSharesForBox: dbListSharesForBox,
   findActiveShare: dbFindActiveShare
-} = require("../db"); // correcte pad
+} = require("../db");
 
-// Check of Firestore actief moet zijn
 const runningOnCloudRun = !!process.env.K_SERVICE;
-
-// Lokale mock data wanneer Firestore niet draait
 let localShares = [];
 
 // ---------------------------------------------------------
-// Share aanmaken
+// Nieuwe share aanmaken
 // ---------------------------------------------------------
 async function createShare(share) {
   if (!runningOnCloudRun) {
@@ -32,24 +29,24 @@ async function createShare(share) {
 }
 
 // ---------------------------------------------------------
-// Shares ophalen voor een box
+// Alle shares voor een box
 // ---------------------------------------------------------
 async function listSharesForBox(boxId) {
   if (!runningOnCloudRun) {
-    return localShares.filter(s => s.boxId === boxId);
+    return localShares.filter((s) => s.boxId === boxId);
   }
 
   return await dbListSharesForBox(boxId);
 }
 
 // ---------------------------------------------------------
-// Share zoeken op telefoonnummer + box
+// Actieve share zoeken op box + telefoonnummer
 // ---------------------------------------------------------
 async function findActiveShare(boxId, phoneNumber) {
   if (!runningOnCloudRun) {
     return (
       localShares.find(
-        s =>
+        (s) =>
           s.boxId === boxId &&
           s.phoneNumber === phoneNumber &&
           s.status === "active"
@@ -61,18 +58,18 @@ async function findActiveShare(boxId, phoneNumber) {
 }
 
 // ---------------------------------------------------------
-// Share zoeken puur op telefoonnummer (nodig voor SMS-webhook)
+// Actieve share zoeken op telefoonnummer (voor SMS-webhook)
 // ---------------------------------------------------------
 async function findActiveShareByPhone(phoneNumber) {
   if (!runningOnCloudRun) {
     return (
       localShares.find(
-        s => s.phoneNumber === phoneNumber && s.status === "active"
+        (s) => s.phoneNumber === phoneNumber && s.status === "active"
       ) || null
     );
   }
 
-  // Firestore variant moet je later implementeren
+  // Firestore-variant kan je later verfijnen
   return await dbFindActiveShare(null, phoneNumber);
 }
 
