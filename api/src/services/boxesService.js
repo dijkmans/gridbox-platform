@@ -1,9 +1,7 @@
 // api/src/services/boxesService.js
+import { getBox, listSharesForBox } from "../db.js";
 
-// Haal data op via db-layer
-const { getBox, listSharesForBox } = require("../db");
-
-// Lokale fallback mock boxen (als Firestore niet actief is)
+// Lokale fallback mock boxen (bij ontwikkeling of wanneer Firestore niet actief is)
 const localBoxes = [
   {
     id: "heist-1",
@@ -23,24 +21,25 @@ const localBoxes = [
   }
 ];
 
+// Cloud Run detectie
 const runningOnCloudRun = !!process.env.K_SERVICE;
 
 // ---------------------------------------------------------
-// Alle boxen
+// Alle boxen ophalen
 // ---------------------------------------------------------
-async function getAll() {
+export async function getAll() {
   if (!runningOnCloudRun) {
     return localBoxes;
   }
 
-  // TODO: later echte Firestore implementatie
+  // TODO: Vervangen door Firestore-query
   return localBoxes;
 }
 
 // ---------------------------------------------------------
-// Eén box via id
+// Eén box ophalen
 // ---------------------------------------------------------
-async function getById(id) {
+export async function getById(id) {
   if (!runningOnCloudRun) {
     return localBoxes.find((b) => b.id === id) || null;
   }
@@ -49,17 +48,18 @@ async function getById(id) {
 }
 
 // ---------------------------------------------------------
-// Shares voor box
+// Shares voor box ophalen
 // ---------------------------------------------------------
-async function getShares(boxId) {
+export async function getShares(boxId) {
   return await listSharesForBox(boxId);
 }
 
 // ---------------------------------------------------------
-// Box openen (mock)
+// Box openen
 // ---------------------------------------------------------
-async function open(id) {
+export async function open(id) {
   const box = localBoxes.find((b) => b.id === id);
+
   if (!box) {
     return { success: false, message: `Box ${id} niet gevonden` };
   }
@@ -76,10 +76,11 @@ async function open(id) {
 }
 
 // ---------------------------------------------------------
-// Box sluiten (mock)
+// Box sluiten
 // ---------------------------------------------------------
-async function close(id) {
+export async function close(id) {
   const box = localBoxes.find((b) => b.id === id);
+
   if (!box) {
     return { success: false, message: `Box ${id} niet gevonden` };
   }
@@ -93,11 +94,3 @@ async function close(id) {
     box
   };
 }
-
-module.exports = {
-  getAll,
-  getById,
-  getShares,
-  open,
-  close
-};
