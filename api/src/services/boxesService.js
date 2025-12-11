@@ -1,15 +1,9 @@
 // api/src/services/boxesService.js
 
-// ------------------------------------------------------
-// Imports
-// ------------------------------------------------------
-const { getBox, listSharesForBox } = require("../db"); 
-// BELANGRIJK: db.js zit één map hoger → "../db"
+// Haal data op via db-layer
+const { getBox, listSharesForBox } = require("../db");
 
-
-// ------------------------------------------------------
-// Lokale mock boxen (wanneer Firestore niet actief is)
-// ------------------------------------------------------
+// Lokale fallback mock boxen (als Firestore niet actief is)
 const localBoxes = [
   {
     id: "heist-1",
@@ -17,7 +11,7 @@ const localBoxes = [
     number: 1,
     status: "online",
     description: "Mock Gridbox Heist #1",
-    cameraEnabled: true,
+    cameraEnabled: true
   },
   {
     id: "geel-1",
@@ -25,29 +19,27 @@ const localBoxes = [
     number: 1,
     status: "online",
     description: "Mock Gridbox Geel #1",
-    cameraEnabled: true,
-  },
+    cameraEnabled: true
+  }
 ];
 
 const runningOnCloudRun = !!process.env.K_SERVICE;
 
-
-// ------------------------------------------------------
-// Alle boxen ophalen
-// ------------------------------------------------------
+// ---------------------------------------------------------
+// Alle boxen
+// ---------------------------------------------------------
 async function getAll() {
   if (!runningOnCloudRun) {
     return localBoxes;
   }
 
-  // TODO later: Firestore ophalen
+  // TODO: later echte Firestore implementatie
   return localBoxes;
 }
 
-
-// ------------------------------------------------------
-// Eén box ophalen via ID
-// ------------------------------------------------------
+// ---------------------------------------------------------
+// Eén box via id
+// ---------------------------------------------------------
 async function getById(id) {
   if (!runningOnCloudRun) {
     return localBoxes.find((b) => b.id === id) || null;
@@ -56,21 +48,18 @@ async function getById(id) {
   return await getBox(id);
 }
 
-
-// ------------------------------------------------------
-// Shares koppelen aan een box
-// ------------------------------------------------------
+// ---------------------------------------------------------
+// Shares voor box
+// ---------------------------------------------------------
 async function getShares(boxId) {
   return await listSharesForBox(boxId);
 }
 
-
-// ------------------------------------------------------
-// Box openen (mock + klaar voor echte hardware)
-// ------------------------------------------------------
+// ---------------------------------------------------------
+// Box openen (mock)
+// ---------------------------------------------------------
 async function open(id) {
   const box = localBoxes.find((b) => b.id === id);
-
   if (!box) {
     return { success: false, message: `Box ${id} niet gevonden` };
   }
@@ -82,17 +71,15 @@ async function open(id) {
     success: true,
     action: "open",
     message: `Mock: box ${id} is geopend`,
-    box,
+    box
   };
 }
 
-
-// ------------------------------------------------------
+// ---------------------------------------------------------
 // Box sluiten (mock)
-// ------------------------------------------------------
+// ---------------------------------------------------------
 async function close(id) {
   const box = localBoxes.find((b) => b.id === id);
-
   if (!box) {
     return { success: false, message: `Box ${id} niet gevonden` };
   }
@@ -103,18 +90,14 @@ async function close(id) {
     success: true,
     action: "close",
     message: `Mock: box ${id} is gesloten`,
-    box,
+    box
   };
 }
 
-
-// ------------------------------------------------------
-// Exports
-// ------------------------------------------------------
 module.exports = {
   getAll,
   getById,
   getShares,
   open,
-  close,
+  close
 };
