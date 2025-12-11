@@ -1,17 +1,26 @@
-const admin = require("firebase-admin");
+import admin from "firebase-admin";
 
-let app;
+let db = null;
 
 if (!admin.apps.length) {
+  const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT;
+
+  if (!serviceAccountBase64) {
+    console.error("❌ FIREBASE_SERVICE_ACCOUNT ontbreekt in environment variables");
+    throw new Error("FIREBASE_SERVICE_ACCOUNT missing");
+  }
+
   const serviceAccount = JSON.parse(
-    Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT, "base64").toString()
+    Buffer.from(serviceAccountBase64, "base64").toString()
   );
 
-  app = admin.initializeApp({
+  admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
   });
+
+  console.log("🔥 Firebase Admin initialized");
 }
 
-const db = admin.firestore();
+db = admin.firestore();
 
-module.exports = { db };
+export { db };
