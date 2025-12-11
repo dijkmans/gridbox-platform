@@ -1,6 +1,7 @@
 // api/src/services/boxesService.js
 
-const { getBox, listSharesForBox } = require("../db"); // juist pad
+const { getBox, listSharesForBox } = require("../db"); // niet "./db"
+
 
 // Lokale fallback mock boxen (als Firestore niet actief is)
 const localBoxes = [
