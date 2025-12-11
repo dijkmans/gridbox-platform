@@ -2,7 +2,7 @@ name: Deploy API to Cloud Run
 
 on:
   push:
-    branches: [ "main" ]  # elke commit op main triggert deployment
+    branches: [ "main" ]
 
 jobs:
   deploy:
@@ -17,7 +17,6 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      # Cloud Run bouwt nu zelf de container vanuit de folder /api
       - name: Deploy to Cloud Run (source build)
         run: |
           gcloud run deploy gridbox-api \
