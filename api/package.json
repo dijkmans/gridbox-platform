@@ -1,10 +1,12 @@
 {
   "name": "gridbox-api",
-  "version": "0.1.0",
-  "description": "Gridbox API voor boxes en shares",
+  "version": "1.0.0",
+  "description": "Gridbox API voor boxes, shares, devices en commands",
   "main": "src/index.js",
+  "type": "module",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
   },
   "engines": {
     "node": "18.x"
@@ -13,6 +15,10 @@
     "@google-cloud/firestore": "^7.8.0",
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "firebase-admin": "^12.0.0"
+    "firebase-admin": "^12.0.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
   }
 }
