@@ -1,5 +1,3 @@
-// api/src/index.js
-
 // ------------------------------------------------------
 // Imports
 // ------------------------------------------------------
@@ -9,7 +7,8 @@ const cors = require("cors");
 // Routers
 const boxesRouter = require("./routes/boxes");
 const sharesRouter = require("./routes/shares");
-const smsRouter = require("./routes/smsWebhook"); // SMS webhook router
+const smsRouter = require("./routes/smsWebhook");
+// SMS webhook router
 
 // ------------------------------------------------------
 // App setup
