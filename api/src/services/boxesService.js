@@ -1,6 +1,6 @@
 // api/src/services/boxesService.js
 
-const { getBox, listSharesForBox } = require("./db.js");
+const { getBox, listSharesForBox } = require("../db");
 
 // Lokale fallback mock boxen (als Firestore niet actief is)
 const localBoxes = [
@@ -19,7 +19,7 @@ const localBoxes = [
     status: "online",
     description: "Mock Gridbox Geel #1",
     cameraEnabled: true,
-  }
+  },
 ];
 
 // Check of we op Cloud Run draaien (Firestore actief)
@@ -45,6 +45,7 @@ async function getById(id) {
     return localBoxes.find((b) => b.id === id) || null;
   }
 
+  // Cloud Run → Firestore
   return await getBox(id);
 }
 
