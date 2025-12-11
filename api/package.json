@@ -1,9 +1,9 @@
 {
   "name": "gridbox-api",
   "version": "1.0.0",
-  "description": "Gridbox API voor boxes, shares, devices en commands",
-  "main": "src/index.js",
   "type": "module",
+  "description": "Gridbox API voor devices, commands, status en config.",
+  "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js"
