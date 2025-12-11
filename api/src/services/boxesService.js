@@ -1,6 +1,6 @@
 // api/src/services/boxesService.js
 
-const { getBox, listSharesForBox } = require("../db");
+const { getBox, listSharesForBox } = require("../db"); // juist pad
 
 // Lokale fallback mock boxen (als Firestore niet actief is)
 const localBoxes = [
@@ -22,43 +22,30 @@ const localBoxes = [
   },
 ];
 
-// Check of we op Cloud Run draaien (Firestore actief)
 const runningOnCloudRun = !!process.env.K_SERVICE;
 
-// ---------------------------------------------------------
-// Alle boxen ophalen
-// ---------------------------------------------------------
+// Alle boxen
 async function getAll() {
   if (!runningOnCloudRun) {
     return localBoxes;
   }
-
-  // Firestore komt later. Voor nu mock teruggeven.
-  return localBoxes;
+  return localBoxes; // Firestore later
 }
 
-// ---------------------------------------------------------
-// Eén box ophalen op ID
-// ---------------------------------------------------------
+// Eén box
 async function getById(id) {
   if (!runningOnCloudRun) {
     return localBoxes.find((b) => b.id === id) || null;
   }
-
-  // Cloud Run → Firestore
   return await getBox(id);
 }
 
-// ---------------------------------------------------------
-// Shares ophalen gekoppeld aan een box
-// ---------------------------------------------------------
+// Shares voor box
 async function getShares(boxId) {
   return await listSharesForBox(boxId);
 }
 
-// ---------------------------------------------------------
 // Box openen (mock)
-// ---------------------------------------------------------
 async function open(id) {
   const box = localBoxes.find((b) => b.id === id);
   if (!box) {
@@ -76,9 +63,7 @@ async function open(id) {
   };
 }
 
-// ---------------------------------------------------------
 // Box sluiten (mock)
-// ---------------------------------------------------------
 async function close(id) {
   const box = localBoxes.find((b) => b.id === id);
   if (!box) {
