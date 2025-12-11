@@ -1,9 +1,8 @@
 // api/src/db.js
 
-const { Firestore } = require("@google-cloud/firestore");
+import { Firestore } from "@google-cloud/firestore";
 
-// In Cloud Run staat K_SERVICE altijd gezet.
-// Lokaal gebruiken we dan enkel de mock data.
+// Detecteer Cloud Run (Firestone actief) of lokale dev-mode (mock data)
 const runningOnCloudRun = !!process.env.K_SERVICE;
 
 let firestore = null;
@@ -11,7 +10,9 @@ if (runningOnCloudRun) {
   firestore = new Firestore();
 }
 
-// Lokale mock data voor ontwikkeling
+// ----------------------------------------------------
+// Lokale mock tables voor ontwikkeling
+// ----------------------------------------------------
 const localBoxes = new Map([
   [
     "heist-1",
@@ -31,23 +32,22 @@ const localShares = [];
 // ----------------------------------------------------
 // BOXES
 // ----------------------------------------------------
-async function getBox(boxId) {
-  // Lokaal: gebruik mock data
+export async function getBox(boxId) {
   if (!firestore) {
     const box = localBoxes.get(boxId);
     return box ? { ...box } : null;
   }
 
-  // In Cloud Run: lees uit Firestore
   const doc = await firestore.collection("boxes").doc(boxId).get();
   if (!doc.exists) return null;
+
   return { id: doc.id, ...doc.data() };
 }
 
 // ----------------------------------------------------
 // SHARES
 // ----------------------------------------------------
-async function listSharesForBox(boxId) {
+export async function listSharesForBox(boxId) {
   if (!firestore) {
     return localShares.filter((s) => s.boxId === boxId);
   }
@@ -60,7 +60,7 @@ async function listSharesForBox(boxId) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-async function createShare({ boxId, phoneNumber, code }) {
+export async function createShare({ boxId, phoneNumber, code }) {
   const base = {
     boxId,
     phoneNumber,
@@ -69,6 +69,7 @@ async function createShare({ boxId, phoneNumber, code }) {
     createdAt: new Date().toISOString(),
   };
 
+  // Lokale mock
   if (!firestore) {
     const share = {
       id: `mock-${localShares.length + 1}`,
@@ -82,7 +83,8 @@ async function createShare({ boxId, phoneNumber, code }) {
   return { id: ref.id, ...base };
 }
 
-async function findActiveShare(boxId, phoneNumber) {
+export async function findActiveShare(boxId, phoneNumber) {
+  // Lokale mock
   if (!firestore) {
     return (
       localShares.find(
@@ -107,11 +109,3 @@ async function findActiveShare(boxId, phoneNumber) {
   const doc = snap.docs[0];
   return { id: doc.id, ...doc.data() };
 }
-
-module.exports = {
-  getBox,
-  listSharesForBox,
-  createShare,
-  findActiveShare,
-};
-
