@@ -2,16 +2,19 @@
 
 const express = require("express");
 const router = express.Router();
+const { db } = require("../firebase");
 
-const {
-  createShare,
-  listSharesForBox,
-  findActiveShare,
-  generateCode
-} = require("../services/sharesService");
 
 // -------------------------------------------------------------
-// Helper: Validate request data
+// Helper: Code genereren
+// -------------------------------------------------------------
+function generateCode() {
+  return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
+
+// -------------------------------------------------------------
+// Helper: Input validatie
 // -------------------------------------------------------------
 function validateShareInput(boxId, phoneNumber) {
   if (!boxId || typeof boxId !== "string") {
@@ -23,41 +26,53 @@ function validateShareInput(boxId, phoneNumber) {
   return null;
 }
 
+
 // -------------------------------------------------------------
 // POST /api/shares
-// Nieuwe share aanmaken (toegangscode genereren)
+// Nieuwe share aanmaken en opslaan in Firestore
 // -------------------------------------------------------------
 router.post("/", async (req, res) => {
   try {
-    const { boxId, phoneNumber } = req.body;
+    const { boxId, phoneNumber, validUntil } = req.body;
 
     const error = validateShareInput(boxId, phoneNumber);
     if (error) {
       return res.status(400).json({ error });
     }
 
+    if (!validUntil) {
+      return res.status(400).json({ error: "validUntil is verplicht" });
+    }
+
     const share = {
       boxId,
       phoneNumber,
       code: generateCode(),
-      status: "active",
-      createdAt: new Date().toISOString()
+      status: "pending",
+      validFrom: new Date(),
+      validUntil: new Date(validUntil),
+      createdAt: new Date()
     };
 
-    const saved = await createShare(share);
+    const docRef = await db.collection("shares").add(share);
 
-    console.log(`Share aangemaakt voor box ${boxId}, nummer ${phoneNumber}`);
+    console.log(`Share aangemaakt voor box ${boxId}, klant ${phoneNumber}`);
 
-    return res.status(201).json(saved);
+    return res.status(201).json({
+      id: docRef.id,
+      ...share
+    });
+
   } catch (err) {
     console.error("Fout bij aanmaken share:", err);
     return res.status(500).json({ error: "Interne serverfout" });
   }
 });
 
+
 // -------------------------------------------------------------
 // POST /api/shares/verify
-// Check of een telefoonnummer toegang heeft tot een box
+// Controleren of een klant een actieve share heeft
 // -------------------------------------------------------------
 router.post("/verify", async (req, res) => {
   try {
@@ -68,30 +83,37 @@ router.post("/verify", async (req, res) => {
       return res.status(400).json({ error });
     }
 
-    const share = await findActiveShare(boxId, phoneNumber);
+    const now = new Date();
 
-    if (!share) {
+    const snapshot = await db.collection("shares")
+      .where("boxId", "==", boxId)
+      .where("phoneNumber", "==", phoneNumber)
+      .where("validFrom", "<=", now)
+      .where("validUntil", ">=", now)
+      .get();
+
+    if (snapshot.empty) {
       return res.status(404).json({
         allowed: false,
         reason: "no-active-share"
       });
     }
 
+    const share = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+
     console.log(`Share toegestaan voor ${phoneNumber} op box ${boxId}`);
 
     return res.json({
       allowed: true,
-      shareId: share.id,
-      boxId: share.boxId,
-      phoneNumber: share.phoneNumber,
-      code: share.code,
-      status: share.status
+      ...share
     });
+
   } catch (err) {
     console.error("Fout bij verify:", err);
     return res.status(500).json({ error: "Interne serverfout" });
   }
 });
+
 
 // -------------------------------------------------------------
 // GET /api/shares/box/:boxId
@@ -101,11 +123,19 @@ router.get("/box/:boxId", async (req, res) => {
   try {
     const { boxId } = req.params;
 
-    const shares = await listSharesForBox(boxId);
+    const snapshot = await db.collection("shares")
+      .where("boxId", "==", boxId)
+      .get();
+
+    const shares = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
 
     return res.json(shares);
+
   } catch (err) {
-    console.error("Fout bij ophalen shares voor box:", err);
+    console.error("Fout bij ophalen shares:", err);
     return res.status(500).json({ error: "Interne serverfout" });
   }
 });
