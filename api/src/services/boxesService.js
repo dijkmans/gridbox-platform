@@ -1,9 +1,15 @@
 // api/src/services/boxesService.js
 
-const { getBox, listSharesForBox } = require("../db"); // niet "./db"
+// ------------------------------------------------------
+// Imports
+// ------------------------------------------------------
+const { getBox, listSharesForBox } = require("../db"); 
+// BELANGRIJK: db.js zit één map hoger → "../db"
 
 
-// Lokale fallback mock boxen (als Firestore niet actief is)
+// ------------------------------------------------------
+// Lokale mock boxen (wanneer Firestore niet actief is)
+// ------------------------------------------------------
 const localBoxes = [
   {
     id: "heist-1",
@@ -25,30 +31,46 @@ const localBoxes = [
 
 const runningOnCloudRun = !!process.env.K_SERVICE;
 
-// Alle boxen
+
+// ------------------------------------------------------
+// Alle boxen ophalen
+// ------------------------------------------------------
 async function getAll() {
   if (!runningOnCloudRun) {
     return localBoxes;
   }
-  return localBoxes; // Firestore later
+
+  // TODO later: Firestore ophalen
+  return localBoxes;
 }
 
-// Eén box
+
+// ------------------------------------------------------
+// Eén box ophalen via ID
+// ------------------------------------------------------
 async function getById(id) {
   if (!runningOnCloudRun) {
     return localBoxes.find((b) => b.id === id) || null;
   }
+
   return await getBox(id);
 }
 
-// Shares voor box
+
+// ------------------------------------------------------
+// Shares koppelen aan een box
+// ------------------------------------------------------
 async function getShares(boxId) {
   return await listSharesForBox(boxId);
 }
 
-// Box openen (mock)
+
+// ------------------------------------------------------
+// Box openen (mock + klaar voor echte hardware)
+// ------------------------------------------------------
 async function open(id) {
   const box = localBoxes.find((b) => b.id === id);
+
   if (!box) {
     return { success: false, message: `Box ${id} niet gevonden` };
   }
@@ -64,9 +86,13 @@ async function open(id) {
   };
 }
 
+
+// ------------------------------------------------------
 // Box sluiten (mock)
+// ------------------------------------------------------
 async function close(id) {
   const box = localBoxes.find((b) => b.id === id);
+
   if (!box) {
     return { success: false, message: `Box ${id} niet gevonden` };
   }
@@ -81,6 +107,10 @@ async function close(id) {
   };
 }
 
+
+// ------------------------------------------------------
+// Exports
+// ------------------------------------------------------
 module.exports = {
   getAll,
   getById,
