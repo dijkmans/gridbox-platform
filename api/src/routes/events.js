@@ -1,12 +1,11 @@
 import { Router } from "express";
-import { db } from "../lib/firestore.js";
+import { db } from "../services/firebase.js";
 import { Timestamp } from "firebase-admin/firestore";
 
 const router = Router();
 
 /**
  * POST /api/events/:boxId
- * Ontvang en log events van een Gridbox (bv van de Raspberry Pi)
  */
 router.post("/:boxId", async (req, res) => {
   try {
@@ -28,3 +27,24 @@ router.post("/:boxId", async (req, res) => {
     };
 
     await db
+      .collection("boxes")
+      .doc(boxId)
+      .collection("events")
+      .add(event);
+
+    return res.json({
+      ok: true,
+      message: "Event opgeslagen",
+      boxId
+    });
+
+  } catch (err) {
+    console.error("Fout bij opslaan event:", err);
+    return res.status(500).json({
+      ok: false,
+      error: "Interne serverfout"
+    });
+  }
+});
+
+export default router;
