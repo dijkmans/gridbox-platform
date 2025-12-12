@@ -4,7 +4,7 @@ import * as deviceService from "../services/devicesService.js";
 const router = Router();
 
 /**
- * Eenvoudige healthcheck: toont dat devices API werkt
+ * Simpele healthcheck
  */
 router.get("/", (req, res) => {
   res.json({ ok: true, message: "Devices endpoint werkt" });
@@ -12,7 +12,7 @@ router.get("/", (req, res) => {
 
 /**
  * GET /api/devices/:boxId/config
- * Haal configuratie op voor Raspberry Pi
+ * Raspberry Pi haalt zijn volledige configuratie op
  */
 router.get("/:boxId/config", async (req, res) => {
   try {
@@ -23,27 +23,62 @@ router.get("/:boxId/config", async (req, res) => {
     if (!config) {
       return res.status(404).json({
         ok: false,
-        error: "Geen configuratie gevonden voor deze box",
+        message: "Geen configuratie gevonden voor deze box",
         boxId
       });
     }
 
     return res.json({
       ok: true,
-      ...config
+      config
     });
 
   } catch (err) {
     console.error("Fout in GET /devices/:boxId/config:", err);
     return res.status(500).json({
       ok: false,
-      error: "Interne serverfout"
+      message: "Interne serverfout bij ophalen configuratie"
     });
   }
 });
 
 /**
- * Optioneel: oude route laten bestaan voor debugging
+ * POST /api/devices/:boxId/status
+ * Raspberry Pi stuurt status updates door
+ * We loggen dit in Firestore op:
+ * boxes/{boxId}/status/current
+ */
+router.post("/:boxId/status", async (req, res) => {
+  try {
+    const boxId = req.params.boxId;
+    const status = req.body;
+
+    if (!status || typeof status !== "object") {
+      return res.status(400).json({
+        ok: false,
+        message: "Ongeldige status payload"
+      });
+    }
+
+    await deviceService.updateStatus(boxId, status);
+
+    return res.json({
+      ok: true,
+      message: "Status ontvangen en opgeslagen",
+      boxId
+    });
+
+  } catch (err) {
+    console.error("Fout in POST /devices/:boxId/status:", err);
+    return res.status(500).json({
+      ok: false,
+      message: "Interne serverfout bij opslaan status"
+    });
+  }
+});
+
+/**
+ * Eventueel oude debug route behouden
  */
 router.get("/:id", (req, res) => {
   res.json({ ok: true, deviceId: req.params.id });
