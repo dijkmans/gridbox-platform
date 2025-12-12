@@ -1,9 +1,30 @@
 import { Router } from "express";
+import { db } from "../lib/firestore.js";
+import { Timestamp } from "firebase-admin/firestore";
+
 const router = Router();
 
-router.post("/", (req, res) => {
-  console.log("Event ontvangen:", req.body);
-  res.json({ ok: true });
-});
+/**
+ * POST /api/events/:boxId
+ * Ontvang en log events van een Gridbox (bv van de Raspberry Pi)
+ */
+router.post("/:boxId", async (req, res) => {
+  try {
+    const { boxId } = req.params;
+    const { type, source = "unknown", meta = {} } = req.body;
 
-export default router;
+    if (!type) {
+      return res.status(400).json({
+        ok: false,
+        error: "Event type is verplicht"
+      });
+    }
+
+    const event = {
+      type,
+      source,
+      meta,
+      createdAt: Timestamp.now()
+    };
+
+    await db
