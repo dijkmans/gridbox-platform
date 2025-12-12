@@ -1,17 +1,13 @@
-# api/Dockerfile
-
 FROM node:18-slim
 
-WORKDIR /app
+WORKDIR /app/api
 
-COPY package*.json ./
-RUN npm install --omit=dev
+COPY api/package.json .
+COPY api/package-lock.json .
+RUN npm install
 
-COPY . .
+COPY api .
 
-ENV HOST=0.0.0.0
 ENV PORT=8080
-
-EXPOSE 8080
 
 CMD ["npm", "start"]
