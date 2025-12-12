@@ -3,17 +3,16 @@ FROM node:18-slim
 # Werkdirectory binnen de container
 WORKDIR /app
 
-# Eerst alleen package-files kopiëren (betere caching)
-COPY api/package.json api/package-lock.json ./api/
+# Eerst enkel package.json + lock kopiëren (beste caching)
+COPY package.json package-lock.json ./
 
-# Dependencies installeren binnen de api-folder
-WORKDIR /app/api
+# Dependencies installeren
 RUN npm install
 
-# Daarna pas de volledige API-code kopiëren
-COPY api/ .
+# Daarna volledige API-code kopiëren
+COPY . .
 
-# Zorg dat Cloud Run weet op welke poort Node luistert
+# Cloud Run gebruikt deze poort, Node moet dit respecteren
 ENV PORT=8080
 
 # Start de API
