@@ -22,7 +22,10 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t europe-west1-docker.pkg.dev/gridbox-platform/gridbox-api/api:latest ./api
+          docker build \
+            -f api/Dockerfile \
+            -t europe-west1-docker.pkg.dev/gridbox-platform/gridbox-api/api:latest \
+            ./api
 
       - name: Push Docker image
         run: |
