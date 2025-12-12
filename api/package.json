@@ -2,7 +2,7 @@
   "name": "gridbox-api",
   "version": "1.0.0",
   "type": "module",
-  "description": "Gridbox API voor devices, commands, status en config.",
+  "description": "Gridbox API voor devices, commands, status, shares, boxes en config.",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
