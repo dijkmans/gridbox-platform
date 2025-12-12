@@ -6,7 +6,7 @@ const router = Router();
 
 /**
  * POST /api/status/:boxId
- * Ontvang heartbeat/status van een Gridbox (Pi)
+ * Ontvang status / heartbeat van een Gridbox (Pi)
  */
 router.post("/:boxId", async (req, res) => {
   try {
@@ -33,6 +33,56 @@ router.post("/:boxId", async (req, res) => {
 
   } catch (err) {
     console.error("Fout bij status update:", err);
+    return res.status(500).json({
+      ok: false,
+      error: "Interne serverfout"
+    });
+  }
+});
+
+/**
+ * GET /api/status/:boxId
+ * Status opvragen (dashboard, monitoring)
+ */
+router.get("/:boxId", async (req, res) => {
+  try {
+    const { boxId } = req.params;
+
+    const snap = await db
+      .collection("boxes")
+      .doc(boxId)
+      .get();
+
+    if (!snap.exists) {
+      return res.status(404).json({
+        ok: false,
+        error: "Box niet gevonden"
+      });
+    }
+
+    const data = snap.data();
+    const status = data.status || {};
+
+    const lastSeen = status.lastSeen?.toDate?.();
+    let online = false;
+
+    if (lastSeen) {
+      const diffSeconds = (Date.now() - lastSeen.getTime()) / 1000;
+      online = diffSeconds < 180; // online als laatste update < 3 minuten
+    }
+
+    return res.json({
+      ok: true,
+      boxId,
+      status: {
+        ...status,
+        online,
+        lastSeen
+      }
+    });
+
+  } catch (err) {
+    console.error("Fout bij status ophalen:", err);
     return res.status(500).json({
       ok: false,
       error: "Interne serverfout"
