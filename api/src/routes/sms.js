@@ -8,7 +8,7 @@ const router = Router();
 
 /**
  * Normaliseer telefoonnummer
- * Twilio stuurt nummers meestal als +32..., +31...
+ * Twilio stuurt nummers als +32..., +31...
  */
 function normalizePhone(number) {
   if (!number) return null;
@@ -22,10 +22,11 @@ function normalizePhone(number) {
 router.post("/inbound", async (req, res) => {
   try {
     console.log("📩 Inkomende SMS webhook");
-    console.log("Payload:", req.body);
+    console.log("From:", req.body.From);
+    console.log("Body:", req.body.Body);
 
     const from = normalizePhone(req.body.From);
-    const body = (req.body.Body || "").trim();
+    const body = (req.body.Body || "").trim().toUpperCase();
 
     if (!from) {
       return res
@@ -38,7 +39,7 @@ router.post("/inbound", async (req, res) => {
         `.trim());
     }
 
-    // 1. Zoek een actieve share op basis van telefoonnummer
+    // 1. Zoek actieve share op basis van telefoonnummer
     const share = await sharesService.findActiveShareByPhone(from);
 
     if (!share) {
@@ -52,7 +53,19 @@ router.post("/inbound", async (req, res) => {
         `.trim());
     }
 
-    // 2. Maak een OPEN-command aan voor de box
+    // 2. Alleen OPEN-commando's verwerken
+    if (body !== "OPEN") {
+      return res
+        .status(200)
+        .type("text/xml")
+        .send(`
+<Response>
+  <Message>Ongeldig commando. Stuur OPEN om de box te openen.</Message>
+</Response>
+        `.trim());
+    }
+
+    // 3. Maak OPEN-command aan voor de box
     const result = await boxesService.openBox(share.boxId);
 
     if (!result || result.success !== true) {
@@ -66,7 +79,7 @@ router.post("/inbound", async (req, res) => {
         `.trim());
     }
 
-    // 3. Succesbericht terug naar gebruiker
+    // 4. Succesbericht
     return res
       .status(200)
       .type("text/xml")
