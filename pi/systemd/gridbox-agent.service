@@ -1,0 +1,11 @@
+[Unit]
+Description=Gridbox Agent
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/node /opt/gridbox-platform/pi/agent/index.js
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target
