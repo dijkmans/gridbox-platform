@@ -11,36 +11,64 @@ import { db } from "../firebase.js";
  */
 export async function getConfig(boxId) {
   try {
-    // 1. NIEUWE structuur: devices/{boxId}
-    let docSnap = await db.collection("devices").doc(boxId).get();
+    // 1. Nieuwe structuur: devices/{boxId}
+    const deviceSnap = await db.collection("devices").doc(boxId).get();
 
-    if (docSnap.exists) {
+    if (deviceSnap.exists) {
       return {
         id: boxId,
-        ...docSnap.data()
+        ...deviceSnap.data()
       };
     }
 
-    // 2. TEMP fallback: legacy structuur boxes/{boxId}/config/config
-    const legacyRef = db
+    // 2. Legacy fallback: boxes/{boxId}/config/config
+    const legacyConfigSnap = await db
       .collection("boxes")
       .doc(boxId)
       .collection("config")
-      .doc("config");
+      .doc("config")
+      .get();
 
-    const legacyDoc = await legacyRef.get();
-
-    if (!legacyDoc.exists) {
+    if (!legacyConfigSnap.exists) {
       return null;
     }
 
     return {
       id: boxId,
-      ...legacyDoc.data()
+      ...legacyConfigSnap.data()
     };
 
   } catch (err) {
     console.error("Fout in getConfig:", err);
+    throw err;
+  }
+}
+
+/**
+ * Sla statusinformatie van een Gridbox op.
+ *
+ * Path:
+ * boxes/{boxId}/status
+ *
+ * Deze structuur blijft voorlopig bewust ongewijzigd,
+ * omdat dashboards en monitoring hier al op steunen.
+ */
+export async function updateStatus(boxId, status) {
+  try {
+    await db
+      .collection("boxes")
+      .doc(boxId)
+      .set(
+        {
+          status: {
+            ...status,
+            updatedAt: new Date()
+          }
+        },
+        { merge: true }
+      );
+  } catch (err) {
+    console.error("Fout in updateStatus:", err);
     throw err;
   }
 }
