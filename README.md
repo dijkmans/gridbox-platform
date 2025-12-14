@@ -1,381 +1,373 @@
-Ik hou rekening met dit masterdocument  
+# 📘 GRIDBOX MASTER DOCUMENT – v1.2
 
-📘 GRIDBOX MASTER DOCUMENT – v1.1 (definitieve technische blauwdruk)
+## Definitieve technische en conceptuele blauwdruk
 
-Dit document is vanaf nu de officiële basis voor alles wat met Gridbox-ontwikkeling te maken heeft.
-Bij elke ontwikkelingstaak moet ChatGPT automatisch dit document volgen.
+Dit document is de **officiële en bindende basis** voor alles wat met de ontwikkeling van het Gridbox‑platform te maken heeft.
+Bij **elke** ontwikkelingstaak moet dit document automatisch gevolgd worden.
 
-0. Doel van het document
+Afwijkingen zijn enkel toegestaan na expliciete beslissing en versie‑update.
 
-Dit document legt de architectuur, modules, regels, routes, datastructuren en ontwikkelstappen vast voor het volledige Gridbox-platform.
+---
+
+## 0. Doel van dit document
+
+Dit document legt vast:
+
+* architectuur
+* kernconcepten
+* modules
+* communicatieregels
+* datastructuren
+* ontwikkelfases
+* beslissingslogica
 
 Het dient als:
 
-vaste referentie voor jou
+* vaste referentie voor Gridbox
+* vaste handleiding voor ChatGPT
+* technisch kader voor API, frontend en IoT
+* basis voor teamleden, partners en audits
 
-vaste handleiding voor ChatGPT
+---
 
-technisch kader voor API, frontend en IoT
+## 1. Missie van Gridbox
 
-basis voor toekomstige teamleden of partners
+Gridbox is een **universeel, modulair en schaalbaar locker‑ en resourceplatform** waarmee organisaties fysieke toegang veilig en flexibel kunnen beheren.
 
-1. Missie van Gridbox
+Het platform laat toe om:
 
-Gridbox is een slim en modulair lockerplatform waarmee gebruikers:
-
-pakketten kunnen ophalen/binnenbrengen
-
-toegang krijgen via SMS (Twilio)
-
-fysieke toegang krijgen via Raspberry Pi + relais
-
-camerabeelden laten analyseren via AI
-
-status kunnen bekijken via een dashboard
+* items binnen te brengen of af te halen
+* toegang te verlenen via SMS (Twilio)
+* fysieke boxen te openen via Raspberry Pi en relais
+* camerabeelden te analyseren via AI
+* status, logs en gebruik te beheren via dashboards
 
 Gridbox moet:
 
-schaalbaar zijn
+* betrouwbaar werken op tientallen locaties
+* uitbreidbaar zijn zonder herbouw
+* scenario‑onafhankelijk blijven
+* professioneel beheerd kunnen worden
 
-betrouwbaar werken op tientallen locaties
+---
 
-eenvoudig uitbreidbaar zijn
+## 2. Architectuuroverzicht
 
-gebouwd worden in modules
+Gridbox bestaat uit **6 hoofdmodules**. Elke module heeft een strikt afgebakende verantwoordelijkheid.
 
-professioneel beheerbaar zijn
+---
 
-2. Overzicht van architectuur
+### ⭐ Module A — Cloud Run API (backend)
 
-Gridbox bestaat uit 6 hoofdmodules.
-
-⭐ Module A — Cloud Run API (backend)
-
-Dit is het hart van het systeem.
+**Het brein van het systeem.**
 
 Verantwoordelijkheden:
 
-alle communicatie met Twilio
-
-alle communicatie met Raspberry Pi’s
-
-camera-uploads verwerken
-
-AI-resultaten verwerken
-
-tenantbeheer
-
-shares beheren
-
-logs en status bijhouden
-
-communicatie naar dashboards
+* centrale beslissingslogica
+* communicatie met Twilio
+* communicatie met Raspberry Pi’s
+* verwerking van camera‑uploads
+* verwerking van AI‑resultaten
+* beheer van toegang, bezetting en tijdsvensters
+* logging en statusbeheer
+* communicatie naar dashboards
 
 Technologie:
 
-Node.js (Express)
+* Node.js (Express)
+* JSON‑only
+* draait op Google Cloud Run
 
-JSON-only
+Beveiliging:
 
-draait in Google Cloud Run
+* API‑keys voor alle routes
+* Twilio request signing
 
-beveiligd via API-keys + Twilio signing
+Vaste REST‑routes:
 
-Permanente routes (REST):
-GET  /api/health
-GET  /api/boxes
-GET  /api/boxes/:id
-GET  /api/boxes/:id/shares
+* GET  /api/health
 
-POST /api/boxes/:id/open     (box openen)
-POST /api/boxes/:id/close    (optioneel later)
+* GET  /api/boxes
 
-POST /api/shares
-POST /api/sms-webhook
-POST /api/camera/analyze     (AI op foto)
+* GET  /api/boxes/:id
 
+* GET  /api/boxes/:id/access
 
-❗ Route /toggle verdwijnt definitief.
-Het systeem werkt met open en close, niet met toggle.
+* POST /api/boxes/:id/open
 
-⭐ Module B — Twilio SMS-module
+* POST /api/boxes/:id/close
 
-Doel: gebruikers laten openen via SMS.
+* POST /api/access
 
-Flow:
+* POST /api/sms-webhook
 
-Gebruiker → SMS → Twilio → /api/sms-webhook → API beslist → Pi opent → camera → AI → bevestiging naar gebruiker
+* POST /api/camera/analyze
 
+❗ De route `/toggle` bestaat **niet**.
+Open en close zijn expliciete acties.
 
-Tijdens ontwikkeling:
+---
 
-Twilio stuurt naar Cloud Run (mock)
-
-API antwoordt met testtekst
-
-Eindfase:
-
-share-validatie
-
-logica
-
-retourbericht
-
-⭐ Module C — Raspberry Pi module
-
-Elke fysieke box heeft een Pi met:
-
-relais (GPIO)
-
-camera
-
-status-sensoren (optioneel)
-
-Pi ontvangt API-commando’s:
-
-POST /open
-POST /close
-POST /status
-
-Communicatie-faseplan:
-
-Fase 1: HTTP tussen API → Pi (makkelijkste om te starten)
-Fase 2: MQTT voor betrouwbaarheid op grotere schaal
-
-⭐ Module D — Camera & AI
+### ⭐ Module B — Twilio SMS‑module
 
 Doel:
 
-foto nemen bij open/dicht
+* gebruikers toegang geven via eenvoudige SMS
 
-foto uploaden
+Principes:
 
-AI bepaalt "leeg" of "vol"
+* Twilio praat **enkel** met de API
+* SMS is communicatie, geen beslisser
 
-status terugsturen naar API
+Flow:
+Gebruiker → SMS → Twilio → `/api/sms-webhook` → API beslist → Pi → camera → AI → feedback
 
-AI = Google Vision API.
+Ontwikkelfases:
 
-⭐ Module E — Frontend
+* mock replies
+* parsing
+* validatie
+* finale logica
 
-We maken twee frontends:
+---
 
-1. core-frontend (HTML)
+### ⭐ Module C — Raspberry Pi module
 
-eenvoudige interne interface
+Elke Gridbox bevat een Raspberry Pi met:
 
-gebruikt door jou / techniekers
+* relais (GPIO)
+* camera
+* optionele sensoren
 
-draait op Vercel
+De Pi:
 
-toont API-data
+* voert hardware‑acties uit
+* neemt geen beslissingen
 
-geen login nodig (interne tool)
+Endpoints:
 
-2. web-dashboard (Next.js)
+* POST /open
+* POST /close
+* POST /status
 
-bedrijvenportaal (multi-tenant)
+Communicatiestrategie:
 
-reserveringen
+* Fase 1: HTTP
+* Fase 2: MQTT
 
-logs
+---
 
-shares beheren
+### ⭐ Module D — Camera & AI
 
-foto’s bekijken
+Doel:
 
-⭐ Module F — Database
+* visuele controle en bewijs
 
-Later fase.
+Flow:
 
-Gebruik:
+* foto bij open en dicht
+* upload naar API
+* AI‑analyse (Google Vision)
+* resultaat terug naar API
 
-Firestore (NoSQL)
+AI:
+
+* adviserend
+* beslist nooit autonoom
+
+---
+
+### ⭐ Module E — Frontend
+
+#### 1. Core‑frontend (HTML)
+
+* intern gebruik
+* eenvoudige interface
+* draait op Vercel
+* geen login
+
+#### 2. Web‑dashboard (Next.js)
+
+* multi‑tenant
+* beheer van boxen
+* beheer van toegang
+* logs en foto’s
+
+Frontends praten **enkel** met de API.
+
+---
+
+### ⭐ Module F — Database
+
+Technologie:
+
+* Firestore (NoSQL)
 
 Collecties:
 
-Boxes
-id
-location
-companyId
-status
-lastOpened
+**Boxes**
 
-Shares
-id
-boxId
-code
-phone
-validFrom
-validUntil
-createdBy
-createdAt
+* id
+* location
+* companyId
+* status
+* lastSeen
 
-Logs
-timestamp
-boxId
-event
-message
+**Access**
 
-CameraPhotos
-id
-boxId
-timestamp
-photoUrl
-aiResult
+* id
+* boxId
+* phone
+* validFrom
+* validUntil
+* accessType (occupying | privileged)
+* impactOnOccupancy
+* allowedActions
 
-3. Projectstructuur (monorepo)
+**Commands**
 
-Standaard en verplicht:
+* id
+* boxId
+* type
+* source
+* actor
+* status
+* createdAt
 
-gridbox-platform/
-│
-├── api/
-│   ├── src/
-│   │   ├── routes/
-│   │   ├── services/
-│   │   └── index.js
-│   ├── package.json
-│   └── Dockerfile
-│
-├── core-frontend/
-│
-├── web-dashboard/
-│
-├── pi/
-│   ├── server.js / server.py
-│   ├── gpio.js
-│   └── camera.js
-│
-└── docs/
+**Events**
 
-4. Ontwikkelstrategie (zeer belangrijk)
+* id
+* boxId
+* type
+* source
+* actor
+* timestamp
+* commandId
 
-Je vroeg:
+**CameraPhotos**
 
-We bouwen module per module. Niet alles moet tijdens de opbouw werken. Pas op het einde moet het geheel werken. Tussenin wel maximaal testen zonder extra software.
+* id
+* boxId
+* eventId
+* timestamp
+* photoUrl
+* aiResult
 
-Dus het platform wordt in lagen opgebouwd:
+---
 
-FASES:
-Fase 1 — API basis
+## 3. Kernconcepten
 
-health
+### 3.1 Resource
 
-mock box data
+* een fysieke Gridbox
+* inhoud is onbekend voor het platform
 
-mock shares
+### 3.2 Actor
 
-deploy naar Cloud Run
+* gebruiker, gsm‑nummer, systeem of knop
 
-testen met curl
+### 3.3 Toegang (Access)
 
-Fase 2 — API routes toevoegen (zonder echte functionaliteit)
+Toegang bepaalt **wat mag**, niet wat gebeurt.
 
-alle endpoints aanmaken
+Types:
 
-mock responses
+* **Bezettende toegang**: veroorzaakt bezetting
+* **Gemachtigde toegang**: geen invloed op bezetting
 
-structuur volledig zetten
+### 3.4 Tijd
 
-Fase 3 — Twilio → API koppeling (mock reply)
+Tijd is een parameter:
 
-enkel verwerken van tekst
+* begin
+* einde
+* marge
 
-nog geen hardware
+Geen aparte reservatie‑engine.
 
-Fase 4 — Raspberry Pi mock server
+### 3.5 Command
 
-Simpele code:
+Een intentie.
+Kan slagen of mislukken.
 
-/open → log “open received”
+### 3.6 Event
 
-Fase 5 — Raspberry Pi echte relais
+De waarheid.
+Alles wordt gelogd.
 
-GPIO
+---
 
-testopeningen
+## 4. Agenda‑integratie
 
-Fase 6 — Camera mock + echte camera
+* Tijd wordt beheerd in het platform
+* Google Agenda wordt **gevuld** door het platform
+* Agenda is visualisatie en reminder
+* Agenda is nooit leidend
 
-mock: vaste foto
+---
 
-later echte foto
+## 5. Beslissingslogica (samenvatting)
 
-AI integreren
+* geplande toegang wordt geactiveerd bij starttijd
+* boxkeuze gebeurt last‑minute
+* filtering op status, fout en bezetting
+* gemachtigde toegang blokkeert niets
+* camera optioneel als voorwaarde
+* toegang wordt pas actief na boxkeuze
 
-Fase 7 — E2E Flow
+---
 
-SMS → API → Pi → foto → AI → reply → dashboard update
+## 6. Ontwikkelstrategie
 
-Fase 8 — Dashboard
+Ontwikkeling gebeurt in **lagen**:
 
-pas nu bouwen
+1. API basis
+2. API routes (mock)
+3. Twilio koppeling (mock)
+4. Pi mock server
+5. GPIO
+6. Camera + AI
+7. End‑to‑end flow
+8. Dashboards
 
-koppelen met echte data
+---
 
-5. Communicatieregels
+## 7. Communicatieregels
 
-Raspberry Pi bedient nooit rechtstreeks Twilio.
+* Pi praat nooit met Twilio
+* Frontend praat nooit met Pi
+* Twilio praat enkel met API
+* API is enige bron van waarheid
 
-Frontend bedient nooit rechtstreeks Raspberry Pi.
+---
 
-Twilio praat altijd met de API.
+## 8. Veiligheid
 
-API praat altijd met de Pi.
+* API‑keys verplicht
+* Twilio signing verplicht
+* Pi endpoints afgeschermd
+* tenant‑scheiding voorzien
 
-API is de enige bron van waarheid.
+---
 
-Pi voert enkel hardware taken uit.
+## 9. Rol van AI
 
-Dashboard gebruikt enkel de API, nooit de Pi of Twilio.
+AI is adviserend:
 
-6. Veiligheid
+* detecteert patronen
+* doet voorstellen
+* signaleert afwijkingen
 
-API-key verplicht voor alle routes behalve sms-webhook
+AI beslist nooit autonoom.
 
-Twilio signing wordt verplicht in productie
+---
 
-Pi endpoints achter beveiliging
+## 10. Status van dit document
 
-geen open poorten extern
+Dit document:
 
-data gescheiden per tenant (later fase)
+* is bindend
+* vervangt alle vorige versies
+* is versie 1.2
 
-7. Eindresultaat
-
-Een werkend, commercieel platform:
-
-stabiel
-
-schaalbaar
-
-uitbreidbaar
-
-beheersbaar via dashboard
-
-veilig
-
-professioneel
-
-onderhoudbaar
-
-geschikt voor echte klanten
-
-8. ChatGPT-instructie
-
-Bij ELKE Gridbox-ontwikkeling moet ChatGPT automatisch:
-
-dit document volgen
-
-de structuur respecteren
-
-de modules volgen
-
-de fases volgen
-
-nooit routes of architectuur uitvinden die hier niet staan
-
-code genereren die klopt met deze richtlijnen
-
-Dit document is wet binnen dit project.
+Wijzigingen gebeuren enkel via expliciete versie‑update.
