@@ -45,8 +45,8 @@ router.get("/:boxId/config", async (req, res) => {
 /**
  * POST /api/devices/:boxId/status
  * Raspberry Pi stuurt status updates door
- * We loggen dit in Firestore op:
- * boxes/{boxId}/status/current
+ * Wordt opgeslagen in:
+ * boxes/{boxId}/status
  */
 router.post("/:boxId/status", async (req, res) => {
   try {
@@ -73,6 +73,47 @@ router.post("/:boxId/status", async (req, res) => {
     return res.status(500).json({
       ok: false,
       message: "Interne serverfout bij opslaan status"
+    });
+  }
+});
+
+/**
+ * POST /api/devices/:boxId/commands
+ * Maakt een nieuw command aan voor een Gridbox
+ * Wordt opgeslagen in:
+ * boxes/{boxId}/commands
+ */
+router.post("/:boxId/commands", async (req, res) => {
+  try {
+    const boxId = req.params.boxId;
+    const { type } = req.body;
+
+    if (!type) {
+      return res.status(400).json({
+        ok: false,
+        message: "Command type ontbreekt"
+      });
+    }
+
+    const command = {
+      type,
+      status: "pending",
+      createdAt: new Date()
+    };
+
+    await deviceService.addCommand(boxId, command);
+
+    return res.json({
+      ok: true,
+      message: "Command aangemaakt",
+      command
+    });
+
+  } catch (err) {
+    console.error("Fout in POST /devices/:boxId/commands:", err);
+    return res.status(500).json({
+      ok: false,
+      message: "Interne serverfout bij aanmaken command"
     });
   }
 });
