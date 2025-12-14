@@ -27,7 +27,7 @@ export async function getConfig(boxId) {
 /**
  * Update de status van een Gridbox.
  * Path:
- * boxes/{boxId}/status
+ * boxes/{boxId}
  */
 export async function updateStatus(boxId, status) {
   try {
@@ -65,6 +65,30 @@ export async function addCommand(boxId, command) {
       .add(command);
   } catch (err) {
     console.error("Fout in addCommand:", err);
+    throw err;
+  }
+}
+
+/**
+ * Haal alle pending commands op voor een Gridbox.
+ * Path:
+ * boxes/{boxId}/commands
+ */
+export async function getPendingCommands(boxId) {
+  try {
+    const snapshot = await db
+      .collection("boxes")
+      .doc(boxId)
+      .collection("commands")
+      .where("status", "==", "pending")
+      .get();
+
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (err) {
+    console.error("Fout in getPendingCommands:", err);
     throw err;
   }
 }
