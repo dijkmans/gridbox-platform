@@ -46,7 +46,7 @@ router.get("/:boxId/config", async (req, res) => {
  * POST /api/devices/:boxId/status
  * Raspberry Pi stuurt status updates door
  * Wordt opgeslagen in:
- * boxes/{boxId}/status
+ * boxes/{boxId}
  */
 router.post("/:boxId/status", async (req, res) => {
   try {
@@ -79,8 +79,8 @@ router.post("/:boxId/status", async (req, res) => {
 
 /**
  * POST /api/devices/:boxId/commands
- * Maakt een nieuw command aan voor een Gridbox
- * Wordt opgeslagen in:
+ * Maakt een nieuw command aan
+ * Path:
  * boxes/{boxId}/commands
  */
 router.post("/:boxId/commands", async (req, res) => {
@@ -114,6 +114,30 @@ router.post("/:boxId/commands", async (req, res) => {
     return res.status(500).json({
       ok: false,
       message: "Interne serverfout bij aanmaken command"
+    });
+  }
+});
+
+/**
+ * GET /api/devices/:boxId/commands/pending
+ * Geeft alle pending commands terug
+ */
+router.get("/:boxId/commands/pending", async (req, res) => {
+  try {
+    const boxId = req.params.boxId;
+
+    const commands = await deviceService.getPendingCommands(boxId);
+
+    return res.json({
+      ok: true,
+      commands
+    });
+
+  } catch (err) {
+    console.error("Fout in GET /devices/:boxId/commands/pending:", err);
+    return res.status(500).json({
+      ok: false,
+      message: "Interne serverfout bij ophalen commands"
     });
   }
 });
