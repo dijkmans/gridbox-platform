@@ -1,5 +1,5 @@
 // api/src/routes/sms.js
-
+console.log("✅ sms.js loaded");
 import { Router } from "express";
 import * as boxesService from "../services/boxesService.js";
 import * as sharesService from "../services/sharesService.js";
