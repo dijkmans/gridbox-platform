@@ -1,5 +1,5 @@
 export const CONFIG = {
   boxId: "gbox-001",
-  apiBaseUrl: "http://localhost:8080/api",
+  apiBaseUrl: "https://gridbox-api-960191535038.europe-west1.run.app/api",
   statusIntervalSeconds: 30
 };
