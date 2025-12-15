@@ -1,13 +1,14 @@
 import express from "express";
 import cors from "cors";
 
-// Bestaande routes
+// Routes (huidige structuur)
 import boxesRouter from "./routes/boxes.js";
 import sharesRouter from "./routes/shares.js";
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -20,10 +21,11 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Actieve routes
+// Routes
 app.use("/api/boxes", boxesRouter);
 app.use("/api/shares", sharesRouter);
 
+// Start server
 app.listen(PORT, () => {
   console.log(`Gridbox API listening on port ${PORT}`);
 });
