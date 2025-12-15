@@ -26,7 +26,7 @@ async function sendStatus(status) {
 }
 
 /**
- * Event versturen (optioneel)
+ * Event versturen
  */
 async function sendEvent(type, payload = {}) {
   await fetch(`${apiBaseUrl}/devices/${boxId}/events`, {
@@ -35,7 +35,8 @@ async function sendEvent(type, payload = {}) {
     body: JSON.stringify({
       type,
       payload,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      source: "pi-simulator"
     })
   });
 }
@@ -65,11 +66,18 @@ async function fetchPendingCommands() {
 /**
  * Command markeren als done
  */
-async function markCommandDone(commandId) {
+async function markCommandDone(commandId, result = "ok", extra = {}) {
   try {
     await fetch(
       `${apiBaseUrl}/devices/${boxId}/commands/${commandId}/done`,
-      { method: "POST" }
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          result,
+          ...extra
+        })
+      }
     );
   } catch (err) {
     console.error("❌ Fout bij afronden command:", err.message);
@@ -80,9 +88,12 @@ async function markCommandDone(commandId) {
  * Command uitvoeren (simulatie)
  */
 async function executeCommand(command) {
-  console.log("⚙️ Command ontvangen:", command.type);
+  const rawType = (command?.type ?? "").toString().trim();
+  const type = rawType.toLowerCase();
 
-  if (command.type === "open") {
+  console.log("⚙️ Command ontvangen:", rawType || "(geen type)");
+
+  if (type === "open") {
     console.log("🔓 Simulatie: box openen");
 
     await sendStatus({
@@ -92,9 +103,13 @@ async function executeCommand(command) {
       simulated: true,
       timestamp: new Date().toISOString()
     });
+
+    await markCommandDone(command.id, "ok");
+    console.log("✅ Command afgerond");
+    return;
   }
 
-  if (command.type === "close") {
+  if (type === "close") {
     console.log("🔒 Simulatie: box sluiten");
 
     await sendStatus({
@@ -104,10 +119,17 @@ async function executeCommand(command) {
       simulated: true,
       timestamp: new Date().toISOString()
     });
+
+    await markCommandDone(command.id, "ok");
+    console.log("✅ Command afgerond");
+    return;
   }
 
-  await markCommandDone(command.id);
-  console.log("✅ Command afgerond");
+  console.log("⚠️ Onbekend command type:", rawType);
+  await markCommandDone(command.id, "unknown_command", {
+    payload: { receivedType: rawType }
+  });
+  console.log("✅ Command afgerond (unknown)");
 }
 
 /**
