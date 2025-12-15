@@ -1,5 +1,5 @@
 // api/src/services/boxesService.js
-import { getBox, listSharesForBox } from "../db.js";
+import { getBox } from "../db.js";
 import * as devicesService from "./devicesService.js";
 
 const runningOnCloudRun = !!process.env.K_SERVICE;
@@ -27,23 +27,18 @@ export async function getById(boxId) {
 }
 
 // ----------------------------------------------------
-// Shares voor box
-// ----------------------------------------------------
-export async function getShares(boxId) {
-  return listSharesForBox(boxId);
-}
-
-// ----------------------------------------------------
-// OPEN via SMS
+// OPEN command
 // ----------------------------------------------------
 export async function openBox(boxId, meta = {}) {
   const command = {
     type: "open",
-    source: meta.source || "sms",
+    source: meta.source || "unknown",
     requestedBy: meta.phone || null,
     createdAt: new Date().toISOString(),
     status: "pending"
   };
+
+  console.log("📤 OPEN command:", command);
 
   const created = await devicesService.addCommand(boxId, command);
 
@@ -59,7 +54,7 @@ export async function openBox(boxId, meta = {}) {
 export async function closeBox(boxId, meta = {}) {
   const command = {
     type: "close",
-    source: meta.source || "sms",
+    source: meta.source || "unknown",
     requestedBy: meta.phone || null,
     createdAt: new Date().toISOString(),
     status: "pending"
@@ -71,13 +66,4 @@ export async function closeBox(boxId, meta = {}) {
     success: true,
     command: created
   };
-}
-
-// Legacy
-export async function open(id) {
-  return openBox(id, { source: "api" });
-}
-
-export async function close(id) {
-  return closeBox(id, { source: "api" });
 }
