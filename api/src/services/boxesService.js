@@ -1,7 +1,7 @@
 // api/src/services/boxesService.js
 
 import { Firestore } from "@google-cloud/firestore";
-import { getBox, listSharesForBox } from "../db.js";
+import { getBox } from "../db.js";
 
 const runningOnCloudRun = !!process.env.K_SERVICE;
 const firestore = runningOnCloudRun ? new Firestore() : null;
@@ -11,12 +11,15 @@ const firestore = runningOnCloudRun ? new Firestore() : null;
  */
 const localBoxes = [
   {
-    id: "heist-1",
-    status: { door: "closed", lock: "locked", online: true }
-  },
-  {
     id: "gbox-001",
-    status: { door: "closed", lock: "locked", online: true }
+    lifecycle: {
+      state: "closed"
+    },
+    status: {
+      door: "closed",
+      lock: "locked",
+      online: true
+    }
   }
 ];
 
@@ -27,6 +30,8 @@ export async function getAll() {
   if (!runningOnCloudRun) {
     return localBoxes;
   }
+
+  // later uitbreidbaar
   return [];
 }
 
@@ -37,20 +42,14 @@ export async function getById(boxId) {
   if (!runningOnCloudRun) {
     return localBoxes.find(b => b.id === boxId) || null;
   }
-  return await getBox(boxId);
-}
 
-// ---------------------------------------------------------
-// Shares voor box ophalen
-// ---------------------------------------------------------
-export async function getShares(boxId) {
-  return await listSharesForBox(boxId);
+  return await getBox(boxId);
 }
 
 // ---------------------------------------------------------
 // OPEN
 // ---------------------------------------------------------
-export async function openBox(boxId, source = "api", phone = null) {
+export async function openBox(boxId, source = "api", requestedBy = "system") {
   if (!runningOnCloudRun) {
     console.log(`🧪 [LOCAL] OPEN ${boxId}`);
     return { success: true };
@@ -63,30 +62,29 @@ export async function openBox(boxId, source = "api", phone = null) {
     return { success: false, message: "Box niet gevonden" };
   }
 
-  // 1. Command voor device / simulator
-  await boxRef.collection("commands").add({
-    type: "OPEN",
-    source,
-    phone,
-    createdAt: new Date().toISOString()
-  });
+  const now = new Date().toISOString();
 
-  // 2. Platform-status vastzetten (leidend)
+  // 1. Lifecycle is LEIDEND
   await boxRef.set(
     {
-      status: {
-        door: "open",
-        lock: "unlocked"
-      },
       lifecycle: {
         state: "open",
-        openedAt: new Date().toISOString(),
-        openedBy: phone || "system"
+        openedAt: now,
+        openedBy: requestedBy,
+        source
       },
-      updatedAt: new Date().toISOString()
+      updatedAt: now
     },
     { merge: true }
   );
+
+  // 2. Command voor hardware / simulator
+  await boxRef.collection("commands").add({
+    type: "OPEN",
+    source,
+    requestedBy,
+    createdAt: now
+  });
 
   return { success: true };
 }
@@ -94,7 +92,7 @@ export async function openBox(boxId, source = "api", phone = null) {
 // ---------------------------------------------------------
 // CLOSE
 // ---------------------------------------------------------
-export async function closeBox(boxId, source = "api", phone = null) {
+export async function closeBox(boxId, source = "api", requestedBy = "system") {
   if (!runningOnCloudRun) {
     console.log(`🧪 [LOCAL] CLOSE ${boxId}`);
     return { success: true };
@@ -107,30 +105,29 @@ export async function closeBox(boxId, source = "api", phone = null) {
     return { success: false, message: "Box niet gevonden" };
   }
 
-  // 1. Command voor device / simulator
-  await boxRef.collection("commands").add({
-    type: "CLOSE",
-    source,
-    phone,
-    createdAt: new Date().toISOString()
-  });
+  const now = new Date().toISOString();
 
-  // 2. Platform-status vastzetten
+  // 1. Lifecycle is LEIDEND
   await boxRef.set(
     {
-      status: {
-        door: "closed",
-        lock: "locked"
-      },
       lifecycle: {
         state: "closed",
-        closedAt: new Date().toISOString(),
-        closedBy: phone || "system"
+        closedAt: now,
+        closedBy: requestedBy,
+        source
       },
-      updatedAt: new Date().toISOString()
+      updatedAt: now
     },
     { merge: true }
   );
+
+  // 2. Command voor hardware / simulator
+  await boxRef.collection("commands").add({
+    type: "CLOSE",
+    source,
+    requestedBy,
+    createdAt: now
+  });
 
   return { success: true };
 }
