@@ -1,7 +1,7 @@
 // api/src/routes/sms.js
 import { Router } from "express";
-import * as sharesService from "../services/sharesService.js";
 import * as boxesService from "../services/boxesService.js";
+import * as sharesService from "../services/sharesService.js";
 
 const router = Router();
 
@@ -20,54 +20,68 @@ router.post("/inbound", async (req, res) => {
     const body = (req.body.Body || "").trim().toUpperCase();
 
     if (!from) {
-      return res.type("text/xml").send(`
+      return res.status(200).type("text/xml").send(
+        `
 <Response>
   <Message>Ongeldig telefoonnummer.</Message>
 </Response>
-      `.trim());
+        `.trim()
+      );
     }
 
     const share = await sharesService.findActiveShareByPhone(from);
 
     if (!share) {
-      return res.type("text/xml").send(`
+      return res.status(200).type("text/xml").send(
+        `
 <Response>
   <Message>Geen actieve toegang gevonden voor dit nummer.</Message>
 </Response>
-      `.trim());
+        `.trim()
+      );
     }
 
     if (body !== "OPEN") {
-      return res.type("text/xml").send(`
+      return res.status(200).type("text/xml").send(
+        `
 <Response>
   <Message>Ongeldig commando. Typ exact: OPEN</Message>
 </Response>
-      `.trim());
+        `.trim()
+      );
     }
 
-    const result = await boxesService.openBox(share.boxId);
+    const result = await boxesService.openBox(share.boxId, {
+      source: "sms",
+      phone: from,
+    });
 
-    if (!result.success) {
-      return res.type("text/xml").send(`
+    if (!result || result.success !== true) {
+      return res.status(200).type("text/xml").send(
+        `
 <Response>
   <Message>De box kon niet geopend worden.</Message>
 </Response>
-      `.trim());
+        `.trim()
+      );
     }
 
-    return res.type("text/xml").send(`
+    return res.status(200).type("text/xml").send(
+      `
 <Response>
   <Message>De box is geopend.</Message>
 </Response>
-    `.trim());
-
+      `.trim()
+    );
   } catch (err) {
     console.error("❌ Fout in SMS webhook:", err);
-    return res.type("text/xml").send(`
+    return res.status(200).type("text/xml").send(
+      `
 <Response>
   <Message>Er ging iets mis. Probeer later opnieuw.</Message>
 </Response>
-    `.trim());
+      `.trim()
+    );
   }
 });
 
