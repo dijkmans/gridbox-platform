@@ -1,88 +1,48 @@
-// gridbox-core/logic/shutterController.js
-
 /**
  * Shutter controller
- * Bepaalt de volgorde en het gedrag van openen en sluiten
- * Hardware-onafhankelijk
+ * Regelt openen en sluiten van het rolluik
+ * Los van hardware, platform en UI
  */
 
-import {
-  startOpening,
-  finishOpening,
-  startClosing,
-  finishClosing,
-  getLightDelay,
-  turnLightOff
-} from "../state/stateManager.js";
+export function createShutterController({ hardware, stateManager }) {
+  return {
+    /**
+     * Open de Gridbox
+     */
+    open(source = "unknown") {
+      const current = stateManager.getState();
 
-/**
- * Open het rolluik
- *
- * source = "button" | "platform"
- * onRelayOpen = functie die het OPEN relais pulseert
- * onDone = callback na voltooiing
- */
-export async function openShutter({
-  source,
-  onRelayOpen,
-  onDone
-}) {
-  const started = startOpening(source);
-  if (!started) {
-    return false;
-  }
+      // veiligheid: niet opnieuw openen
+      if (current === "open" || current === "opening") {
+        return;
+      }
 
-  // Hardware actie: rolluik openen
-  await onRelayOpen();
+      // state eerst
+      stateManager.setState("opening", { source });
 
-  // Rolluik is open
-  finishOpening();
+      // hardware actie
+      hardware.openShutter();
 
-  if (typeof onDone === "function") {
-    onDone();
-  }
+      // eindstate
+      stateManager.setState("open", { source });
+    },
 
-  return true;
-}
+    /**
+     * Sluit de Gridbox
+     */
+    close(source = "unknown") {
+      const current = stateManager.getState();
 
-/**
- * Sluit het rolluik
- *
- * source = "button" | "platform"
- * onRelayClose = functie die het CLOSE relais pulseert
- * onLightOff = functie die licht uit zet
- * onDone = callback na voltooiing
- */
-export async function closeShutter({
-  source,
-  onRelayClose,
-  onLightOff,
-  onDone
-}) {
-  const started = startClosing(source);
-  if (!started) {
-    return false;
-  }
+      // veiligheid: niet opnieuw sluiten
+      if (current === "closed" || current === "closing") {
+        return;
+      }
 
-  // Hardware actie: rolluik sluiten
-  await onRelayClose();
+      stateManager.setState("closing", { source });
 
-  // Rolluik is dicht
-  finishClosing();
+      hardware.closeShutter();
 
-  // Licht vertraagd uitschakelen
-  const delay = getLightDelay();
-
-  setTimeout(() => {
-    turnLightOff();
-    if (typeof onLightOff === "function") {
-      onLightOff();
+      stateManager.setState("closed", { source });
     }
-  }, delay);
-
-  if (typeof onDone === "function") {
-    onDone();
-  }
-
-  return true;
+  };
 }
