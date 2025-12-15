@@ -1,9 +1,7 @@
 // api/src/db.js
+
 import { Firestore } from "@google-cloud/firestore";
 
-// ----------------------------------------------------
-// Firestore actief?
-// ----------------------------------------------------
 const useFirestore =
   !!process.env.K_SERVICE || !!process.env.FIRESTORE_EMULATOR_HOST;
 
@@ -12,60 +10,16 @@ if (useFirestore) {
   firestore = new Firestore();
 }
 
-// ----------------------------------------------------
-// Helpers
-// ----------------------------------------------------
+// helpers
 function normalizePhone(phone) {
   if (!phone) return null;
   return String(phone).replace(/\s+/g, "").trim();
 }
 
-function normalizeShare(id, data) {
-  return {
-    id,
-    boxId: data.boxId || null,
-    phone: normalizePhone(data.phone || data.phoneNumber),
-    active: data.active === true,
-    createdAt: data.createdAt || null
-  };
-}
-
-// ----------------------------------------------------
-// Lokale mock data (alleen lokaal)
-// ----------------------------------------------------
-const localBoxes = new Map([
-  [
-    "gbox-001",
-    {
-      id: "gbox-001",
-      locationName: "Simulator",
-      number: 1,
-      status: "online",
-      description: "Gridbox 001 (lokale mock)",
-      cameraEnabled: false
-    }
-  ]
-]);
-
+// lokale mock (alleen lokaal)
 const localShares = [];
 
-// ----------------------------------------------------
-// BOXES
-// ----------------------------------------------------
-export async function getBox(boxId) {
-  if (!firestore) {
-    return localBoxes.get(boxId) || null;
-  }
-
-  const doc = await firestore.collection("boxes").doc(boxId).get();
-  if (!doc.exists) return null;
-
-  return { id: doc.id, ...doc.data() };
-}
-
-// ----------------------------------------------------
-// SHARES
-// ----------------------------------------------------
+// shares per box
 export async function listSharesForBox(boxId) {
   if (!firestore) {
     return localShares.filter(
@@ -79,16 +33,16 @@ export async function listSharesForBox(boxId) {
     .where("active", "==", true)
     .get();
 
-  return snap.docs.map((d) => normalizeShare(d.id, d.data()));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+// share aanmaken
 export async function createShare({ boxId, phone }) {
   const phoneN = normalizePhone(phone);
 
   const share = {
     boxId,
     phone: phoneN,
-    phoneNumber: phoneN,
     active: true,
     createdAt: new Date().toISOString()
   };
@@ -103,7 +57,7 @@ export async function createShare({ boxId, phone }) {
   return { id: ref.id, ...share };
 }
 
-// 🔴 deze export MOET bestaan
+// actieve share box + phone
 export async function findActiveShare(boxId, phone) {
   const phoneN = normalizePhone(phone);
 
@@ -127,10 +81,10 @@ export async function findActiveShare(boxId, phone) {
     .get();
 
   if (snap.empty) return null;
-
-  return normalizeShare(snap.docs[0].id, snap.docs[0].data());
+  return { id: snap.docs[0].id, ...snap.docs[0].data() };
 }
 
+// ✅ DIT IS CRUCIAAL VOOR SMS
 export async function findActiveShareByPhone(phone) {
   const phoneN = normalizePhone(phone);
 
@@ -150,6 +104,5 @@ export async function findActiveShareByPhone(phone) {
     .get();
 
   if (snap.empty) return null;
-
-  return normalizeShare(snap.docs[0].id, snap.docs[0].data());
+  return { id: snap.docs[0].id, ...snap.docs[0].data() };
 }
