@@ -187,6 +187,7 @@
 
     if (!rawText || !number) return;
 
+    // Toon exact wat gebruiker typt
     addBubble(rawText, "sent");
     inputEl.value = "";
     sendBtn.disabled = true;
@@ -200,7 +201,7 @@
         body: new URLSearchParams({
           From: number,
           To: number,
-          Body: rawText
+          Body: rawText.toUpperCase()
         })
       });
 
@@ -223,5 +224,6 @@
     if (e.key === "Enter") sendSms();
   });
 </script>
+
 </body>
 </html>
