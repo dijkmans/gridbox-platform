@@ -1,29 +1,43 @@
-import { openShutter, closeShutter } from "../../gridbox-core/logic/shutterController.js";
-import { lightOn, scheduleLightOff } from "../../gridbox-core/logic/lightController.js";
 import { initSimulatorHardware } from "./simulatorHardware.js";
-import { initSimulatorRuntime } from "./simulatorRuntime.js";
+import { createStateManager } from "../../gridbox-core/state/stateManager.js";
+import { createShutterController } from "../../gridbox-core/logic/shutterController.js";
+import { createLightController } from "../../gridbox-core/logic/lightController.js";
+import { startSimulatorAgent } from "./simulatorAgent.js";
+
+const BOX_ID = "box-sim-001";
 
 const hardware = initSimulatorHardware();
 
-initSimulatorRuntime({ hardware });
+const stateManager = createStateManager({
+  initialState: "closed"
+});
 
-hardware.onButtonPress(async () => {
-  if (hardware.isShutterOpen()) {
-    await closeShutter({
-      source: "button",
-      onRelayClose: hardware.relayClose,
-      onLightOff: hardware.lightOff
-    });
+const shutterController = createShutterController({
+  hardware,
+  stateManager
+});
 
-    scheduleLightOff({ onLightOff: hardware.lightOff });
+const lightController = createLightController({
+  hardware,
+  stateManager,
+  config: { delayAfterCloseMs: 60000 }
+});
+
+// lokale knop blijft werken
+hardware.onButtonPress(() => {
+  if (stateManager.getState() === "open") {
+    shutterController.close("button");
+    lightController.onClose();
   } else {
-    lightOn({ onLightOn: hardware.lightOn });
-
-    await openShutter({
-      source: "button",
-      onRelayOpen: hardware.relayOpen
-    });
+    shutterController.open("button");
+    lightController.onOpen();
   }
 });
 
-window.simulateButton = () => hardware.simulateButton();
+// start API-agent
+startSimulatorAgent({
+  boxId: BOX_ID,
+  shutterController,
+  lightController,
+  stateManager
+});
