@@ -1,32 +1,41 @@
-// api/src/index.js
+import express from "express";
+import cors from "cors";
 
-const express = require("express");
-const cors = require("cors");
-
-const { getBoxHandler } = require("./boxes");
-const {
-  router: sharesRouter,
-  listSharesForBoxHandler,
-} = require("./shares");
+// Routes (huidige structuur)
+import boxesRouter from "./routes/boxes.js";
+import statusRouter from "./routes/status.js";
+// import sharesRouter from "./routes/shares.js";
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// ------------------------------------------------------
+// Middleware
+// ------------------------------------------------------
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
+// ------------------------------------------------------
 // Healthcheck
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", service: "gridbox-api" });
+// ------------------------------------------------------
+app.get("/api/health", (req, res) => {
+  res.json({
+    ok: true,
+    service: "gridbox-api"
+  });
 });
 
-// Boxes
-app.get("/api/boxes/:boxId", getBoxHandler);
-app.get("/api/boxes/:boxId/shares", listSharesForBoxHandler);
+// ------------------------------------------------------
+// Routes
+// ------------------------------------------------------
+app.use("/api/boxes", boxesRouter);
+app.use("/api/status", statusRouter);
+// app.use("/api/shares", sharesRouter);
 
-// Shares (aanmaken + verify)
-app.use("/api/shares", sharesRouter);
-
+// ------------------------------------------------------
+// Start server
+// ------------------------------------------------------
 app.listen(PORT, () => {
-  console.log(`Gridbox API luistert op poort ${PORT}`);
+  console.log(`Gridbox API listening on port ${PORT}`);
 });
