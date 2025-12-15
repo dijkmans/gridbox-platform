@@ -1,7 +1,7 @@
 // api/src/db.js
 import { Firestore } from "@google-cloud/firestore";
 
-// Cloud Run detectie
+// Detecteer Cloud Run
 const runningOnCloudRun = !!process.env.K_SERVICE;
 
 let firestore = null;
@@ -10,7 +10,7 @@ if (runningOnCloudRun) {
 }
 
 // ----------------------------------------------------
-// Lokale mock data (enkel lokaal, Cloud Run gebruikt Firestore)
+// Lokale mock data (enkel lokaal)
 // ----------------------------------------------------
 const localBoxes = new Map([
   [
@@ -34,19 +34,16 @@ const localShares = [];
 function isActiveShare(s) {
   if (!s) return false;
   if (s.active === true) return true;
-  if (s.active === "true") return true; // legacy fout
+  if (s.active === "true") return true; // als iemand per ongeluk string heeft opgeslagen
   if (s.status === "active") return true; // legacy
   return false;
 }
 
 function normalizeShare(raw) {
-  const boxId = raw.boxId || raw.boxid || null;
-  const phone = raw.phone || raw.phoneNumber || null;
-
   return {
     ...raw,
-    boxId,
-    phone,
+    boxId: raw.boxId || raw.boxid || null,
+    phone: raw.phone || raw.phoneNumber || null,
   };
 }
 
@@ -71,7 +68,7 @@ export async function getBox(boxId) {
 export async function listSharesForBox(boxId) {
   if (!firestore) {
     return localShares
-      .map((s) => normalizeShare(s))
+      .map(normalizeShare)
       .filter((s) => s.boxId === boxId && isActiveShare(s));
   }
 
@@ -108,9 +105,8 @@ export async function findActiveShare(boxId, phone) {
   if (!firestore) {
     return (
       localShares
-        .map((s) => normalizeShare(s))
-        .find((s) => s.boxId === boxId && s.phone === phone && isActiveShare(s)) ||
-      null
+        .map(normalizeShare)
+        .find((s) => s.boxId === boxId && s.phone === phone && isActiveShare(s)) || null
     );
   }
 
@@ -127,7 +123,7 @@ export async function findActiveShare(boxId, phone) {
 
   if (matches.length > 0) return matches[0];
 
-  // fallback: oude veldnaam phoneNumber
+  // fallback voor phoneNumber legacy
   const snap2 = await firestore
     .collection("shares")
     .where("boxId", "==", boxId)
@@ -146,29 +142,61 @@ export async function findActiveShareByPhone(phone) {
   if (!firestore) {
     return (
       localShares
-        .map((s) => normalizeShare(s))
+        .map(normalizeShare)
         .find((s) => s.phone === phone && isActiveShare(s)) || null
     );
   }
 
-  const results = [];
-
+  // Eerst proper: phone + active true
   const snap1 = await firestore
     .collection("shares")
     .where("phone", "==", phone)
-    .limit(20)
+    .where("active", "==", true)
+    .limit(1)
     .get();
 
-  snap1.docs.forEach((d) => results.push(normalizeShare({ id: d.id, ...d.data() })));
+  if (!snap1.empty) {
+    const d = snap1.docs[0];
+    return normalizeShare({ id: d.id, ...d.data() });
+  }
 
+  // Fallback: phoneNumber + active true
   const snap2 = await firestore
     .collection("shares")
     .where("phoneNumber", "==", phone)
-    .limit(20)
+    .where("active", "==", true)
+    .limit(1)
     .get();
 
-  snap2.docs.forEach((d) => results.push(normalizeShare({ id: d.id, ...d.data() })));
+  if (!snap2.empty) {
+    const d = snap2.docs[0];
+    return normalizeShare({ id: d.id, ...d.data() });
+  }
 
-  const active = results.filter((s) => isActiveShare(s));
-  return active[0] || null;
+  // Fallback legacy: status == "active"
+  const snap3 = await firestore
+    .collection("shares")
+    .where("phone", "==", phone)
+    .where("status", "==", "active")
+    .limit(1)
+    .get();
+
+  if (!snap3.empty) {
+    const d = snap3.docs[0];
+    return normalizeShare({ id: d.id, ...d.data() });
+  }
+
+  const snap4 = await firestore
+    .collection("shares")
+    .where("phoneNumber", "==", phone)
+    .where("status", "==", "active")
+    .limit(1)
+    .get();
+
+  if (!snap4.empty) {
+    const d = snap4.docs[0];
+    return normalizeShare({ id: d.id, ...d.data() });
+  }
+
+  return null;
 }
