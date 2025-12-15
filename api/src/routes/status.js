@@ -11,9 +11,15 @@ const router = Router();
 router.post("/:boxId", async (req, res) => {
   try {
     const { boxId } = req.params;
-    const { online = true, uptime = null, temp = null } = req.body;
 
+    const payload = req.body && typeof req.body === "object" ? req.body : {};
+    const online = payload.online ?? true;
+    const uptime = payload.uptime ?? null;
+    const temp = payload.temp ?? null;
+
+    // Bewaar ook extra velden zoals door/lock/... die de Pi doorstuurt
     const status = {
+      ...payload,
       online,
       uptime,
       temp,
