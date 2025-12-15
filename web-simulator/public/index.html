@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <title>Gridbox Pi Simulator</title>
+  <style>
+    body { font-family: Arial; background:#f4f4f4; padding:20px; }
+    .box { background:#fff; padding:20px; border-radius:8px; max-width:500px; }
+    .state { font-size:18px; margin-bottom:10px; }
+    .led { width:20px; height:20px; border-radius:50%; background:#ccc; display:inline-block; }
+    .led.on { background:#4caf50; }
+    button { padding:10px 15px; margin-right:10px; }
+  </style>
+</head>
+<body>
+
+  <div class="box">
+    <h2>Gridbox Pi Simulator</h2>
+
+    <div class="state">
+      Rolluik: <span id="shutter">closed</span>
+    </div>
+
+    <div class="state">
+      Licht: <span class="led" id="light"></span>
+    </div>
+
+    <br />
+
+    <button onclick="simulateButton()">Knop indrukken</button>
+  </div>
+
+  <script type="module" src="/src/simulator.js"></script>
+</body>
+</html>
