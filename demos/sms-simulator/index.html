@@ -149,7 +149,7 @@
     <div class="messages" id="messages"></div>
 
     <div class="input">
-      <input id="smsInput" placeholder="Typ bv: OPEN" />
+      <input id="smsInput" placeholder="Typ: OPEN of CLOSE" />
       <button id="sendBtn">Verstuur</button>
     </div>
 
@@ -187,18 +187,9 @@
 
     if (!rawText || !number) return;
 
-    const normalized = rawText.toUpperCase();
-
     addBubble(rawText, "sent");
     inputEl.value = "";
     sendBtn.disabled = true;
-
-    // Client-side validatie
-    if (normalized !== "OPEN") {
-      addSystemMessage("Ongeldig commando. Typ exact: OPEN");
-      sendBtn.disabled = false;
-      return;
-    }
 
     try {
       const response = await fetch(API_URL, {
@@ -209,7 +200,7 @@
         body: new URLSearchParams({
           From: number,
           To: number,
-          Body: normalized
+          Body: rawText
         })
       });
 
