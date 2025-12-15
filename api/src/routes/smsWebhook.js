@@ -1,13 +1,8 @@
 // api/src/routes/smsWebhook.js
 
 import { Router } from "express";
-
 import * as boxesService from "../services/boxesService.js";
 import * as sharesService from "../services/sharesService.js";
-import { updateState } from "../services/stateService.js";
-
-import { handleEvent } from "../state/gridboxStateMachine.js";
-import { EVENTS } from "../state/events.js";
 
 const router = Router();
 
@@ -21,14 +16,15 @@ function normalizePhone(number) {
 
 /**
  * POST /api/sms-webhook
- * Ontvangt inkomende SMS via Twilio
+ * Inkomende berichten via simulator of later SMS provider
  */
 router.post("/", async (req, res) => {
   try {
-    console.log("📩 SMS webhook ontvangen:", req.body);
+    console.log("📩 Inbound bericht:", req.body);
 
     const from = normalizePhone(req.body.From);
-    const body = (req.body.Body || "").trim().toLowerCase();
+    const rawBody = req.body.Body || "";
+    const body = rawBody.trim().toLowerCase();
 
     if (!from) {
       return res
@@ -36,18 +32,20 @@ router.post("/", async (req, res) => {
         .send(`<Response><Message>Ongeldig nummer.</Message></Response>`);
     }
 
-    const isOpen = body.startsWith("open");
-    const isClose = body.startsWith("close");
+    // Commando bepalen
+    let command = null;
+    if (body === "open") command = "OPEN";
+    if (body === "close") command = "CLOSE";
 
-    if (!isOpen && !isClose) {
+    if (!command) {
       return res
         .type("text/xml")
         .send(
-          `<Response><Message>Onbekend commando. Gebruik OPEN.</Message></Response>`
+          `<Response><Message>Ongeldig commando. Gebruik OPEN of CLOSE.</Message></Response>`
         );
     }
 
-    // 1. Actieve share zoeken
+    // Actieve share zoeken
     const share = await sharesService.findActiveShareByPhone(from);
 
     if (!share) {
@@ -58,110 +56,42 @@ router.post("/", async (req, res) => {
         );
     }
 
-    // 2. Box ophalen
-    const box = await boxesService.getById(share.boxId);
+    console.log("✔ Share gevonden:", share);
 
-    if (!box) {
-      return res
-        .type("text/xml")
-        .send(`<Response><Message>Box niet beschikbaar.</Message></Response>`);
-    }
-
-    // 3. Event bepalen
-    const eventType = isOpen ? EVENTS.SMS_OPEN : EVENTS.SMS_CLOSE;
-
-    // 4. Beslissing via state-machine
-    const result = await handleEvent({
-      box,
-      event: { type: eventType },
-      context: {
-        phone: from,
-        source: "sms"
-      }
-    });
-
-    console.log("🧠 State-machine result:", result);
-
-    // 5. Afhandeling
-    if (result.action === "REJECT") {
-      return res
-        .type("text/xml")
-        .send(
-          `<Response><Message>Geen toegang of box tijdelijk niet beschikbaar.</Message></Response>`
-        );
-    }
-
-    if (result.action === "IGNORE") {
-      // Geen antwoord nodig
-      return res.sendStatus(200);
-    }
-
-    // -------------------------
-    // OPEN
-    // -------------------------
-    if (result.action === "OPEN") {
-
-      // ✅ STATE WEGSCHRIJVEN (beslist door state-machine)
-      if (result.nextState) {
-        await updateState(share.boxId, {
-          ...result.nextState,
-          requestedBy: from,
-          source: "sms"
-        });
-      }
-
-      // ✅ COMMAND STUREN
-      const openResult = await boxesService.openBox(share.boxId, "sms");
-
-      if (!openResult.success) {
-        return res
-          .type("text/xml")
-          .send(
-            `<Response><Message>De box kon niet worden geopend.</Message></Response>`
-          );
-      }
+    // Commando uitvoeren
+    if (command === "OPEN") {
+      await boxesService.openBox(
+        share.boxId,
+        "sms",
+        from
+      );
 
       return res
         .type("text/xml")
         .send(
-          `<Response><Message>De Gridbox wordt geopend.</Message></Response>`
+          `<Response><Message>De box wordt geopend.</Message></Response>`
         );
     }
 
-    // -------------------------
-    // CLOSE
-    // -------------------------
-    if (result.action === "CLOSE") {
-
-      if (result.nextState) {
-        await updateState(share.boxId, {
-          ...result.nextState,
-          requestedBy: from,
-          source: "sms"
-        });
-      }
-
-      const closeResult = await boxesService.closeBox(share.boxId, "sms");
-
-      if (!closeResult.success) {
-        return res
-          .type("text/xml")
-          .send(
-            `<Response><Message>De box kon niet worden gesloten.</Message></Response>`
-          );
-      }
+    if (command === "CLOSE") {
+      await boxesService.closeBox(
+        share.boxId,
+        "sms",
+        from
+      );
 
       return res
         .type("text/xml")
         .send(
-          `<Response><Message>De Gridbox wordt gesloten.</Message></Response>`
+          `<Response><Message>De box wordt gesloten.</Message></Response>`
         );
     }
 
+    // Fallback
     return res.sendStatus(200);
 
   } catch (err) {
-    console.error("❌ Fout in smsWebhook:", err);
+    console.error("❌ Fout in inbound:", err);
 
     return res
       .type("text/xml")
