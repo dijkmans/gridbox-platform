@@ -1,0 +1,10 @@
+{
+  "name": "gridbox-raspberry-agent",
+  "version": "0.1.0",
+  "description": "Gridbox Raspberry Pi Agent",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  }
+}
