@@ -4,7 +4,7 @@ import * as devicesService from "./devicesService.js";
 
 const runningOnCloudRun = !!process.env.K_SERVICE;
 
-// Lokale fallback boxen (voor lokaal draaien)
+// Lokale fallback (alleen lokaal)
 const localBoxes = [
   {
     id: "gbox-001",
@@ -12,79 +12,68 @@ const localBoxes = [
     number: 1,
     status: "online",
     description: "Mock Gridbox 001",
-    cameraEnabled: false,
-  },
+    cameraEnabled: false
+  }
 ];
 
-// ---------------------------------------------------------
-// Alle boxen ophalen
-// ---------------------------------------------------------
-export async function getAll() {
-  if (!runningOnCloudRun) return localBoxes;
-
-  // Voor nu: minimaal, maar stabiel
-  // Als je later “alle boxen” uit Firestore wil, maken we daar een aparte query voor.
-  return localBoxes;
-}
-
-// ---------------------------------------------------------
-// Eén box ophalen
-// ---------------------------------------------------------
-export async function getById(id) {
+// ----------------------------------------------------
+// Box ophalen
+// ----------------------------------------------------
+export async function getById(boxId) {
   if (!runningOnCloudRun) {
-    return localBoxes.find((b) => b.id === id) || null;
+    return localBoxes.find((b) => b.id === boxId) || null;
   }
-  return getBox(id);
+  return getBox(boxId);
 }
 
-// ---------------------------------------------------------
-// Shares voor box ophalen
-// ---------------------------------------------------------
+// ----------------------------------------------------
+// Shares voor box
+// ----------------------------------------------------
 export async function getShares(boxId) {
   return listSharesForBox(boxId);
 }
 
-// ---------------------------------------------------------
-// SMS flow: OPEN command maken
-// ---------------------------------------------------------
+// ----------------------------------------------------
+// OPEN via SMS
+// ----------------------------------------------------
 export async function openBox(boxId, meta = {}) {
-  const cmd = {
+  const command = {
     type: "open",
     source: meta.source || "sms",
     requestedBy: meta.phone || null,
     createdAt: new Date().toISOString(),
-    status: "pending",
+    status: "pending"
   };
 
-  const created = await devicesService.addCommand(boxId, cmd);
+  const created = await devicesService.addCommand(boxId, command);
 
   return {
     success: true,
-    command: created,
+    command: created
   };
 }
 
-// Optioneel: CLOSE
+// ----------------------------------------------------
+// CLOSE (voor later)
+// ----------------------------------------------------
 export async function closeBox(boxId, meta = {}) {
-  const cmd = {
+  const command = {
     type: "close",
     source: meta.source || "sms",
     requestedBy: meta.phone || null,
     createdAt: new Date().toISOString(),
-    status: "pending",
+    status: "pending"
   };
 
-  const created = await devicesService.addCommand(boxId, cmd);
+  const created = await devicesService.addCommand(boxId, command);
 
   return {
     success: true,
-    command: created,
+    command: created
   };
 }
 
-// ---------------------------------------------------------
-// Legacy endpoints /api/boxes/:id/open en /close
-// ---------------------------------------------------------
+// Legacy
 export async function open(id) {
   return openBox(id, { source: "api" });
 }
