@@ -6,7 +6,9 @@ export function initSimulatorHardware() {
   const lightEl = document.getElementById("light");
 
   function updateUI() {
-    shutterEl.textContent = shutterOpen ? "open" : "closed";
+    if (shutterEl) {
+      shutterEl.textContent = shutterOpen ? "open" : "closed";
+    }
   }
 
   return {
@@ -17,26 +19,30 @@ export function initSimulatorHardware() {
     relayOpen() {
       shutterOpen = true;
       updateUI();
+      console.log("SIM: relay OPEN");
     },
 
     relayClose() {
       shutterOpen = false;
       updateUI();
+      console.log("SIM: relay CLOSE");
     },
 
     lightOn() {
-      lightEl.classList.add("on");
+      if (lightEl) lightEl.classList.add("on");
+      console.log("SIM: light ON");
     },
 
     lightOff() {
-      lightEl.classList.remove("on");
+      if (lightEl) lightEl.classList.remove("on");
+      console.log("SIM: light OFF");
     },
 
     isShutterOpen() {
       return shutterOpen;
     },
 
-    simulateButton() {
+    simulateButtonPress() {
       if (buttonCallback) buttonCallback();
     }
   };
