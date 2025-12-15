@@ -2,19 +2,19 @@
 import express from "express";
 import cors from "cors";
 
-// Nieuwe API routers (laat staan als jij ze hebt)
+// Nieuwe API routers
 import devicesRouter from "./routes/devices.js";
 import commandsRouter from "./routes/commands.js";
 import statusRouter from "./routes/status.js";
 import configRouter from "./routes/config.js";
 import eventsRouter from "./routes/events.js";
 
-// Legacy routers (laat staan als jij ze hebt)
+// Legacy routers
 import boxesRouter from "./routes/boxes.js";
 import sharesRouter from "./routes/shares.js";
 
-// BELANGRIJK: gebruik deze
-import smsRouter from "./routes/sms.js";
+// ✅ ENIGE SMS INGANG
+import smsWebhook from "./routes/smsWebhook.js";
 
 const app = express();
 
@@ -40,8 +40,8 @@ app.use("/api/events", eventsRouter);
 app.use("/api/boxes", boxesRouter);
 app.use("/api/shares", sharesRouter);
 
-// SMS webhook
-app.use("/api/sms", smsRouter);
+// ✅ SMS webhook (enkel deze)
+app.use("/api/sms/inbound", smsWebhook);
 
 app.listen(PORT, HOST, () => {
   console.log(`✅ API running on http://${HOST}:${PORT}`);
