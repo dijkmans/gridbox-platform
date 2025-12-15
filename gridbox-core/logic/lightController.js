@@ -1,88 +1,55 @@
-// gridbox-core/logic/lightController.js
-
 /**
  * Light controller
  * Regelt lichtgedrag los van hardware
- * Wordt aangestuurd door shutter logic
+ * Geen kennis van GPIO, UI of platform
  */
 
-import {
-  setConfig,
-  turnLightOff,
-  getLightDelay,
-  getState
-} from "../state/stateManager.js";
+export function createLightController({ hardware, stateManager, config = {} }) {
+  const {
+    delayAfterCloseMs = 60000 // standaard 60 seconden
+  } = config;
 
-let offTimer = null;
+  let offTimer = null;
 
-/**
- * Zet het licht onmiddellijk aan
- * onLightOn = hardware callback
- */
-export function lightOn({ onLightOn }) {
-  // Annuleer eventueel geplande uitschakeling
-  if (offTimer) {
-    clearTimeout(offTimer);
-    offTimer = null;
-  }
-
-  if (typeof onLightOn === "function") {
-    onLightOn();
-  }
-}
-
-/**
- * Plan het licht om uit te gaan na vertraging
- * onLightOff = hardware callback
- */
-export function scheduleLightOff({ onLightOff }) {
-  const delay = getLightDelay();
-
-  // Annuleer bestaande timer
-  if (offTimer) {
-    clearTimeout(offTimer);
-  }
-
-  offTimer = setTimeout(() => {
-    turnLightOff();
-
-    if (typeof onLightOff === "function") {
-      onLightOff();
+  function clearOffTimer() {
+    if (offTimer) {
+      clearTimeout(offTimer);
+      offTimer = null;
     }
-
-    offTimer = null;
-  }, delay);
-}
-
-/**
- * Forceer licht onmiddellijk uit
- * Wordt bv. gebruikt bij noodstop of reset
- */
-export function forceLightOff({ onLightOff }) {
-  if (offTimer) {
-    clearTimeout(offTimer);
-    offTimer = null;
   }
 
-  turnLightOff();
+  return {
+    /**
+     * Wordt aangeroepen wanneer de Gridbox opent
+     * Licht moet onmiddellijk aan
+     */
+    onOpen() {
+      clearOffTimer();
+      hardware.lightOn();
+    },
 
-  if (typeof onLightOff === "function") {
-    onLightOff();
-  }
-}
+    /**
+     * Wordt aangeroepen wanneer de Gridbox sluit
+     * Licht blijft nog even aan
+     */
+    onClose() {
+      clearOffTimer();
 
-/**
- * Update lichtconfig via platform
- * Bijvoorbeeld lichtvertraging aanpassen
- */
-export function updateLightConfig(config = {}) {
-  setConfig(config);
-}
+      offTimer = setTimeout(() => {
+        // extra veiligheid: alleen uit als box nog steeds dicht is
+        if (stateManager.getState() === "closed") {
+          hardware.lightOff();
+        }
+        offTimer = null;
+      }, delayAfterCloseMs);
+    },
 
-/**
- * Debug helper
- */
-export function getLightStatus() {
-  const state = getState();
-  return state.light;
+    /**
+     * Noodstop / reset
+     */
+    forceOff() {
+      clearOffTimer();
+      hardware.lightOff();
+    }
+  };
 }
