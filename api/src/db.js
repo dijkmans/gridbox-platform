@@ -4,8 +4,8 @@ import { Firestore } from "@google-cloud/firestore";
 // ----------------------------------------------------
 // Firestore aan of uit
 // ----------------------------------------------------
-// Cloud Run zet K_SERVICE. Lokaal kan je ook de emulator gebruiken via FIRESTORE_EMULATOR_HOST.
-const useFirestore = !!process.env.K_SERVICE || !!process.env.FIRESTORE_EMULATOR_HOST;
+const useFirestore =
+  !!process.env.K_SERVICE || !!process.env.FIRESTORE_EMULATOR_HOST;
 
 let firestore = null;
 if (useFirestore) {
@@ -21,14 +21,11 @@ function normPhone(number) {
 }
 
 function normalizeShareDoc(id, data) {
-  const boxId = data.boxId || data.boxid || null;
-  const phone = data.phone || data.phoneNumber || null;
-
   return {
     id,
     ...data,
-    boxId,
-    phone,
+    boxId: data.boxId || data.boxid || null,
+    phone: data.phone || data.phoneNumber || null
   };
 }
 
@@ -44,9 +41,9 @@ const localBoxes = new Map([
       number: 1,
       status: "online",
       description: "Gridbox 001 (lokale mock)",
-      cameraEnabled: false,
-    },
-  ],
+      cameraEnabled: false
+    }
+  ]
 ]);
 
 const localShares = [];
@@ -71,27 +68,18 @@ export async function getBox(boxId) {
 // ----------------------------------------------------
 export async function listSharesForBox(boxId) {
   if (!firestore) {
-    return localShares.filter((s) => s.boxId === boxId && s.active === true);
+    return localShares.filter(
+      (s) => s.boxId === boxId && s.active === true
+    );
   }
 
-  // Primair: boxId
-  const snap1 = await firestore
+  const snap = await firestore
     .collection("shares")
     .where("boxId", "==", boxId)
     .where("active", "==", true)
     .get();
 
-  const res1 = snap1.docs.map((d) => normalizeShareDoc(d.id, d.data()));
-  if (res1.length > 0) return res1;
-
-  // Fallback: boxid (oude veldnaam)
-  const snap2 = await firestore
-    .collection("shares")
-    .where("boxid", "==", boxId)
-    .where("active", "==", true)
-    .get();
-
-  return snap2.docs.map((d) => normalizeShareDoc(d.id, d.data()));
+  return snap.docs.map((d) => normalizeShareDoc(d.id, d.data()));
 }
 
 export async function createShare({ boxId, phone }) {
@@ -100,9 +88,9 @@ export async function createShare({ boxId, phone }) {
   const base = {
     boxId,
     phone: phoneN,
-    phoneNumber: phoneN, // handig voor oudere code
+    phoneNumber: phoneN,
     active: true,
-    createdAt: new Date().toISOString(),
+    createdAt: new Date().toISOString()
   };
 
   if (!firestore) {
@@ -115,19 +103,22 @@ export async function createShare({ boxId, phone }) {
   return { id: ref.id, ...base };
 }
 
+// 🔴 DEZE EXPORT MOET BESTAAN
 export async function findActiveShare(boxId, phone) {
   const phoneN = normPhone(phone);
 
   if (!firestore) {
     return (
       localShares.find(
-        (s) => s.boxId === boxId && s.phone === phoneN && s.active === true
+        (s) =>
+          s.boxId === boxId &&
+          s.phone === phoneN &&
+          s.active === true
       ) || null
     );
   }
 
-  // Primair: boxId + phone
-  const snap1 = await firestore
+  const snap = await firestore
     .collection("shares")
     .where("boxId", "==", boxId)
     .where("phone", "==", phoneN)
@@ -135,40 +126,10 @@ export async function findActiveShare(boxId, phone) {
     .limit(1)
     .get();
 
-  if (!snap1.empty) {
-    const doc = snap1.docs[0];
-    return normalizeShareDoc(doc.id, doc.data());
-  }
+  if (snap.empty) return null;
 
-  // Fallback: boxId + phoneNumber
-  const snap2 = await firestore
-    .collection("shares")
-    .where("boxId", "==", boxId)
-    .where("phoneNumber", "==", phoneN)
-    .where("active", "==", true)
-    .limit(1)
-    .get();
-
-  if (!snap2.empty) {
-    const doc = snap2.docs[0];
-    return normalizeShareDoc(doc.id, doc.data());
-  }
-
-  // Fallback: boxid + phone
-  const snap3 = await firestore
-    .collection("shares")
-    .where("boxid", "==", boxId)
-    .where("phone", "==", phoneN)
-    .where("active", "==", true)
-    .limit(1)
-    .get();
-
-  if (!snap3.empty) {
-    const doc = snap3.docs[0];
-    return normalizeShareDoc(doc.id, doc.data());
-  }
-
-  return null;
+  const doc = snap.docs[0];
+  return normalizeShareDoc(doc.id, doc.data());
 }
 
 export async function findActiveShareByPhone(phone) {
@@ -176,33 +137,21 @@ export async function findActiveShareByPhone(phone) {
 
   if (!firestore) {
     return (
-      localShares.find((s) => s.phone === phoneN && s.active === true) || null
+      localShares.find(
+        (s) => s.phone === phoneN && s.active === true
+      ) || null
     );
   }
 
-  // Primair: phone
-  const snap1 = await firestore
+  const snap = await firestore
     .collection("shares")
     .where("phone", "==", phoneN)
     .where("active", "==", true)
     .limit(1)
     .get();
 
-  if (!snap1.empty) {
-    const doc = snap1.docs[0];
-    return normalizeShareDoc(doc.id, doc.data());
-  }
+  if (snap.empty) return null;
 
-  // Fallback: phoneNumber
-  const snap2 = await firestore
-    .collection("shares")
-    .where("phoneNumber", "==", phoneN)
-    .where("active", "==", true)
-    .limit(1)
-    .get();
-
-  if (snap2.empty) return null;
-
-  const doc = snap2.docs[0];
+  const doc = snap.docs[0];
   return normalizeShareDoc(doc.id, doc.data());
 }
