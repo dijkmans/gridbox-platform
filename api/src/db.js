@@ -1,10 +1,7 @@
 // api/src/db.js
-
 import { Firestore } from "@google-cloud/firestore";
 
-// ----------------------------------------------------
-// Detecteer Cloud Run
-// ----------------------------------------------------
+// Cloud Run detectie
 const runningOnCloudRun = !!process.env.K_SERVICE;
 
 let firestore = null;
@@ -13,15 +10,7 @@ if (runningOnCloudRun) {
 }
 
 // ----------------------------------------------------
-// Helpers
-// ----------------------------------------------------
-function normalizePhone(phone) {
-  if (!phone) return null;
-  return phone.replace(/\s+/g, "").trim();
-}
-
-// ----------------------------------------------------
-// Lokale mock data (enkel voor lokaal draaien)
+// Lokale mock data (enkel lokaal, Cloud Run gebruikt Firestore)
 // ----------------------------------------------------
 const localBoxes = new Map([
   [
@@ -38,6 +27,28 @@ const localBoxes = new Map([
 ]);
 
 const localShares = [];
+
+// ----------------------------------------------------
+// Helpers
+// ----------------------------------------------------
+function isActiveShare(s) {
+  if (!s) return false;
+  if (s.active === true) return true;
+  if (s.active === "true") return true; // legacy fout
+  if (s.status === "active") return true; // legacy
+  return false;
+}
+
+function normalizeShare(raw) {
+  const boxId = raw.boxId || raw.boxid || null;
+  const phone = raw.phone || raw.phoneNumber || null;
+
+  return {
+    ...raw,
+    boxId,
+    phone,
+  };
+}
 
 // ----------------------------------------------------
 // BOXES
@@ -57,38 +68,34 @@ export async function getBox(boxId) {
 // ----------------------------------------------------
 // SHARES
 // ----------------------------------------------------
-
-// Alle actieve shares voor een box
 export async function listSharesForBox(boxId) {
   if (!firestore) {
-    return localShares.filter(
-      (s) => s.boxId === boxId && s.active === true
-    );
+    return localShares
+      .map((s) => normalizeShare(s))
+      .filter((s) => s.boxId === boxId && isActiveShare(s));
   }
 
   const snap = await firestore
     .collection("shares")
     .where("boxId", "==", boxId)
-    .where("active", "==", true)
+    .limit(50)
     .get();
 
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return snap.docs
+    .map((d) => normalizeShare({ id: d.id, ...d.data() }))
+    .filter((s) => isActiveShare(s));
 }
 
-// Nieuwe share aanmaken
 export async function createShare({ boxId, phone }) {
   const share = {
     boxId,
-    phone: normalizePhone(phone),
+    phone,
     active: true,
     createdAt: new Date().toISOString(),
   };
 
   if (!firestore) {
-    const local = {
-      id: `mock-${localShares.length + 1}`,
-      ...share,
-    };
+    const local = { id: `mock-${localShares.length + 1}`, ...share };
     localShares.push(local);
     return local;
   }
@@ -97,68 +104,71 @@ export async function createShare({ boxId, phone }) {
   return { id: ref.id, ...share };
 }
 
-// Actieve share zoeken op box + phone
 export async function findActiveShare(boxId, phone) {
-  const normalized = normalizePhone(phone);
-
   if (!firestore) {
     return (
-      localShares.find(
-        (s) =>
-          s.boxId === boxId &&
-          normalizePhone(s.phone) === normalized &&
-          s.active === true
-      ) || null
+      localShares
+        .map((s) => normalizeShare(s))
+        .find((s) => s.boxId === boxId && s.phone === phone && isActiveShare(s)) ||
+      null
     );
   }
 
   const snap = await firestore
     .collection("shares")
     .where("boxId", "==", boxId)
-    .where("active", "==", true)
+    .where("phone", "==", phone)
+    .limit(10)
     .get();
 
-  const match = snap.docs
-    .map((d) => ({ id: d.id, ...d.data() }))
-    .find(
-      (s) => normalizePhone(s.phone) === normalized
-    );
+  const matches = snap.docs
+    .map((d) => normalizeShare({ id: d.id, ...d.data() }))
+    .filter((s) => isActiveShare(s));
 
-  return match || null;
+  if (matches.length > 0) return matches[0];
+
+  // fallback: oude veldnaam phoneNumber
+  const snap2 = await firestore
+    .collection("shares")
+    .where("boxId", "==", boxId)
+    .where("phoneNumber", "==", phone)
+    .limit(10)
+    .get();
+
+  const matches2 = snap2.docs
+    .map((d) => normalizeShare({ id: d.id, ...d.data() }))
+    .filter((s) => isActiveShare(s));
+
+  return matches2[0] || null;
 }
 
-// Actieve share zoeken op enkel phone (SMS-flow)
 export async function findActiveShareByPhone(phone) {
-  const normalized = normalizePhone(phone);
-
   if (!firestore) {
     return (
-      localShares.find(
-        (s) =>
-          normalizePhone(s.phone) === normalized &&
-          s.active === true
-      ) || null
+      localShares
+        .map((s) => normalizeShare(s))
+        .find((s) => s.phone === phone && isActiveShare(s)) || null
     );
   }
 
-  console.log("🔎 SMS lookup for phone:", normalized);
+  const results = [];
 
-  const snap = await firestore
+  const snap1 = await firestore
     .collection("shares")
-    .where("active", "==", true)
+    .where("phone", "==", phone)
+    .limit(20)
     .get();
 
-  const match = snap.docs
-    .map((d) => ({ id: d.id, ...d.data() }))
-    .find(
-      (s) => normalizePhone(s.phone) === normalized
-    );
+  snap1.docs.forEach((d) => results.push(normalizeShare({ id: d.id, ...d.data() })));
 
-  if (!match) {
-    console.log("❌ Geen actieve share gevonden");
-    return null;
-  }
+  const snap2 = await firestore
+    .collection("shares")
+    .where("phoneNumber", "==", phone)
+    .limit(20)
+    .get();
 
-  console.log("✅ Actieve share gevonden:", match.id);
-  return match;
+  snap2.docs.forEach((d) => results.push(normalizeShare({ id: d.id, ...d.data() })));
+
+  const active = results.filter((s) => isActiveShare(s));
+  return active[0] || null;
 }
