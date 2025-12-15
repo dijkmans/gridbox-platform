@@ -1,83 +1,83 @@
 // api/src/services/boxesService.js
+import { Firestore } from "@google-cloud/firestore";
+import { getBox, listSharesForBox } from "../db.js";
 
-import { getBox } from "../db.js";
-
-// Cloud Run detectie
 const runningOnCloudRun = !!process.env.K_SERVICE;
 
-// Lokale mock boxen (alleen voor lokaal draaien)
+let firestore = null;
+if (runningOnCloudRun) {
+  firestore = new Firestore();
+}
+
+// lokale mock (enkel lokaal)
 const localBoxes = [
-  {
-    id: "heist-1",
-    locationName: "Heist",
-    number: 1,
-    status: "online",
-    description: "Mock Gridbox Heist #1",
-    cameraEnabled: true
-  },
-  {
-    id: "gbox-001",
-    locationName: "Simulator",
-    number: 1,
-    status: "online",
-    description: "Mock Gridbox 001",
-    cameraEnabled: false
-  }
+  { id: "heist-1", status: "online" },
+  { id: "gbox-001", status: "online" },
 ];
+
+// ---------------------------------------------------------
+// Alle boxen ophalen (optioneel)
+// ---------------------------------------------------------
+export async function getAll() {
+  return localBoxes;
+}
 
 // ---------------------------------------------------------
 // Eén box ophalen
 // ---------------------------------------------------------
-export async function getById(boxId) {
+export async function getById(id) {
   if (!runningOnCloudRun) {
-    return localBoxes.find((b) => b.id === boxId) || null;
+    return localBoxes.find((b) => b.id === id) || null;
   }
-
-  return await getBox(boxId);
+  return await getBox(id);
 }
 
 // ---------------------------------------------------------
-// Box openen (HOOFDFUNCTIE)
+// Shares voor box ophalen
+// ---------------------------------------------------------
+export async function getShares(boxId) {
+  return await listSharesForBox(boxId);
+}
+
+// ---------------------------------------------------------
+// Box openen (SMS gebruikt dit)
 // ---------------------------------------------------------
 export async function openBox(boxId) {
-  console.log("🔓 openBox aangeroepen voor:", boxId);
-
-  // 1. Box ophalen
-  const box = await getById(boxId);
-
-  if (!box) {
-    console.warn("❌ Box niet gevonden:", boxId);
-    return {
-      success: false,
-      message: `Box ${boxId} niet gevonden`
-    };
-  }
-
-  // 2. Mock gedrag (lokaal of voorlopig)
   if (!runningOnCloudRun) {
+    const box = localBoxes.find((b) => b.id === boxId);
+    if (!box) return { success: false, message: `Box ${boxId} niet gevonden (lokaal)` };
+
     box.status = "open";
-    box.lastOpened = new Date().toISOString();
-
-    console.log("✅ Mock box geopend:", boxId);
-
-    return {
-      success: true,
-      action: "open",
-      box
-    };
+    return { success: true, message: `Mock: box ${boxId} is geopend` };
   }
 
-  // 3. Cloud Run gedrag (nu nog mock, later IoT)
-  console.log("🚀 Cloud Run: box openen gelogd voor", boxId);
+  // check box bestaat
+  const box = await getBox(boxId);
+  if (!box) {
+    return { success: false, message: `Box ${boxId} niet gevonden (Firestore)` };
+  }
 
-  // TODO later:
-  // - command document schrijven
-  // - IoT publish
-  // - relay triggeren
+  const boxRef = firestore.collection("boxes").doc(boxId);
 
-  return {
-    success: true,
-    action: "open",
-    boxId
-  };
+  // command in subcollection
+  await boxRef.collection("commands").add({
+    type: "OPEN",
+    source: "sms",
+    createdAt: new Date().toISOString(),
+  });
+
+  // optioneel status update
+  await boxRef.set(
+    {
+      status: {
+        ...(box.status || {}),
+        door: "open",
+        lock: "unlocked",
+      },
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+
+  return { success: true, message: "OPEN command aangemaakt" };
 }
