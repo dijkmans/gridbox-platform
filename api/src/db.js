@@ -23,8 +23,8 @@ function normalizePhone(phone) {
 function normalizeShare(id, data) {
   return {
     id,
-    boxId: data.boxId || data.boxid || null,
-    phone: data.phone || data.phoneNumber || null,
+    boxId: data.boxId || null,
+    phone: normalizePhone(data.phone || data.phoneNumber),
     active: data.active === true,
     createdAt: data.createdAt || null
   };
@@ -103,7 +103,7 @@ export async function createShare({ boxId, phone }) {
   return { id: ref.id, ...share };
 }
 
-// ⚠️ DEZE EXPORT IS CRUCIAAL
+// 🔴 deze export MOET bestaan
 export async function findActiveShare(boxId, phone) {
   const phoneN = normalizePhone(phone);
 
