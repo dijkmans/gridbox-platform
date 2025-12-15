@@ -60,6 +60,9 @@ export async function listSharesForBox(boxId) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+// ----------------------------------------------------
+// Nieuwe share aanmaken
+// ----------------------------------------------------
 export async function createShare({ boxId, phone }) {
   const base = {
     boxId,
@@ -68,7 +71,6 @@ export async function createShare({ boxId, phone }) {
     createdAt: new Date().toISOString(),
   };
 
-  // Lokale mock
   if (!firestore) {
     const share = {
       id: `mock-${localShares.length + 1}`,
