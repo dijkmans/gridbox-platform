@@ -1,19 +1,18 @@
 // api/src/state/gridboxStateMachine.js
 
 import { EVENTS } from "./events.js";
-import * as transitions from "./stateTransitions.js";
 
 export async function handleEvent({ box, event, context }) {
-  const state = box.state;
+  const currentState = box.state?.mode || "idle";
 
   switch (event.type) {
 
-    case EVENTS.SMS_OPEN: {
-      if (transitions.isBlocked(state)) {
-        return { action: "REJECT", reason: "BOX_BLOCKED" };
-      }
+    // -------------------------
+    // SMS OPEN
+    // -------------------------
+    case EVENTS.SMS_OPEN:
 
-      if (transitions.canOpen(state)) {
+      if (currentState === "idle" || currentState === "closed") {
         return {
           action: "OPEN",
           nextState: {
@@ -23,19 +22,33 @@ export async function handleEvent({ box, event, context }) {
         };
       }
 
+      if (currentState === "opening" || currentState === "open") {
+        // OPEN opnieuw sturen heeft geen zin
+        return { action: "IGNORE" };
+      }
+
+      return { action: "REJECT" };
+
+    // -------------------------
+    // SMS CLOSE
+    // -------------------------
+    case EVENTS.SMS_CLOSE:
+
+      if (currentState === "open") {
+        return {
+          action: "CLOSE",
+          nextState: {
+            mode: "closing",
+            reason: "sms"
+          }
+        };
+      }
+
       return { action: "IGNORE" };
-    }
 
-    case EVENTS.BUTTON_PRESSED: {
-      return {
-        action: "OPEN",
-        nextState: {
-          mode: "opening",
-          reason: "button"
-        }
-      };
-    }
-
+    // -------------------------
+    // Default
+    // -------------------------
     default:
       return { action: "IGNORE" };
   }
