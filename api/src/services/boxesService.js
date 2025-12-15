@@ -1,69 +1,29 @@
 // api/src/services/boxesService.js
+
 import { getBox } from "../db.js";
-import * as devicesService from "./devicesService.js";
+import { Firestore } from "@google-cloud/firestore";
 
-const runningOnCloudRun = !!process.env.K_SERVICE;
+const firestore = process.env.K_SERVICE ? new Firestore() : null;
 
-// Lokale fallback (alleen lokaal)
-const localBoxes = [
-  {
-    id: "gbox-001",
-    locationName: "Simulator",
-    number: 1,
-    status: "online",
-    description: "Mock Gridbox 001",
-    cameraEnabled: false
+// box openen
+export async function openBox(boxId) {
+  if (!firestore) {
+    return { success: true, simulated: true };
   }
-];
 
-// ----------------------------------------------------
-// Box ophalen
-// ----------------------------------------------------
-export async function getById(boxId) {
-  if (!runningOnCloudRun) {
-    return localBoxes.find((b) => b.id === boxId) || null;
+  const ref = firestore.collection("boxes").doc(boxId);
+
+  const snap = await ref.get();
+  if (!snap.exists) {
+    return { success: false, message: "Box niet gevonden" };
   }
-  return getBox(boxId);
-}
 
-// ----------------------------------------------------
-// OPEN command
-// ----------------------------------------------------
-export async function openBox(boxId, meta = {}) {
-  const command = {
-    type: "open",
-    source: meta.source || "unknown",
-    requestedBy: meta.phone || null,
-    createdAt: new Date().toISOString(),
-    status: "pending"
-  };
+  await ref.update({
+    "status.door": "open",
+    "status.lock": "unlocked",
+    "status.timestamp": new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
 
-  console.log("📤 OPEN command:", command);
-
-  const created = await devicesService.addCommand(boxId, command);
-
-  return {
-    success: true,
-    command: created
-  };
-}
-
-// ----------------------------------------------------
-// CLOSE (voor later)
-// ----------------------------------------------------
-export async function closeBox(boxId, meta = {}) {
-  const command = {
-    type: "close",
-    source: meta.source || "unknown",
-    requestedBy: meta.phone || null,
-    createdAt: new Date().toISOString(),
-    status: "pending"
-  };
-
-  const created = await devicesService.addCommand(boxId, command);
-
-  return {
-    success: true,
-    command: created
-  };
+  return { success: true };
 }
