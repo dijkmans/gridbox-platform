@@ -10,6 +10,10 @@ function normalizePhone(number) {
   return number.replace(/\s+/g, "").trim();
 }
 
+function twimlMessage(text) {
+  return `<Response><Message>${text}</Message></Response>`;
+}
+
 router.post("/inbound", async (req, res) => {
   try {
     console.log("📩 Inkomende SMS webhook");
@@ -20,10 +24,7 @@ router.post("/inbound", async (req, res) => {
     const body = (req.body.Body || "").trim().toUpperCase();
 
     if (!from) {
-      return res
-        .status(200)
-        .type("text/xml")
-        .send(`<Response><Message>Ongeldig telefoonnummer.</Message></Response>`);
+      return res.status(200).type("text/xml").send(twimlMessage("Ongeldig telefoonnummer."));
     }
 
     const share = await sharesService.findActiveShareByPhone(from);
@@ -33,35 +34,58 @@ router.post("/inbound", async (req, res) => {
       return res
         .status(200)
         .type("text/xml")
-        .send(`<Response><Message>Geen actieve toegang gevonden voor dit nummer.</Message></Response>`);
+        .send(twimlMessage("Geen actieve toegang gevonden voor dit nummer."));
     }
 
-    if (body !== "OPEN") {
+    if (body !== "OPEN" && body !== "CLOSE") {
       return res
         .status(200)
         .type("text/xml")
-        .send(`<Response><Message>Ongeldig commando. Stuur OPEN om de box te openen.</Message></Response>`);
+        .send(twimlMessage("Ongeldig commando. Stuur OPEN of CLOSE."));
     }
 
-    const result = await boxesService.openBox(share.boxId);
+    if (body === "OPEN") {
+      const result = await boxesService.openBox(share.boxId, "sms", from);
 
-    if (!result || result.success !== true) {
+      if (!result || result.success !== true) {
+        return res
+          .status(200)
+          .type("text/xml")
+          .send(twimlMessage("De box kon niet geopend worden."));
+      }
+
       return res
         .status(200)
         .type("text/xml")
-        .send(`<Response><Message>De box kon niet geopend worden.</Message></Response>`);
+        .send(twimlMessage("De box is geopend."));
+    }
+
+    if (body === "CLOSE") {
+      const result = await boxesService.closeBox(share.boxId, "sms", from);
+
+      if (!result || result.success !== true) {
+        return res
+          .status(200)
+          .type("text/xml")
+          .send(twimlMessage("De box kon niet gesloten worden."));
+      }
+
+      return res
+        .status(200)
+        .type("text/xml")
+        .send(twimlMessage("De box is gesloten."));
     }
 
     return res
       .status(200)
       .type("text/xml")
-      .send(`<Response><Message>De box is geopend.</Message></Response>`);
+      .send(twimlMessage("Ongeldig commando. Stuur OPEN of CLOSE."));
   } catch (err) {
     console.error("❌ Fout in SMS webhook:", err);
     return res
       .status(200)
       .type("text/xml")
-      .send(`<Response><Message>Er ging iets mis. Probeer later opnieuw.</Message></Response>`);
+      .send(twimlMessage("Er ging iets mis. Probeer later opnieuw."));
   }
 });
 
