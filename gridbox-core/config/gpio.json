@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "description": "Gridbox GPIO configuration",
+
+  "inputs": {
+    "button_open_close": {
+      "gpio": 8,
+      "type": "momentary",
+      "pull": "up",
+      "active": "low",
+      "description": "Fysieke knop voor open en close, altijd lokaal prioritair"
+    }
+  },
+
+  "outputs": {
+    "shutter_open": {
+      "gpio": 26,
+      "type": "relay",
+      "active": "high",
+      "pulseMs": 800,
+      "description": "Relais voor rolluik openen"
+    },
+
+    "shutter_close": {
+      "gpio": 20,
+      "type": "relay",
+      "active": "high",
+      "pulseMs": 800,
+      "description": "Relais voor rolluik sluiten"
+    },
+
+    "light": {
+      "gpio": 21,
+      "type": "relay",
+      "active": "high",
+      "description": "LED verlichting in Gridbox"
+    }
+  }
+}

@@ -1,20 +1,35 @@
+// api/src/routes/status.js
 import { Router } from "express";
 
 const router = Router();
 
-// In-memory status (tijdelijk, voor simulator & Pi)
+// tijdelijke in-memory opslag
+// later te vervangen door Firestore
 const STATUS = {};
 
 /**
  * POST /api/status/:boxId
- * Ontvang status / heartbeat van Pi of simulator
+ * Ontvang status of heartbeat van Raspberry of simulator
  */
 router.post("/:boxId", (req, res) => {
   const { boxId } = req.params;
 
+  const {
+    state = null,
+    source = null,
+    uptime = null,
+    temp = null,
+    type = "heartbeat"
+  } = req.body || {};
+
   STATUS[boxId] = {
-    ...req.body,
-    lastSeen: new Date()
+    online: true,
+    state,
+    source,
+    uptime,
+    temp,
+    type,
+    lastSeen: new Date().toISOString()
   };
 
   res.json({
@@ -26,16 +41,16 @@ router.post("/:boxId", (req, res) => {
 
 /**
  * GET /api/status/:boxId
- * Status opvragen (dashboard / debug)
+ * Status opvragen voor dashboard of debug
  */
 router.get("/:boxId", (req, res) => {
   const { boxId } = req.params;
-
   const status = STATUS[boxId];
+
   if (!status) {
     return res.status(404).json({
       ok: false,
-      error: "Geen status gekend"
+      error: "Geen status bekend"
     });
   }
 

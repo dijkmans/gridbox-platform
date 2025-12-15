@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <title>Gridbox SMS Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    body {
+      background: #f0f2f5;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .phone {
+      width: 360px;
+      height: 640px;
+      background: #000;
+      border-radius: 32px;
+      padding: 12px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.35);
+    }
+
+    .screen {
+      background: #e5ddd5;
+      height: 100%;
+      border-radius: 24px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .header {
+      background: #075e54;
+      color: white;
+      padding: 10px;
+      font-weight: bold;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .to-field {
+      background: #f0f0f0;
+      padding: 8px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .to-field input {
+      width: 100%;
+      padding: 8px 12px;
+      border-radius: 16px;
+      border: none;
+      outline: none;
+      font-size: 13px;
+    }
+
+    .messages {
+      flex: 1;
+      padding: 12px;
+      overflow-y: auto;
+    }
+
+    .bubble {
+      max-width: 80%;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.4;
+      word-wrap: break-word;
+    }
+
+    .sent {
+      background: #dcf8c6;
+      margin-left: auto;
+      border-bottom-right-radius: 4px;
+    }
+
+    .received {
+      background: #ffffff;
+      margin-right: auto;
+      border-bottom-left-radius: 4px;
+    }
+
+    .system {
+      background: #fff3cd;
+      color: #664d03;
+      margin: 0 auto 8px auto;
+      text-align: center;
+      font-size: 13px;
+      border-radius: 8px;
+      padding: 6px 10px;
+      max-width: 90%;
+    }
+
+    .input {
+      display: flex;
+      padding: 8px;
+      background: #f0f0f0;
+    }
+
+    .input input {
+      flex: 1;
+      padding: 10px 12px;
+      border-radius: 20px;
+      border: none;
+      outline: none;
+      font-size: 14px;
+    }
+
+    .input button {
+      margin-left: 8px;
+      padding: 10px 16px;
+      border-radius: 20px;
+      border: none;
+      background: #075e54;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .input button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="screen">
+
+    <div class="header">
+      Gridbox · SMS demo
+    </div>
+
+    <div class="to-field">
+      <input
+        id="toNumber"
+        value="+32460235151"
+        placeholder="Van: +324..."
+      />
+    </div>
+
+    <div class="messages" id="messages"></div>
+
+    <div class="input">
+      <input id="smsInput" placeholder="Typ: OPEN of CLOSE" />
+      <button id="sendBtn">Verstuur</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const messagesEl = document.getElementById("messages");
+  const inputEl = document.getElementById("smsInput");
+  const sendBtn = document.getElementById("sendBtn");
+  const toInput = document.getElementById("toNumber");
+
+  const API_URL =
+    "https://gridbox-api-960191535038.europe-west1.run.app/api/sms/inbound";
+
+  function addBubble(text, type) {
+    const div = document.createElement("div");
+    div.className = "bubble " + type;
+    div.textContent = text;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  async function sendSms() {
+    const rawText = inputEl.value.trim();
+    const number = toInput.value.trim();
+
+    if (!rawText || !number) return;
+
+    // Toon exact wat gebruiker typt
+    addBubble(rawText, "sent");
+
+    inputEl.value = "";
+    sendBtn.disabled = true;
+
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: new URLSearchParams({
+          From: number,
+          To: number,
+          Body: rawText.toUpperCase()
+        })
+      });
+
+      const responseText = await response.text();
+      const match = responseText.match(/<Message>(.*?)<\/Message>/);
+      const message = match ? match[1] : "Onbekend antwoord van server";
+
+      addBubble(message, "received");
+
+    } catch (err) {
+      console.error(err);
+      addBubble("Technische fout bij verzenden.", "received");
+    } finally {
+      sendBtn.disabled = false;
+    }
+  }
+
+  sendBtn.addEventListener("click", sendSms);
+  inputEl.addEventListener("keydown", e => {
+    if (e.key === "Enter") sendSms();
+  });
+</script>
+
+</body>
+</html>

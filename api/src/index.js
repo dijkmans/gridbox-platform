@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 
-// Routes (huidige structuur)
+// Routes
 import boxesRouter from "./routes/boxes.js";
 import statusRouter from "./routes/status.js";
 // import sharesRouter from "./routes/shares.js";
