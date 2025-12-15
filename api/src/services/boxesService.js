@@ -4,18 +4,20 @@ import { Firestore } from "@google-cloud/firestore";
 import { getBox, listSharesForBox } from "../db.js";
 
 const runningOnCloudRun = !!process.env.K_SERVICE;
-
-let firestore = null;
-if (runningOnCloudRun) {
-  firestore = new Firestore();
-}
+const firestore = runningOnCloudRun ? new Firestore() : null;
 
 /**
- * Lokale mock (enkel voor development zonder Cloud Run)
+ * Lokale mock (enkel voor development)
  */
 const localBoxes = [
-  { id: "heist-1", status: { online: true } },
-  { id: "gbox-001", status: { online: true } },
+  {
+    id: "heist-1",
+    status: { door: "closed", lock: "locked", online: true }
+  },
+  {
+    id: "gbox-001",
+    status: { door: "closed", lock: "locked", online: true }
+  }
 ];
 
 // ---------------------------------------------------------
@@ -25,8 +27,6 @@ export async function getAll() {
   if (!runningOnCloudRun) {
     return localBoxes;
   }
-
-  // optioneel later: Firestore query
   return [];
 }
 
@@ -35,9 +35,8 @@ export async function getAll() {
 // ---------------------------------------------------------
 export async function getById(boxId) {
   if (!runningOnCloudRun) {
-    return localBoxes.find((b) => b.id === boxId) || null;
+    return localBoxes.find(b => b.id === boxId) || null;
   }
-
   return await getBox(boxId);
 }
 
@@ -49,63 +48,89 @@ export async function getShares(boxId) {
 }
 
 // ---------------------------------------------------------
-// OPEN command sturen naar box
+// OPEN
 // ---------------------------------------------------------
-export async function openBox(boxId, source = "api") {
+export async function openBox(boxId, source = "api", phone = null) {
   if (!runningOnCloudRun) {
-    console.log(`🧪 [LOCAL] OPEN command voor ${boxId}`);
-    return { success: true, message: "Mock OPEN uitgevoerd" };
-  }
-
-  const box = await getBox(boxId);
-  if (!box) {
-    return {
-      success: false,
-      message: `Box ${boxId} niet gevonden`
-    };
+    console.log(`🧪 [LOCAL] OPEN ${boxId}`);
+    return { success: true };
   }
 
   const boxRef = firestore.collection("boxes").doc(boxId);
+  const snap = await boxRef.get();
 
+  if (!snap.exists) {
+    return { success: false, message: "Box niet gevonden" };
+  }
+
+  // 1. Command voor device / simulator
   await boxRef.collection("commands").add({
     type: "OPEN",
     source,
+    phone,
     createdAt: new Date().toISOString()
   });
 
-  return {
-    success: true,
-    message: "OPEN command aangemaakt"
-  };
+  // 2. Platform-status vastzetten (leidend)
+  await boxRef.set(
+    {
+      status: {
+        door: "open",
+        lock: "unlocked"
+      },
+      lifecycle: {
+        state: "open",
+        openedAt: new Date().toISOString(),
+        openedBy: phone || "system"
+      },
+      updatedAt: new Date().toISOString()
+    },
+    { merge: true }
+  );
+
+  return { success: true };
 }
 
 // ---------------------------------------------------------
-// CLOSE command sturen naar box
+// CLOSE
 // ---------------------------------------------------------
-export async function closeBox(boxId, source = "api") {
+export async function closeBox(boxId, source = "api", phone = null) {
   if (!runningOnCloudRun) {
-    console.log(`🧪 [LOCAL] CLOSE command voor ${boxId}`);
-    return { success: true, message: "Mock CLOSE uitgevoerd" };
-  }
-
-  const box = await getBox(boxId);
-  if (!box) {
-    return {
-      success: false,
-      message: `Box ${boxId} niet gevonden`
-    };
+    console.log(`🧪 [LOCAL] CLOSE ${boxId}`);
+    return { success: true };
   }
 
   const boxRef = firestore.collection("boxes").doc(boxId);
+  const snap = await boxRef.get();
 
+  if (!snap.exists) {
+    return { success: false, message: "Box niet gevonden" };
+  }
+
+  // 1. Command voor device / simulator
   await boxRef.collection("commands").add({
     type: "CLOSE",
     source,
+    phone,
     createdAt: new Date().toISOString()
   });
 
-  return {
-    success: true,
-    message: "CLOSE command aangemaakt"
-  };
+  // 2. Platform-status vastzetten
+  await boxRef.set(
+    {
+      status: {
+        door: "closed",
+        lock: "locked"
+      },
+      lifecycle: {
+        state: "closed",
+        closedAt: new Date().toISOString(),
+        closedBy: phone || "system"
+      },
+      updatedAt: new Date().toISOString()
+    },
+    { merge: true }
+  );
+
+  return { success: true };
 }
