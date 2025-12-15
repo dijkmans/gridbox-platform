@@ -3,58 +3,38 @@ import { CONFIG } from "./config.js";
 
 const { boxId, apiBaseUrl, statusIntervalSeconds } = CONFIG;
 
-/**
- * Config ophalen
- */
+function url(path) {
+  const base = String(apiBaseUrl).replace(/\/$/, "");
+  return `${base}${path}`;
+}
+
 async function fetchConfig() {
-  const res = await fetch(`${apiBaseUrl}/devices/${boxId}/config`);
-  if (!res.ok) {
-    throw new Error("Config ophalen mislukt");
-  }
+  const res = await fetch(url(`/devices/${boxId}/config`));
+  if (!res.ok) throw new Error("Config ophalen mislukt");
   return res.json();
 }
 
-/**
- * Status versturen
- */
 async function sendStatus(status) {
-  await fetch(`${apiBaseUrl}/devices/${boxId}/status`, {
+  await fetch(url(`/status/${boxId}`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(status)
   });
 }
 
-/**
- * Event versturen (optioneel)
- */
-async function sendEvent(type, payload = {}) {
-  await fetch(`${apiBaseUrl}/devices/${boxId}/events`, {
+async function sendEvent(type, meta = {}) {
+  await fetch(url(`/events/${boxId}`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      type,
-      payload,
-      timestamp: new Date().toISOString()
-    })
+    body: JSON.stringify({ type, source: "pi-simulator", meta })
   });
 }
 
-/**
- * Pending commands ophalen
- */
 async function fetchPendingCommands() {
   try {
-    const res = await fetch(
-      `${apiBaseUrl}/devices/${boxId}/commands/pending`
-    );
-
+    const res = await fetch(url(`/commands/${boxId}`));
     const data = await res.json();
-
-    if (!data.ok || !Array.isArray(data.commands)) {
-      return [];
-    }
-
+    if (!data.ok || !Array.isArray(data.commands)) return [];
     return data.commands;
   } catch (err) {
     console.error("❌ Fout bij ophalen commands:", err.message);
@@ -62,27 +42,19 @@ async function fetchPendingCommands() {
   }
 }
 
-/**
- * Command markeren als done
- */
-async function markCommandDone(commandId) {
-  try {
-    await fetch(
-      `${apiBaseUrl}/devices/${boxId}/commands/${commandId}/done`,
-      { method: "POST" }
-    );
-  } catch (err) {
-    console.error("❌ Fout bij afronden command:", err.message);
-  }
+async function ackCommand(commandId, result = "ok") {
+  await fetch(url(`/commands/${boxId}/ack`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ commandId, result })
+  });
 }
 
-/**
- * Command uitvoeren (simulatie)
- */
 async function executeCommand(command) {
-  console.log("⚙️ Command ontvangen:", command.type);
+  const type = String(command.type || "").toUpperCase();
+  console.log("⚙️ Command ontvangen:", type, command.id);
 
-  if (command.type === "open") {
+  if (type === "OPEN") {
     console.log("🔓 Simulatie: box openen");
 
     await sendStatus({
@@ -90,11 +62,16 @@ async function executeCommand(command) {
       door: "open",
       lock: "unlocked",
       simulated: true,
-      timestamp: new Date().toISOString()
+      uptime: Math.floor(process.uptime())
     });
+
+    await ackCommand(command.id, "ok");
+    await sendEvent("OPEN_OK", { commandId: command.id });
+    console.log("✅ OPEN afgerond");
+    return;
   }
 
-  if (command.type === "close") {
+  if (type === "CLOSE") {
     console.log("🔒 Simulatie: box sluiten");
 
     await sendStatus({
@@ -102,17 +79,20 @@ async function executeCommand(command) {
       door: "closed",
       lock: "locked",
       simulated: true,
-      timestamp: new Date().toISOString()
+      uptime: Math.floor(process.uptime())
     });
+
+    await ackCommand(command.id, "ok");
+    await sendEvent("CLOSE_OK", { commandId: command.id });
+    console.log("✅ CLOSE afgerond");
+    return;
   }
 
-  await markCommandDone(command.id);
-  console.log("✅ Command afgerond");
+  console.log("⚠️ Onbekend command:", type);
+  await ackCommand(command.id, "ignored");
+  await sendEvent("COMMAND_IGNORED", { commandId: command.id, type });
 }
 
-/**
- * Hoofdprogramma
- */
 async function boot() {
   console.log("🟢 Gridbox Pi-simulator gestart");
   console.log("Box ID:", boxId);
@@ -120,32 +100,31 @@ async function boot() {
   const config = await fetchConfig();
   console.log("📥 Config ontvangen:", config);
 
-  await sendEvent("boot", { version: "pi-simulator-1.0" });
+  await sendEvent("PI_SIM_BOOT", { version: "pi-simulator-1.1" });
 
-  // Status interval (heartbeat)
+  // Heartbeat
   setInterval(async () => {
-    const status = {
-      online: true,
-      door: "closed",
-      lock: "locked",
-      simulated: true,
-      timestamp: new Date().toISOString()
-    };
-
-    await sendStatus(status);
-    console.log("📡 Status verzonden");
+    try {
+      await sendStatus({
+        online: true,
+        simulated: true,
+        uptime: Math.floor(process.uptime())
+      });
+      console.log("📡 Status verzonden");
+    } catch (err) {
+      console.error("❌ Status fout:", err.message);
+    }
   }, statusIntervalSeconds * 1000);
 
-  // Command polling (elke 5 seconden)
+  // Commands poll
   setInterval(async () => {
     const commands = await fetchPendingCommands();
-
     for (const command of commands) {
       await executeCommand(command);
     }
-  }, 5000);
+  }, 2000);
 }
 
-boot().catch(err => {
+boot().catch((err) => {
   console.error("❌ Simulator fout:", err.message);
 });
