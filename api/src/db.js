@@ -2,7 +2,7 @@
 
 import { Firestore } from "@google-cloud/firestore";
 
-// Detecteer Cloud Run (Firestone actief) of lokale dev-mode (mock data)
+// Detecteer Cloud Run (Firestore actief) of lokale dev-mode
 const runningOnCloudRun = !!process.env.K_SERVICE;
 
 let firestore = null;
@@ -11,7 +11,7 @@ if (runningOnCloudRun) {
 }
 
 // ----------------------------------------------------
-// Lokale mock tables voor ontwikkeling
+// Lokale mock data
 // ----------------------------------------------------
 const localBoxes = new Map([
   [
@@ -60,12 +60,11 @@ export async function listSharesForBox(boxId) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-export async function createShare({ boxId, phoneNumber, code }) {
+export async function createShare({ boxId, phone }) {
   const base = {
     boxId,
-    phoneNumber,
-    code,
-    status: "active",
+    phone,
+    active: true,
     createdAt: new Date().toISOString(),
   };
 
@@ -83,15 +82,17 @@ export async function createShare({ boxId, phoneNumber, code }) {
   return { id: ref.id, ...base };
 }
 
-export async function findActiveShare(boxId, phoneNumber) {
-  // Lokale mock
+// ----------------------------------------------------
+// Actieve share zoeken (box + phone)
+// ----------------------------------------------------
+export async function findActiveShare(boxId, phone) {
   if (!firestore) {
     return (
       localShares.find(
         (s) =>
           s.boxId === boxId &&
-          s.phoneNumber === phoneNumber &&
-          s.status === "active"
+          s.phone === phone &&
+          s.active === true
       ) || null
     );
   }
@@ -99,8 +100,8 @@ export async function findActiveShare(boxId, phoneNumber) {
   const snap = await firestore
     .collection("shares")
     .where("boxId", "==", boxId)
-    .where("phoneNumber", "==", phoneNumber)
-    .where("status", "==", "active")
+    .where("phone", "==", phone)
+    .where("active", "==", true)
     .limit(1)
     .get();
 
