@@ -7,7 +7,7 @@ import {
 
 const runningOnCloudRun = !!process.env.K_SERVICE;
 
-// Lokale mock data
+// Lokale mock data (alleen voor lokaal draaien)
 let localShares = [];
 
 // ---------------------------------------------------------
@@ -43,35 +43,35 @@ export async function listSharesForBox(boxId) {
 // ---------------------------------------------------------
 // Actieve share zoeken op box + telefoonnummer
 // ---------------------------------------------------------
-export async function findActiveShare(boxId, phoneNumber) {
+export async function findActiveShare(boxId, phone) {
   if (!runningOnCloudRun) {
     return (
       localShares.find(
         (s) =>
           s.boxId === boxId &&
-          s.phoneNumber === phoneNumber &&
+          s.phone === phone &&
           s.status === "active"
       ) || null
     );
   }
 
-  return await dbFindActiveShare(boxId, phoneNumber);
+  return await dbFindActiveShare(boxId, phone);
 }
 
 // ---------------------------------------------------------
 // Actieve share zoeken op enkel telefoonnummer
-// (handig voor SMS-webhook)
+// (gebruikt door SMS-webhook)
 // ---------------------------------------------------------
-export async function findActiveShareByPhone(phoneNumber) {
+export async function findActiveShareByPhone(phone) {
   if (!runningOnCloudRun) {
     return (
       localShares.find(
-        (s) => s.phoneNumber === phoneNumber && s.status === "active"
+        (s) => s.phone === phone && s.status === "active"
       ) || null
     );
   }
 
-  return await dbFindActiveShare(null, phoneNumber);
+  return await dbFindActiveShare(null, phone);
 }
 
 // ---------------------------------------------------------
