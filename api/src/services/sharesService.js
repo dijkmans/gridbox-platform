@@ -2,22 +2,56 @@
 import {
   createShare as dbCreateShare,
   listSharesForBox as dbListSharesForBox,
-  findActiveShare as dbFindActiveShare,
-  findActiveShareByPhone as dbFindActiveShareByPhone,
+  findActiveShareByPhone as dbFindActiveShareByPhone
 } from "../db.js";
 
-export async function createShare({ boxId, phone }) {
-  return dbCreateShare({ boxId, phone });
+const runningOnCloudRun = !!process.env.K_SERVICE;
+
+// Lokale mock data
+let localShares = [];
+
+// -------------------------------------
+// Nieuwe share
+// -------------------------------------
+export async function createShare(share) {
+  if (!runningOnCloudRun) {
+    const mock = {
+      id: `mock-${localShares.length + 1}`,
+      ...share,
+      active: true,
+      createdAt: new Date().toISOString()
+    };
+    localShares.push(mock);
+    return mock;
+  }
+
+  return await dbCreateShare(share);
 }
 
+// -------------------------------------
+// Shares voor box
+// -------------------------------------
 export async function listSharesForBox(boxId) {
-  return dbListSharesForBox(boxId);
+  if (!runningOnCloudRun) {
+    return localShares.filter(
+      s => s.boxId === boxId && s.active === true
+    );
+  }
+
+  return await dbListSharesForBox(boxId);
 }
 
-export async function findActiveShare(boxId, phone) {
-  return dbFindActiveShare(boxId, phone);
-}
-
+// -------------------------------------
+// Actieve share op telefoonnummer (SMS)
+// -------------------------------------
 export async function findActiveShareByPhone(phone) {
-  return dbFindActiveShareByPhone(phone);
+  if (!runningOnCloudRun) {
+    return (
+      localShares.find(
+        s => s.phone === phone && s.active === true
+      ) || null
+    );
+  }
+
+  return await dbFindActiveShareByPhone(phone);
 }
