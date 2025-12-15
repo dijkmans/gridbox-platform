@@ -28,8 +28,7 @@ router.post("/", async (req, res) => {
     console.log("📩 SMS webhook ontvangen:", req.body);
 
     const from = normalizePhone(req.body.From);
-    const bodyRaw = req.body.Body || "";
-    const body = bodyRaw.trim().toLowerCase();
+    const body = (req.body.Body || "").trim().toLowerCase();
 
     if (!from) {
       return res
@@ -37,7 +36,6 @@ router.post("/", async (req, res) => {
         .send(`<Response><Message>Ongeldig nummer.</Message></Response>`);
     }
 
-    // Enkel OPEN en CLOSE herkennen (CLOSE is voorbereid)
     const isOpen = body.startsWith("open");
     const isClose = body.startsWith("close");
 
@@ -53,7 +51,6 @@ router.post("/", async (req, res) => {
     const share = await sharesService.findActiveShareByPhone(from);
 
     if (!share) {
-      console.log("❌ Geen actieve share voor:", from);
       return res
         .type("text/xml")
         .send(
@@ -61,13 +58,10 @@ router.post("/", async (req, res) => {
         );
     }
 
-    console.log("✔ Actieve share:", share);
-
     // 2. Box ophalen
     const box = await boxesService.getById(share.boxId);
 
     if (!box) {
-      console.log("❌ Box niet gevonden:", share.boxId);
       return res
         .type("text/xml")
         .send(`<Response><Message>Box niet beschikbaar.</Message></Response>`);
@@ -98,31 +92,34 @@ router.post("/", async (req, res) => {
     }
 
     if (result.action === "IGNORE") {
-      // Stil negeren (bv. herhaald OPEN)
+      // Geen antwoord nodig
       return res.sendStatus(200);
     }
 
+    // -------------------------
+    // OPEN
+    // -------------------------
     if (result.action === "OPEN") {
-      // State eerst zetten
-      await updateState(share.boxId, {
-        mode: "opening",
-        reason: "sms",
-        requestedBy: from
-      });
 
-      // Fysiek openen
-      const openResult = await boxesService.open(share.boxId);
+      // ✅ STATE WEGSCHRIJVEN (beslist door state-machine)
+      if (result.nextState) {
+        await updateState(share.boxId, {
+          ...result.nextState,
+          requestedBy: from,
+          source: "sms"
+        });
+      }
+
+      // ✅ COMMAND STUREN
+      const openResult = await boxesService.openBox(share.boxId, "sms");
 
       if (!openResult.success) {
-        console.error("❌ Open mislukt:", openResult.message);
         return res
           .type("text/xml")
           .send(
             `<Response><Message>De box kon niet worden geopend.</Message></Response>`
           );
       }
-
-      console.log("🔓 OPEN uitgevoerd voor:", share.boxId);
 
       return res
         .type("text/xml")
@@ -131,25 +128,28 @@ router.post("/", async (req, res) => {
         );
     }
 
+    // -------------------------
+    // CLOSE
+    // -------------------------
     if (result.action === "CLOSE") {
-      await updateState(share.boxId, {
-        mode: "closing",
-        reason: "sms",
-        requestedBy: from
-      });
 
-      const closeResult = await boxesService.close(share.boxId);
+      if (result.nextState) {
+        await updateState(share.boxId, {
+          ...result.nextState,
+          requestedBy: from,
+          source: "sms"
+        });
+      }
+
+      const closeResult = await boxesService.closeBox(share.boxId, "sms");
 
       if (!closeResult.success) {
-        console.error("❌ Close mislukt:", closeResult.message);
         return res
           .type("text/xml")
           .send(
             `<Response><Message>De box kon niet worden gesloten.</Message></Response>`
           );
       }
-
-      console.log("🔒 CLOSE uitgevoerd voor:", share.boxId);
 
       return res
         .type("text/xml")
@@ -158,7 +158,6 @@ router.post("/", async (req, res) => {
         );
     }
 
-    // Fallback
     return res.sendStatus(200);
 
   } catch (err) {
