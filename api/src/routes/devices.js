@@ -78,6 +78,48 @@ router.post("/:boxId/status", async (req, res) => {
 });
 
 /**
+ * POST /api/devices/:boxId/events
+ * Raspberry Pi stuurt events (boot, error, log, ...)
+ * Wordt opgeslagen in:
+ * boxes/{boxId}/events
+ */
+router.post("/:boxId/events", async (req, res) => {
+  try {
+    const boxId = req.params.boxId;
+    const body = req.body || {};
+
+    const { type, payload = {}, timestamp = null, source = "device" } = body;
+
+    if (!type) {
+      return res.status(400).json({
+        ok: false,
+        message: "Event type ontbreekt"
+      });
+    }
+
+    await deviceService.addEvent(boxId, {
+      type,
+      payload,
+      timestamp,
+      source
+    });
+
+    return res.json({
+      ok: true,
+      message: "Event ontvangen en opgeslagen",
+      boxId
+    });
+
+  } catch (err) {
+    console.error("Fout in POST /devices/:boxId/events:", err);
+    return res.status(500).json({
+      ok: false,
+      message: "Interne serverfout bij opslaan event"
+    });
+  }
+});
+
+/**
  * POST /api/devices/:boxId/commands
  * Maakt een nieuw command aan
  * Path:
@@ -138,6 +180,40 @@ router.get("/:boxId/commands/pending", async (req, res) => {
     return res.status(500).json({
       ok: false,
       message: "Interne serverfout bij ophalen commands"
+    });
+  }
+});
+
+/**
+ * POST /api/devices/:boxId/commands/:commandId/done
+ * Raspberry Pi bevestigt dat een command uitgevoerd is
+ */
+router.post("/:boxId/commands/:commandId/done", async (req, res) => {
+  try {
+    const boxId = req.params.boxId;
+    const commandId = req.params.commandId;
+    const body = req.body || {};
+
+    const { result = "ok", payload = null, error = null } = body;
+
+    await deviceService.markCommandDone(boxId, commandId, {
+      result,
+      payload,
+      error
+    });
+
+    return res.json({
+      ok: true,
+      message: "Command gemarkeerd als done",
+      boxId,
+      commandId
+    });
+
+  } catch (err) {
+    console.error("Fout in POST /devices/:boxId/commands/:commandId/done:", err);
+    return res.status(500).json({
+      ok: false,
+      message: "Interne serverfout bij afronden command"
     });
   }
 });
