@@ -141,8 +141,8 @@
     <div class="to-field">
       <input
         id="toNumber"
-        placeholder="Van: +324..."
         value="+32460235151"
+        placeholder="Van: +324..."
       />
     </div>
 
@@ -173,14 +173,6 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  function addSystemMessage(text) {
-    const div = document.createElement("div");
-    div.className = "system";
-    div.textContent = text;
-    messagesEl.appendChild(div);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  }
-
   async function sendSms() {
     const rawText = inputEl.value.trim();
     const number = toInput.value.trim();
@@ -189,6 +181,7 @@
 
     // Toon exact wat gebruiker typt
     addBubble(rawText, "sent");
+
     inputEl.value = "";
     sendBtn.disabled = true;
 
@@ -213,7 +206,7 @@
 
     } catch (err) {
       console.error(err);
-      addSystemMessage("Technische fout bij verzenden");
+      addBubble("Technische fout bij verzenden.", "received");
     } finally {
       sendBtn.disabled = false;
     }
