@@ -3,41 +3,21 @@ import {
   createShare as dbCreateShare,
   listSharesForBox as dbListSharesForBox,
   findActiveShare as dbFindActiveShare,
-  findActiveShareByPhone as dbFindActiveShareByPhone
+  findActiveShareByPhone as dbFindActiveShareByPhone,
 } from "../db.js";
 
-const runningOnCloudRun = !!process.env.K_SERVICE;
-
-let localShares = [];
-
-// Nieuwe share
-export async function createShare(share) {
-  if (!runningOnCloudRun) {
-    const mock = {
-      id: `mock-${localShares.length + 1}`,
-      boxId: share.boxId,
-      phone: share.phone,
-      active: true,
-      createdAt: new Date().toISOString()
-    };
-    localShares.push(mock);
-    return mock;
-  }
-  return await dbCreateShare(share);
+export async function createShare({ boxId, phone }) {
+  return dbCreateShare({ boxId, phone });
 }
 
-// Shares per box
 export async function listSharesForBox(boxId) {
-  if (!runningOnCloudRun) {
-    return localShares.filter(s => s.boxId === boxId && s.active === true);
-  }
-  return await dbListSharesForBox(boxId);
+  return dbListSharesForBox(boxId);
 }
 
-// Actieve share via telefoon (SMS)
+export async function findActiveShare(boxId, phone) {
+  return dbFindActiveShare(boxId, phone);
+}
+
 export async function findActiveShareByPhone(phone) {
-  if (!runningOnCloudRun) {
-    return localShares.find(s => s.phone === phone && s.active === true) || null;
-  }
-  return await dbFindActiveShareByPhone(phone);
+  return dbFindActiveShareByPhone(phone);
 }
