@@ -1,4 +1,5 @@
 // api/src/services/sharesService.js
+
 import {
   createShare as dbCreateShare,
   listSharesForBox as dbListSharesForBox,
@@ -8,12 +9,10 @@ import {
 
 const runningOnCloudRun = !!process.env.K_SERVICE;
 
-// Lokale mock (alleen lokaal)
+// lokale mock (alleen lokaal)
 let localShares = [];
 
-// ----------------------------------------------------
-// Share aanmaken
-// ----------------------------------------------------
+// share aanmaken
 export async function createShare(data) {
   if (!runningOnCloudRun) {
     const mock = {
@@ -29,9 +28,7 @@ export async function createShare(data) {
   return dbCreateShare(data);
 }
 
-// ----------------------------------------------------
-// Shares per box
-// ----------------------------------------------------
+// shares per box
 export async function listSharesForBox(boxId) {
   if (!runningOnCloudRun) {
     return localShares.filter(
@@ -42,16 +39,12 @@ export async function listSharesForBox(boxId) {
   return dbListSharesForBox(boxId);
 }
 
-// ----------------------------------------------------
-// Actieve share op box + phone
-// ----------------------------------------------------
+// actieve share voor box + phone
 export async function findActiveShareForBox(boxId, phone) {
   return findActiveShare(boxId, phone);
 }
 
-// ----------------------------------------------------
-// Actieve share op phone (SMS)
-// ----------------------------------------------------
-export async function findActiveShareByPhoneNumber(phone) {
+// ✅ DIT MOET BESTAAN
+export async function findActiveShareByPhone(phone) {
   return findActiveShareByPhone(phone);
 }
