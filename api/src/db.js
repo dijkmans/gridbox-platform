@@ -13,6 +13,14 @@ if (runningOnCloudRun) {
 }
 
 // ----------------------------------------------------
+// Helpers
+// ----------------------------------------------------
+function normalizePhone(phone) {
+  if (!phone) return null;
+  return phone.replace(/\s+/g, "").trim();
+}
+
+// ----------------------------------------------------
 // Lokale mock data (enkel voor lokaal draaien)
 // ----------------------------------------------------
 const localBoxes = new Map([
@@ -71,7 +79,7 @@ export async function listSharesForBox(boxId) {
 export async function createShare({ boxId, phone }) {
   const share = {
     boxId,
-    phone,
+    phone: normalizePhone(phone),
     active: true,
     createdAt: new Date().toISOString(),
   };
@@ -91,12 +99,14 @@ export async function createShare({ boxId, phone }) {
 
 // Actieve share zoeken op box + phone
 export async function findActiveShare(boxId, phone) {
+  const normalized = normalizePhone(phone);
+
   if (!firestore) {
     return (
       localShares.find(
         (s) =>
           s.boxId === boxId &&
-          s.phone === phone &&
+          normalizePhone(s.phone) === normalized &&
           s.active === true
       ) || null
     );
@@ -105,44 +115,50 @@ export async function findActiveShare(boxId, phone) {
   const snap = await firestore
     .collection("shares")
     .where("boxId", "==", boxId)
-    .where("phone", "==", phone)
     .where("active", "==", true)
-    .limit(1)
     .get();
 
-  if (snap.empty) return null;
+  const match = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .find(
+      (s) => normalizePhone(s.phone) === normalized
+    );
 
-  const doc = snap.docs[0];
-  return { id: doc.id, ...doc.data() };
+  return match || null;
 }
 
 // Actieve share zoeken op enkel phone (SMS-flow)
 export async function findActiveShareByPhone(phone) {
+  const normalized = normalizePhone(phone);
+
   if (!firestore) {
     return (
       localShares.find(
-        (s) => s.phone === phone && s.active === true
+        (s) =>
+          normalizePhone(s.phone) === normalized &&
+          s.active === true
       ) || null
     );
   }
 
-  console.log("🔎 Firestore lookup for phone:", phone);
+  console.log("🔎 SMS lookup for phone:", normalized);
 
   const snap = await firestore
     .collection("shares")
-    .where("phone", "==", phone)
     .where("active", "==", true)
-    .limit(1)
     .get();
 
-  console.log("📄 Firestore docs found:", snap.size);
+  const match = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .find(
+      (s) => normalizePhone(s.phone) === normalized
+    );
 
-  snap.docs.forEach((d) => {
-    console.log("➡️ share:", d.id, d.data());
-  });
+  if (!match) {
+    console.log("❌ Geen actieve share gevonden");
+    return null;
+  }
 
-  if (snap.empty) return null;
-
-  const doc = snap.docs[0];
-  return { id: doc.id, ...doc.data() };
+  console.log("✅ Actieve share gevonden:", match.id);
+  return match;
 }
