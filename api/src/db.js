@@ -2,7 +2,9 @@
 
 import { Firestore } from "@google-cloud/firestore";
 
-// Detecteer Cloud Run (Firestore actief) of lokale dev-mode
+// ----------------------------------------------------
+// Detecteer Cloud Run
+// ----------------------------------------------------
 const runningOnCloudRun = !!process.env.K_SERVICE;
 
 let firestore = null;
@@ -11,7 +13,7 @@ if (runningOnCloudRun) {
 }
 
 // ----------------------------------------------------
-// Lokale mock data
+// Lokale mock data (enkel voor lokaal draaien)
 // ----------------------------------------------------
 const localBoxes = new Map([
   [
@@ -47,75 +49,74 @@ export async function getBox(boxId) {
 // ----------------------------------------------------
 // SHARES
 // ----------------------------------------------------
+
+// Alle actieve shares voor een box
 export async function listSharesForBox(boxId) {
   if (!firestore) {
-    return localShares.filter((s) => s.boxId === boxId);
+    return localShares.filter(
+      (s) => s.boxId === boxId && s.active === true
+    );
   }
 
-  const snap = await firestore.collection("shares").get();
+  const snap = await firestore
+    .collection("shares")
+    .where("boxId", "==", boxId)
+    .where("active", "==", true)
+    .get();
 
-  return snap.docs
-    .map((d) => ({ id: d.id, ...d.data() }))
-    .filter(
-      (s) =>
-        (s.boxId === boxId || s.boxid === boxId) &&
-        s.active === true
-    );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+// Nieuwe share aanmaken
 export async function createShare({ boxId, phone }) {
-  const base = {
-    boxId,          // altijd correct veld gebruiken
+  const share = {
+    boxId,
     phone,
     active: true,
     createdAt: new Date().toISOString(),
   };
 
   if (!firestore) {
-    const share = {
+    const local = {
       id: `mock-${localShares.length + 1}`,
-      ...base,
+      ...share,
     };
-    localShares.push(share);
-    return share;
+    localShares.push(local);
+    return local;
   }
 
-  const ref = await firestore.collection("shares").add(base);
-  return { id: ref.id, ...base };
+  const ref = await firestore.collection("shares").add(share);
+  return { id: ref.id, ...share };
 }
 
-// ----------------------------------------------------
-// Actieve share zoeken (box + phone)
-// ----------------------------------------------------
+// Actieve share zoeken op box + phone
 export async function findActiveShare(boxId, phone) {
   if (!firestore) {
     return (
       localShares.find(
         (s) =>
+          s.boxId === boxId &&
           s.phone === phone &&
-          s.active === true &&
-          (s.boxId === boxId || s.boxid === boxId)
+          s.active === true
       ) || null
     );
   }
 
-  const snap = await firestore.collection("shares").get();
+  const snap = await firestore
+    .collection("shares")
+    .where("boxId", "==", boxId)
+    .where("phone", "==", phone)
+    .where("active", "==", true)
+    .limit(1)
+    .get();
 
-  const matches = snap.docs
-    .map((d) => ({ id: d.id, ...d.data() }))
-    .filter(
-      (s) =>
-        s.active === true &&
-        s.phone === phone &&
-        (s.boxId === boxId || s.boxid === boxId)
-    );
+  if (snap.empty) return null;
 
-  return matches[0] || null;
+  const doc = snap.docs[0];
+  return { id: doc.id, ...doc.data() };
 }
 
-// ----------------------------------------------------
-// Actieve share zoeken op enkel phone (SMS)
-// ----------------------------------------------------
+// Actieve share zoeken op enkel phone (SMS-flow)
 export async function findActiveShareByPhone(phone) {
   if (!firestore) {
     return (
@@ -125,12 +126,20 @@ export async function findActiveShareByPhone(phone) {
     );
   }
 
+  console.log("🔎 Firestore lookup for phone:", phone);
+
   const snap = await firestore
     .collection("shares")
     .where("phone", "==", phone)
     .where("active", "==", true)
     .limit(1)
     .get();
+
+  console.log("📄 Firestore docs found:", snap.size);
+
+  snap.docs.forEach((d) => {
+    console.log("➡️ share:", d.id, d.data());
+  });
 
   if (snap.empty) return null;
 
