@@ -110,3 +110,28 @@ export async function findActiveShare(boxId, phone) {
   const doc = snap.docs[0];
   return { id: doc.id, ...doc.data() };
 }
+
+// ----------------------------------------------------
+// Actieve share zoeken op enkel phone (SMS)
+// ----------------------------------------------------
+export async function findActiveShareByPhone(phone) {
+  if (!firestore) {
+    return (
+      localShares.find(
+        (s) => s.phone === phone && s.active === true
+      ) || null
+    );
+  }
+
+  const snap = await firestore
+    .collection("shares")
+    .where("phone", "==", phone)
+    .where("active", "==", true)
+    .limit(1)
+    .get();
+
+  if (snap.empty) return null;
+
+  const doc = snap.docs[0];
+  return { id: doc.id, ...doc.data() };
+}
