@@ -25,10 +25,11 @@ function normalizePhone(number) {
  */
 router.post("/", async (req, res) => {
   try {
-    console.log("📩 Inbound bericht:", req.body);
+    console.log("📩 Inbound SMS:", req.body);
 
     const from = normalizePhone(req.body.From);
-    const body = (req.body.Body || "").trim().toLowerCase();
+    const bodyRaw = req.body.Body || "";
+    const body = bodyRaw.trim().toLowerCase();
 
     if (!from) {
       return res
@@ -36,6 +37,7 @@ router.post("/", async (req, res) => {
         .send(`<Response><Message>Ongeldig nummer.</Message></Response>`);
     }
 
+    // Enkel exacte commando’s
     const isOpen = body === "open";
     const isClose = body === "close";
 
@@ -43,11 +45,11 @@ router.post("/", async (req, res) => {
       return res
         .type("text/xml")
         .send(
-          `<Response><Message>Ongeldig commando. Gebruik OPEN of CLOSE.</Message></Response>`
+          `<Response><Message>Ongeldig commando. Stuur OPEN of CLOSE.</Message></Response>`
         );
     }
 
-    // 1. Actieve share zoeken
+    // 1. Actieve share controleren
     const share = await sharesService.findActiveShareByPhone(from);
 
     if (!share) {
@@ -64,13 +66,15 @@ router.post("/", async (req, res) => {
     if (!box) {
       return res
         .type("text/xml")
-        .send(`<Response><Message>Box niet beschikbaar.</Message></Response>`);
+        .send(
+          `<Response><Message>Box niet beschikbaar.</Message></Response>`
+        );
     }
 
     // 3. Event bepalen
     const eventType = isOpen ? EVENTS.SMS_OPEN : EVENTS.SMS_CLOSE;
 
-    // 4. State-machine beslissen
+    // 4. State-machine beslist
     const result = await handleEvent({
       box,
       event: { type: eventType },
@@ -86,7 +90,7 @@ router.post("/", async (req, res) => {
       return res
         .type("text/xml")
         .send(
-          `<Response><Message>Geen toegang of box tijdelijk niet beschikbaar.</Message></Response>`
+          `<Response><Message>Actie niet toegestaan.</Message></Response>`
         );
     }
 
@@ -118,7 +122,7 @@ router.post("/", async (req, res) => {
         return res
           .type("text/xml")
           .send(
-            `<Response><Message>De Gridbox kon niet worden geopend.</Message></Response>`
+            `<Response><Message>Openen kon niet worden gestart.</Message></Response>`
           );
       }
 
@@ -152,7 +156,7 @@ router.post("/", async (req, res) => {
         return res
           .type("text/xml")
           .send(
-            `<Response><Message>De Gridbox kon niet worden gesloten.</Message></Response>`
+            `<Response><Message>Sluiten kon niet worden gestart.</Message></Response>`
           );
       }
 
@@ -163,6 +167,7 @@ router.post("/", async (req, res) => {
         );
     }
 
+    // Fallback
     return res.sendStatus(200);
 
   } catch (err) {
@@ -170,7 +175,9 @@ router.post("/", async (req, res) => {
 
     return res
       .type("text/xml")
-      .send(`<Response><Message>Er ging iets mis.</Message></Response>`);
+      .send(
+        `<Response><Message>Er ging iets mis.</Message></Response>`
+      );
   }
 });
 
