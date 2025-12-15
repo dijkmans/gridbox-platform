@@ -62,18 +62,18 @@ export async function openBox(boxId, source = "api", requestedBy = "system") {
     return { success: false, message: "Box niet gevonden" };
   }
 
-  const now = new Date().toISOString();
+  const nowIso = new Date().toISOString();
 
   // 1. Lifecycle is LEIDEND
   await boxRef.set(
     {
       lifecycle: {
         state: "open",
-        openedAt: now,
+        openedAt: nowIso,
         openedBy: requestedBy,
         source
       },
-      updatedAt: now
+      updatedAt: nowIso
     },
     { merge: true }
   );
@@ -81,9 +81,11 @@ export async function openBox(boxId, source = "api", requestedBy = "system") {
   // 2. Command voor hardware / simulator
   await boxRef.collection("commands").add({
     type: "OPEN",
+    status: "pending",
     source,
     requestedBy,
-    createdAt: now
+    createdAt: new Date(),
+    requestedAt: nowIso
   });
 
   return { success: true };
@@ -105,18 +107,18 @@ export async function closeBox(boxId, source = "api", requestedBy = "system") {
     return { success: false, message: "Box niet gevonden" };
   }
 
-  const now = new Date().toISOString();
+  const nowIso = new Date().toISOString();
 
   // 1. Lifecycle is LEIDEND
   await boxRef.set(
     {
       lifecycle: {
         state: "closed",
-        closedAt: now,
+        closedAt: nowIso,
         closedBy: requestedBy,
         source
       },
-      updatedAt: now
+      updatedAt: nowIso
     },
     { merge: true }
   );
@@ -124,9 +126,11 @@ export async function closeBox(boxId, source = "api", requestedBy = "system") {
   // 2. Command voor hardware / simulator
   await boxRef.collection("commands").add({
     type: "CLOSE",
+    status: "pending",
     source,
     requestedBy,
-    createdAt: now
+    createdAt: new Date(),
+    requestedAt: nowIso
   });
 
   return { success: true };
