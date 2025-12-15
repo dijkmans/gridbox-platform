@@ -1,28 +1,39 @@
+// api/src/routes/sms.js
+
 import { Router } from "express";
 import * as boxesService from "../services/boxesService.js";
 import * as sharesService from "../services/sharesService.js";
 
 const router = Router();
 
+/**
+ * Telefoonnummer normaliseren
+ */
 function normalizePhone(number) {
   if (!number) return null;
   return number.replace(/\s+/g, "").trim();
 }
 
-router.post("/inbound", async (req, res) => {
+/**
+ * POST /api/sms/inbound
+ * Inkomende SMS of simulator-bericht
+ */
+router.post("/", async (req, res) => {
   try {
-    const from = normalizePhone(req.body.From);
-    const body = (req.body.Body || "").trim().toLowerCase();
+    console.log("📩 SMS inbound:", req.body);
 
-    console.log("📩 SMS inbound:", { from, body });
+    const from = normalizePhone(req.body.From);
+    const bodyRaw = req.body.Body || "";
+    const body = bodyRaw.trim().toUpperCase();
 
     if (!from) {
       return res
         .type("text/xml")
-        .send(`<Response><Message>Ongeldig nummer.</Message></Response>`);
+        .send(`<Response><Message>Ongeldig telefoonnummer.</Message></Response>`);
     }
 
-    if (body !== "open" && body !== "close") {
+    // Enkel OPEN of CLOSE
+    if (body !== "OPEN" && body !== "CLOSE") {
       return res
         .type("text/xml")
         .send(
@@ -30,7 +41,9 @@ router.post("/inbound", async (req, res) => {
         );
     }
 
+    // Actieve share zoeken
     const share = await sharesService.findActiveShareByPhone(from);
+
     if (!share) {
       return res
         .type("text/xml")
@@ -39,7 +52,17 @@ router.post("/inbound", async (req, res) => {
         );
     }
 
-    if (body === "open") {
+    // Box ophalen
+    const box = await boxesService.getById(share.boxId);
+
+    if (!box) {
+      return res
+        .type("text/xml")
+        .send(`<Response><Message>Box niet gevonden.</Message></Response>`);
+    }
+
+    // OPEN
+    if (body === "OPEN") {
       await boxesService.openBox(share.boxId, "sms", from);
 
       return res
@@ -49,7 +72,8 @@ router.post("/inbound", async (req, res) => {
         );
     }
 
-    if (body === "close") {
+    // CLOSE
+    if (body === "CLOSE") {
       await boxesService.closeBox(share.boxId, "sms", from);
 
       return res
@@ -59,12 +83,15 @@ router.post("/inbound", async (req, res) => {
         );
     }
 
+    // Fallback
     return res.sendStatus(200);
+
   } catch (err) {
-    console.error("❌ SMS fout:", err);
+    console.error("❌ Fout in sms route:", err);
+
     return res
       .type("text/xml")
-      .send(`<Response><Message>Er ging iets mis.</Message></Response>`);
+      .send(`<Response><Message>Interne fout.</Message></Response>`);
   }
 });
 
