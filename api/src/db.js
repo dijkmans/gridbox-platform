@@ -52,20 +52,20 @@ export async function listSharesForBox(boxId) {
     return localShares.filter((s) => s.boxId === boxId);
   }
 
-  const snap = await firestore
-    .collection("shares")
-    .where("boxId", "==", boxId)
-    .get();
+  const snap = await firestore.collection("shares").get();
 
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter(
+      (s) =>
+        (s.boxId === boxId || s.boxid === boxId) &&
+        s.active === true
+    );
 }
 
-// ----------------------------------------------------
-// Nieuwe share aanmaken
-// ----------------------------------------------------
 export async function createShare({ boxId, phone }) {
   const base = {
-    boxId,
+    boxId,          // altijd correct veld gebruiken
     phone,
     active: true,
     createdAt: new Date().toISOString(),
@@ -92,25 +92,25 @@ export async function findActiveShare(boxId, phone) {
     return (
       localShares.find(
         (s) =>
-          s.boxId === boxId &&
           s.phone === phone &&
-          s.active === true
+          s.active === true &&
+          (s.boxId === boxId || s.boxid === boxId)
       ) || null
     );
   }
 
-  const snap = await firestore
-    .collection("shares")
-    .where("boxId", "==", boxId)
-    .where("phone", "==", phone)
-    .where("active", "==", true)
-    .limit(1)
-    .get();
+  const snap = await firestore.collection("shares").get();
 
-  if (snap.empty) return null;
+  const matches = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter(
+      (s) =>
+        s.active === true &&
+        s.phone === phone &&
+        (s.boxId === boxId || s.boxid === boxId)
+    );
 
-  const doc = snap.docs[0];
-  return { id: doc.id, ...doc.data() };
+  return matches[0] || null;
 }
 
 // ----------------------------------------------------
