@@ -1,98 +1,83 @@
 // api/src/services/boxesService.js
-// Bewust simpel gehouden: boxes ophalen, shares lijst, en OPEN/CLOSE commands aanmaken.
+import { Firestore } from "@google-cloud/firestore";
+import { getBox, listSharesForBox } from "../db.js";
 
-import { db } from "../firebase.js";
-import { Timestamp } from "firebase-admin/firestore";
+const runningOnCloudRun = !!process.env.K_SERVICE;
 
-// ---------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------
-function normalizeBool(v) {
-  if (v === true) return true;
-  if (v === "true") return true;
-  return false;
+let firestore = null;
+if (runningOnCloudRun) {
+  firestore = new Firestore();
 }
 
-function isActiveShare(s) {
-  if (!s) return false;
-  if (normalizeBool(s.active)) return true;
-  if (s.status === "active") return true;
-  return false;
-}
-
-function normalizeCommandType(type) {
-  if (!type) return null;
-  return String(type).trim().toUpperCase();
-}
+// lokale mock (enkel lokaal)
+const localBoxes = [
+  { id: "heist-1", status: "online" },
+  { id: "gbox-001", status: "online" },
+];
 
 // ---------------------------------------------------------
-// BOXES
+// Alle boxen ophalen (optioneel)
 // ---------------------------------------------------------
 export async function getAll() {
-  const snap = await db.collection("boxes").limit(200).get();
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return localBoxes;
 }
 
-export async function getById(boxId) {
-  const doc = await db.collection("boxes").doc(boxId).get();
-  if (!doc.exists) return null;
-  return { id: doc.id, ...doc.data() };
+// ---------------------------------------------------------
+// Eén box ophalen
+// ---------------------------------------------------------
+export async function getById(id) {
+  if (!runningOnCloudRun) {
+    return localBoxes.find((b) => b.id === id) || null;
+  }
+  return await getBox(id);
 }
 
+// ---------------------------------------------------------
+// Shares voor box ophalen
+// ---------------------------------------------------------
 export async function getShares(boxId) {
-  const snap = await db
-    .collection("shares")
-    .where("boxId", "==", boxId)
-    .limit(50)
-    .get();
-
-  return snap.docs
-    .map((d) => ({ id: d.id, ...d.data() }))
-    .filter((s) => isActiveShare(s));
+  return await listSharesForBox(boxId);
 }
 
 // ---------------------------------------------------------
-// COMMANDS (OPEN / CLOSE)
+// Box openen (SMS gebruikt dit)
 // ---------------------------------------------------------
-async function addCommand(boxId, type, source = "api", actor = null, meta = {}) {
-  const commandType = normalizeCommandType(type);
-  if (!commandType) {
-    return { success: false, message: "Command type ontbreekt" };
+export async function openBox(boxId) {
+  if (!runningOnCloudRun) {
+    const box = localBoxes.find((b) => b.id === boxId);
+    if (!box) return { success: false, message: `Box ${boxId} niet gevonden (lokaal)` };
+
+    box.status = "open";
+    return { success: true, message: `Mock: box ${boxId} is geopend` };
   }
 
-  // Check dat box bestaat
-  const boxDoc = await db.collection("boxes").doc(boxId).get();
-  if (!boxDoc.exists) {
-    return { success: false, message: `Box ${boxId} niet gevonden` };
+  // check box bestaat
+  const box = await getBox(boxId);
+  if (!box) {
+    return { success: false, message: `Box ${boxId} niet gevonden (Firestore)` };
   }
 
-  const command = {
-    type: commandType,
-    status: "pending",
-    source,
-    actor,
-    meta,
-    createdAt: Timestamp.now()
-  };
+  const boxRef = firestore.collection("boxes").doc(boxId);
 
-  const ref = await db
-    .collection("boxes")
-    .doc(boxId)
-    .collection("commands")
-    .add(command);
+  // command in subcollection
+  await boxRef.collection("commands").add({
+    type: "OPEN",
+    source: "sms",
+    createdAt: new Date().toISOString(),
+  });
 
-  return {
-    success: true,
-    message: `${commandType} command aangemaakt`,
-    command: { id: ref.id, ...command }
-  };
-}
+  // optioneel status update
+  await boxRef.set(
+    {
+      status: {
+        ...(box.status || {}),
+        door: "open",
+        lock: "unlocked",
+      },
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true }
+  );
 
-// SMS gebruikt dit
-export async function openBox(boxId, source = "sms", actor = null) {
-  return addCommand(boxId, "OPEN", source, actor);
-}
-
-export async function closeBox(boxId, source = "api", actor = null) {
-  return addCommand(boxId, "CLOSE", source, actor);
+  return { success: true, message: "OPEN command aangemaakt" };
 }

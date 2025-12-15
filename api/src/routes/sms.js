@@ -1,15 +1,13 @@
 // api/src/routes/sms.js
-
 import { Router } from "express";
-import * as sharesService from "../services/sharesService.js";
 import * as boxesService from "../services/boxesService.js";
+import * as sharesService from "../services/sharesService.js";
 
 const router = Router();
 
-// telefoon normaliseren
 function normalizePhone(number) {
   if (!number) return null;
-  return String(number).replace(/\s+/g, "").trim();
+  return number.replace(/\s+/g, "").trim();
 }
 
 router.post("/inbound", async (req, res) => {
@@ -22,56 +20,48 @@ router.post("/inbound", async (req, res) => {
     const body = (req.body.Body || "").trim().toUpperCase();
 
     if (!from) {
-      return res.status(200).type("text/xml").send(`
-<Response>
-  <Message>Ongeldig telefoonnummer.</Message>
-</Response>
-      `.trim());
+      return res
+        .status(200)
+        .type("text/xml")
+        .send(`<Response><Message>Ongeldig telefoonnummer.</Message></Response>`);
     }
 
-    // ✅ JUISTE FUNCTIE
     const share = await sharesService.findActiveShareByPhone(from);
+    console.log("🔎 Share gevonden:", share ? JSON.stringify(share) : "NONE");
 
     if (!share) {
-      return res.status(200).type("text/xml").send(`
-<Response>
-  <Message>Geen actieve toegang gevonden voor dit nummer.</Message>
-</Response>
-      `.trim());
+      return res
+        .status(200)
+        .type("text/xml")
+        .send(`<Response><Message>Geen actieve toegang gevonden voor dit nummer.</Message></Response>`);
     }
 
     if (body !== "OPEN") {
-      return res.status(200).type("text/xml").send(`
-<Response>
-  <Message>Ongeldig commando. Typ exact: OPEN</Message>
-</Response>
-      `.trim());
+      return res
+        .status(200)
+        .type("text/xml")
+        .send(`<Response><Message>Ongeldig commando. Stuur OPEN om de box te openen.</Message></Response>`);
     }
 
     const result = await boxesService.openBox(share.boxId);
 
-    if (!result.success) {
-      return res.status(200).type("text/xml").send(`
-<Response>
-  <Message>De box kon niet geopend worden.</Message>
-</Response>
-      `.trim());
+    if (!result || result.success !== true) {
+      return res
+        .status(200)
+        .type("text/xml")
+        .send(`<Response><Message>De box kon niet geopend worden.</Message></Response>`);
     }
 
-    return res.status(200).type("text/xml").send(`
-<Response>
-  <Message>De box is geopend.</Message>
-</Response>
-    `.trim());
-
+    return res
+      .status(200)
+      .type("text/xml")
+      .send(`<Response><Message>De box is geopend.</Message></Response>`);
   } catch (err) {
     console.error("❌ Fout in SMS webhook:", err);
-
-    return res.status(200).type("text/xml").send(`
-<Response>
-  <Message>Interne fout. Probeer later opnieuw.</Message>
-</Response>
-    `.trim());
+    return res
+      .status(200)
+      .type("text/xml")
+      .send(`<Response><Message>Er ging iets mis. Probeer later opnieuw.</Message></Response>`);
   }
 });
 

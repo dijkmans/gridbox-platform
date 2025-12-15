@@ -53,11 +53,11 @@ router.get("/:id/shares", async (req, res) => {
 
 /**
  * POST /api/boxes/:id/open
- * Box openen (mock - wordt later door IoT uitgevoerd)
+ * Box openen (mock — wordt later door IoT uitgevoerd)
  */
 router.post("/:id/open", async (req, res) => {
   try {
-    const result = await boxesService.openBox(req.params.id, "api");
+    const result = await boxesService.open(req.params.id);
     res.json(result);
   } catch (err) {
     console.error("Fout bij openen box:", err);
@@ -71,7 +71,7 @@ router.post("/:id/open", async (req, res) => {
  */
 router.post("/:id/close", async (req, res) => {
   try {
-    const result = await boxesService.closeBox(req.params.id, "api");
+    const result = await boxesService.close(req.params.id);
     res.json(result);
   } catch (err) {
     console.error("Fout bij sluiten box:", err);

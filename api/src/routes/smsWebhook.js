@@ -46,7 +46,7 @@ router.post("/", async (req, res) => {
     console.log("✔ Actieve share gevonden:", share);
 
     // 2. Box openen via boxesService (nu mock)
-    const openResult = await boxesService.openBox(share.boxId, "sms");
+    const openResult = await boxesService.open(share.boxId);
 
     if (!openResult.success) {
       console.log("❌ Box openen mislukt:", openResult.message);

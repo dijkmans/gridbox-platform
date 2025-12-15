@@ -1,50 +1,26 @@
-// api/src/firebase.js
 import admin from "firebase-admin";
 
-function tryParseJson(str) {
-  try {
-    return JSON.parse(str);
-  } catch {
-    return null;
-  }
-}
+let db = null;
 
-function tryParseBase64Json(b64) {
-  try {
-    const json = Buffer.from(b64, "base64").toString("utf8");
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
+if (!admin.apps.length) {
+  const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT;
 
-function initFirebaseAdmin() {
-  if (admin.apps.length > 0) return;
-
-  // 1) Optie A: FIREBASE_SERVICE_ACCOUNT (string JSON)
-  const sa1 = process.env.FIREBASE_SERVICE_ACCOUNT
-    ? tryParseJson(process.env.FIREBASE_SERVICE_ACCOUNT)
-    : null;
-
-  // 2) Optie B: GOOGLE_APPLICATION_CREDENTIALS_BASE64 (base64 JSON)
-  const sa2 = process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64
-    ? tryParseBase64Json(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64)
-    : null;
-
-  const serviceAccount = sa1 || sa2;
-
-  if (serviceAccount) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-    return;
+  if (!serviceAccountBase64) {
+    console.error("❌ FIREBASE_SERVICE_ACCOUNT ontbreekt in environment variables");
+    throw new Error("FIREBASE_SERVICE_ACCOUNT missing");
   }
 
-  // 3) Optie C: Default credentials (ADC). Dit werkt op Cloud Run met service account.
-  admin.initializeApp();
+  const serviceAccount = JSON.parse(
+    Buffer.from(serviceAccountBase64, "base64").toString()
+  );
+
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+  });
+
+  console.log("🔥 Firebase Admin initialized");
 }
 
-initFirebaseAdmin();
+db = admin.firestore();
 
-export const db = admin.firestore();
-export { admin };
+export { db };
