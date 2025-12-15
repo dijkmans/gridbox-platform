@@ -3,13 +3,71 @@
 <head>
   <meta charset="UTF-8" />
   <title>Gridbox Pi Simulator</title>
-</head>
-<body>
-  <h1>Gridbox Pi Simulator</h1>
-  <p>Simulator draait lokaal</p>
 
-  <script type="module">
-    console.log("Simulator gestart");
-  </script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      padding: 20px;
+    }
+
+    .box {
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 420px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+
+    .row {
+      margin-bottom: 12px;
+      font-size: 16px;
+    }
+
+    .led {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #ccc;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+
+    .led.on {
+      background: #4caf50;
+    }
+
+    button {
+      padding: 10px 14px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="box">
+    <h1>Gridbox Pi Simulator</h1>
+
+    <div class="row">
+      Rolluik:
+      <strong id="shutter">closed</strong>
+    </div>
+
+    <div class="row">
+      Licht:
+      <span id="light" class="led"></span>
+    </div>
+
+    <div class="row">
+      <button id="btn">Knop indrukken</button>
+    </div>
+  </div>
+
+  <!-- Simulator logica -->
+  <script type="module" src="/src/simulator.js"></script>
+
 </body>
 </html>
