@@ -6,43 +6,60 @@ const router = Router();
 
 /**
  * POST /api/status/:boxId
- * Ontvang status / heartbeat van een Gridbox (Pi)
+ * Raspberry Pi stuurt status en heartbeat
  */
 router.post("/:boxId", async (req, res) => {
   try {
     const { boxId } = req.params;
-    const { online = true, uptime = null, temp = null } = req.body;
 
-    const status = {
+    const {
+      state = null,          // open | closed | opening | closing
+      source = null,         // button | platform
+      online = true,
+      uptime = null,         // seconden
+      temp = null,           // °C, optioneel
+      type = null            // heartbeat | status
+    } = req.body;
+
+    const statusUpdate = {
       online,
-      uptime,
-      temp,
       lastSeen: Timestamp.now()
     };
+
+    if (state !== null) statusUpdate.state = state;
+    if (source !== null) statusUpdate.source = source;
+    if (uptime !== null) statusUpdate.uptime = uptime;
+    if (temp !== null) statusUpdate.temp = temp;
+    if (type !== null) statusUpdate.type = type;
 
     await db
       .collection("boxes")
       .doc(boxId)
-      .set({ status }, { merge: true });
+      .set(
+        {
+          status: statusUpdate
+        },
+        { merge: true }
+      );
 
     return res.json({
       ok: true,
-      message: "Status bijgewerkt",
-      boxId
+      boxId,
+      status: statusUpdate
     });
 
   } catch (err) {
     console.error("Fout bij status update:", err);
     return res.status(500).json({
       ok: false,
-      error: "Interne serverfout"
+      error: "Interne serverfout bij status update"
     });
   }
 });
 
 /**
  * GET /api/status/:boxId
- * Status opvragen (dashboard, monitoring)
+ * Status ophalen (dashboard / monitoring)
  */
 router.get("/:boxId", async (req, res) => {
   try {
@@ -63,12 +80,12 @@ router.get("/:boxId", async (req, res) => {
     const data = snap.data();
     const status = data.status || {};
 
-    const lastSeen = status.lastSeen?.toDate?.();
-    let online = false;
+    const lastSeenDate = status.lastSeen?.toDate?.() || null;
 
-    if (lastSeen) {
-      const diffSeconds = (Date.now() - lastSeen.getTime()) / 1000;
-      online = diffSeconds < 180; // online als laatste update < 3 minuten
+    let online = false;
+    if (lastSeenDate) {
+      const diffSeconds = (Date.now() - lastSeenDate.getTime()) / 1000;
+      online = diffSeconds < 180; // online als < 3 min geleden
     }
 
     return res.json({
@@ -77,7 +94,7 @@ router.get("/:boxId", async (req, res) => {
       status: {
         ...status,
         online,
-        lastSeen
+        lastSeen: lastSeenDate
       }
     });
 
@@ -85,7 +102,7 @@ router.get("/:boxId", async (req, res) => {
     console.error("Fout bij status ophalen:", err);
     return res.status(500).json({
       ok: false,
-      error: "Interne serverfout"
+      error: "Interne serverfout bij status ophalen"
     });
   }
 });
