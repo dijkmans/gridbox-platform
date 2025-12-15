@@ -28,15 +28,12 @@ router.post("/", async (req, res) => {
     console.log("📩 Inbound bericht:", req.body);
 
     const from = normalizePhone(req.body.From);
-    const bodyRaw = req.body.Body || "";
-    const body = bodyRaw.trim().toLowerCase();
+    const body = (req.body.Body || "").trim().toLowerCase();
 
     if (!from) {
       return res
         .type("text/xml")
-        .send(
-          `<Response><Message>Ongeldig nummer.</Message></Response>`
-        );
+        .send(`<Response><Message>Ongeldig nummer.</Message></Response>`);
     }
 
     const isOpen = body === "open";
@@ -46,7 +43,7 @@ router.post("/", async (req, res) => {
       return res
         .type("text/xml")
         .send(
-          `<Response><Message>Ongeldig commando. Stuur OPEN of CLOSE.</Message></Response>`
+          `<Response><Message>Ongeldig commando. Gebruik OPEN of CLOSE.</Message></Response>`
         );
     }
 
@@ -67,15 +64,13 @@ router.post("/", async (req, res) => {
     if (!box) {
       return res
         .type("text/xml")
-        .send(
-          `<Response><Message>Box niet beschikbaar.</Message></Response>`
-        );
+        .send(`<Response><Message>Box niet beschikbaar.</Message></Response>`);
     }
 
     // 3. Event bepalen
     const eventType = isOpen ? EVENTS.SMS_OPEN : EVENTS.SMS_CLOSE;
 
-    // 4. State-machine raadplegen
+    // 4. State-machine beslissen
     const result = await handleEvent({
       box,
       event: { type: eventType },
@@ -91,12 +86,12 @@ router.post("/", async (req, res) => {
       return res
         .type("text/xml")
         .send(
-          `<Response><Message>Actie niet toegestaan op dit moment.</Message></Response>`
+          `<Response><Message>Geen toegang of box tijdelijk niet beschikbaar.</Message></Response>`
         );
     }
 
     if (result.action === "IGNORE") {
-      // Stil negeren, geen SMS terug
+      // Geen antwoord nodig
       return res.sendStatus(200);
     }
 
@@ -105,7 +100,6 @@ router.post("/", async (req, res) => {
     // -------------------------
     if (result.action === "OPEN") {
 
-      // State vastleggen (logisch, niet fysiek)
       if (result.nextState) {
         await updateState(share.boxId, {
           ...result.nextState,
@@ -114,7 +108,6 @@ router.post("/", async (req, res) => {
         });
       }
 
-      // Command sturen naar box / simulator
       const openResult = await boxesService.openBox(
         share.boxId,
         "sms",
@@ -177,9 +170,7 @@ router.post("/", async (req, res) => {
 
     return res
       .type("text/xml")
-      .send(
-        `<Response><Message>Er ging iets mis.</Message></Response>`
-      );
+      .send(`<Response><Message>Er ging iets mis.</Message></Response>`);
   }
 });
 
