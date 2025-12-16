@@ -1,97 +1,67 @@
 import { Router } from "express";
 import { getFirestore } from "firebase-admin/firestore";
-import { buildShareSms } from "../utils/shareMessages.js";
 
 const router = Router();
 const db = getFirestore();
 
 /**
  * POST /api/shares
- * Maakt een share aan met:
- * - waarschuwing 1 uur vooraf
- * - blokkering op eindmoment
+ * Maakt een share aan en genereert een SMS-bericht
  */
 router.post("/", async (req, res) => {
   try {
-    const { phone, boxNumber, boxId, validUntil } = req.body;
+    const {
+      phone,
+      boxNumber,
+      boxId,
+      expiresAt
+    } = req.body;
 
-    // -----------------------------
-    // 1. Validatie
-    // -----------------------------
-
-    if (!phone || boxNumber === undefined || !boxId || !validUntil) {
+    if (
+      !phone ||
+      boxNumber === undefined ||
+      !boxId ||
+      !expiresAt
+    ) {
       return res.status(400).json({
         ok: false,
-        message: "phone, boxNumber, boxId en validUntil zijn verplicht"
+        message: "phone, boxNumber, boxId en expiresAt zijn verplicht"
       });
     }
-
-    const blockedAt = new Date(validUntil);
-    if (isNaN(blockedAt.getTime())) {
-      return res.status(400).json({
-        ok: false,
-        message: "validUntil is geen geldige datum"
-      });
-    }
-
-    // -----------------------------
-    // 2. Waarschuwingsmoment bepalen
-    // -----------------------------
-
-    const expiresAt = new Date(
-      blockedAt.getTime() - 60 * 60 * 1000
-    );
-
-    // -----------------------------
-    // 3. Share opslaan
-    // -----------------------------
 
     const share = {
-      active: true,
       phone,
       boxNumber: Number(boxNumber),
       boxId,
 
+      active: true,
+
       createdAt: new Date().toISOString(),
-      expiresAt: expiresAt.toISOString(),
-      blockedAt: blockedAt.toISOString(),
+      expiresAt,
 
       warningSent: false
     };
 
-    const docRef = await db
-      .collection("shares")
-      .add(share);
+    const docRef = await db.collection("shares").add(share);
 
-    // -----------------------------
-    // 4. SMS-tekst (informatief)
-    // -----------------------------
-
-    const smsText = buildShareSms({
-      boxNumber: share.boxNumber,
-      expiresAt: share.expiresAt
-    });
+    const smsText =
+      `Gridbox ${boxNumber} is met u gedeeld. ` +
+      `U kan deze Gridbox gebruiken tot ${new Date(expiresAt).toLocaleString("nl-BE")}. ` +
+      `Antwoord met OPEN ${boxNumber} om te openen.`;
 
     console.log("📤 SHARE SMS (simulatie):", {
       to: phone,
       message: smsText
     });
 
-    // -----------------------------
-    // 5. Response
-    // -----------------------------
-
     return res.status(201).json({
       ok: true,
       shareId: docRef.id,
-      sms: smsText,
-      expiresAt: share.expiresAt,
-      blockedAt: share.blockedAt
+      sms: smsText
     });
 
   } catch (err) {
     console.error("❌ share create error:", err);
-
     return res.status(500).json({
       ok: false,
       message: "Share kon niet worden aangemaakt"
