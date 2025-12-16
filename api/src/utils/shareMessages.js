@@ -1,6 +1,6 @@
 /**
- * Genereert de standaard SMS-tekst
- * bij het delen van een Gridbox
+ * Bouwt de standaard SMS-tekst
+ * voor het delen van een Gridbox
  */
 export function buildShareSms({ boxNumber }) {
   return (
