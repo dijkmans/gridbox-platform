@@ -130,7 +130,7 @@
 
     <div class="to-field">
       <input
-        id="toNumber"
+        id="fromNumber"
         value="+32460235151"
         placeholder="Van: +324..."
       />
@@ -150,7 +150,7 @@
   const messagesEl = document.getElementById("messages");
   const inputEl = document.getElementById("smsInput");
   const sendBtn = document.getElementById("sendBtn");
-  const toInput = document.getElementById("toNumber");
+  const fromInput = document.getElementById("fromNumber");
 
   const API_URL =
     "https://gridbox-api-960191535038.europe-west1.run.app/api/sms";
@@ -164,12 +164,14 @@
   }
 
   async function sendSms() {
-    const rawText = inputEl.value.trim();
-    const number = toInput.value.trim();
+    const text = inputEl.value.trim();
+    const from = fromInput.value.trim();
 
-    if (!rawText || !number) return;
+    if (!text || !from) return;
 
-    addBubble(rawText, "sent");
+    // Toon verzonden bericht
+    addBubble(text, "sent");
+
     inputEl.value = "";
     sendBtn.disabled = true;
 
@@ -177,16 +179,21 @@
       const response = await fetch(API_URL, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/x-www-form-urlencoded"
         },
-        body: JSON.stringify({
-          from: number,
-          body: rawText
+        body: new URLSearchParams({
+          From: from,
+          To: from,
+          Body: text.toUpperCase()
         })
       });
 
-      const data = await response.json();
-      const message = data.reply || "Onbekend antwoord van server";
+      const responseText = await response.text();
+
+      const match = responseText.match(/<Message>(.*?)<\/Message>/);
+      const message = match
+        ? match[1]
+        : "Onbekend antwoord van server";
 
       addBubble(message, "received");
 
