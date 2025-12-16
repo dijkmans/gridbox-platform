@@ -29,11 +29,9 @@ function sendResponse(res, message, isSimulator) {
   return res
     .status(200)
     .type("text/xml")
-    .send(`
-      <Response>
-        <Message>${message}</Message>
-      </Response>
-    `);
+    .send(
+      `<Response><Message>${message}</Message></Response>`
+    );
 }
 
 /**
@@ -45,7 +43,7 @@ function sendResponse(res, message, isSimulator) {
 router.post("/", async (req, res) => {
   try {
     // --------------------------------------------------
-    // 0. Bepaal kanaal
+    // 0. Kanaal bepalen
     // --------------------------------------------------
 
     const isSimulator =
@@ -108,8 +106,9 @@ router.post("/", async (req, res) => {
     // --------------------------------------------------
 
     const share =
-      await sharesService.findActiveShareByPhoneAndBoxNumber(from, boxNr)
-
+      await sharesService.findActiveShareByPhoneAndBoxNumber(
+        from,
+        boxNr
       );
 
     if (!share) {
