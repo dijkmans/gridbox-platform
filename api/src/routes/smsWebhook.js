@@ -15,16 +15,38 @@ function normalizePhone(number) {
 }
 
 /**
+ * Antwoord helper
+ * - JSON voor simulator
+ * - XML voor Twilio
+ */
+function sendResponse(res, message, isJson) {
+  if (isJson) {
+    return res.status(200).json({ reply: message });
+  }
+
+  return res
+    .status(200)
+    .type("text/xml")
+    .send(`
+      <Response>
+        <Message>${message}</Message>
+      </Response>
+    `);
+}
+
+/**
  * POST /api/sms
  * Enige ingang voor:
- * - echte SMS (Twilio style: form-urlencoded)
- * - simulator (JSON)
+ * - SMS simulator (JSON)
+ * - Twilio (form-urlencoded)
  */
 router.post("/", async (req, res) => {
   try {
-    // --------------------------------------------------
-    // 1. Input normaliseren (Twilio + simulator)
-    // --------------------------------------------------
+    const isJson = req.is("application/json");
+
+    // -----------------------------
+    // 1. Input normaliseren
+    // -----------------------------
 
     const rawFrom =
       req.body.From ||
@@ -42,47 +64,36 @@ router.post("/", async (req, res) => {
     console.log("📩 SMS inbound:", { from, body });
 
     if (!from) {
-      return res
-        .status(200)
-        .type("text/xml")
-        .send(`
-          <Response>
-            <Message>Ongeldig nummer.</Message>
-          </Response>
-        `);
+      return sendResponse(
+        res,
+        "Ongeldig nummer.",
+        isJson
+      );
     }
 
-    // --------------------------------------------------
-    // 2. Commando parseren
-    // verwacht: "open 3" of "close 3"
-    // --------------------------------------------------
+    // -----------------------------
+    // 2. Commando parsen
+    // -----------------------------
 
     const parts = body.split(/\s+/);
     const command = parts[0];
-    const boxNumber = parts[1];
+    const boxNr = parts[1];
 
     if (
       !["open", "close"].includes(command) ||
-      !boxNumber ||
-      isNaN(boxNumber)
+      !boxNr ||
+      isNaN(boxNr)
     ) {
-      return res
-        .status(200)
-        .type("text/xml")
-        .send(`
-          <Response>
-            <Message>
-              Gebruik: OPEN &lt;nummer&gt; of CLOSE &lt;nummer&gt;.
-            </Message>
-          </Response>
-        `);
+      return sendResponse(
+        res,
+        "Gebruik: OPEN <nummer> of CLOSE <nummer>.",
+        isJson
+      );
     }
 
-    const boxNr = Number(boxNumber);
-
-    // --------------------------------------------------
-    // 3. Actieve share zoeken (nummer + boxnummer)
-    // --------------------------------------------------
+    // -----------------------------
+    // 3. Share zoeken
+    // -----------------------------
 
     const share =
       await sharesService.findActiveShareByPhoneAndBox(
@@ -91,40 +102,30 @@ router.post("/", async (req, res) => {
       );
 
     if (!share) {
-      return res
-        .status(200)
-        .type("text/xml")
-        .send(`
-          <Response>
-            <Message>
-              Geen toegang tot Gridbox ${boxNr}.
-            </Message>
-          </Response>
-        `);
+      return sendResponse(
+        res,
+        `Geen toegang tot Gridbox ${boxNr}.`,
+        isJson
+      );
     }
 
-    // --------------------------------------------------
+    // -----------------------------
     // 4. Box ophalen
-    // --------------------------------------------------
+    // -----------------------------
 
     const box = await boxesService.getById(share.boxId);
 
     if (!box) {
-      return res
-        .status(200)
-        .type("text/xml")
-        .send(`
-          <Response>
-            <Message>
-              Gridbox ${boxNr} niet gevonden.
-            </Message>
-          </Response>
-        `);
+      return sendResponse(
+        res,
+        "Gridbox niet gevonden.",
+        isJson
+      );
     }
 
-    // --------------------------------------------------
+    // -----------------------------
     // 5. OPEN
-    // --------------------------------------------------
+    // -----------------------------
 
     if (command === "open") {
       const result = await boxesService.openBox(
@@ -133,34 +134,24 @@ router.post("/", async (req, res) => {
         from
       );
 
-      if (!result || !result.success) {
-        return res
-          .status(200)
-          .type("text/xml")
-          .send(`
-            <Response>
-              <Message>
-                Gridbox ${boxNr} kan niet worden geopend.
-              </Message>
-            </Response>
-          `);
+      if (!result?.success) {
+        return sendResponse(
+          res,
+          `Gridbox ${boxNr} kan niet worden geopend.`,
+          isJson
+        );
       }
 
-      return res
-        .status(200)
-        .type("text/xml")
-        .send(`
-          <Response>
-            <Message>
-              Gridbox ${boxNr} wordt geopend.
-            </Message>
-          </Response>
-        `);
+      return sendResponse(
+        res,
+        `Gridbox ${boxNr} wordt geopend.`,
+        isJson
+      );
     }
 
-    // --------------------------------------------------
+    // -----------------------------
     // 6. CLOSE
-    // --------------------------------------------------
+    // -----------------------------
 
     if (command === "close") {
       const result = await boxesService.closeBox(
@@ -169,47 +160,31 @@ router.post("/", async (req, res) => {
         from
       );
 
-      if (!result || !result.success) {
-        return res
-          .status(200)
-          .type("text/xml")
-          .send(`
-            <Response>
-              <Message>
-                Gridbox ${boxNr} kan niet worden gesloten.
-              </Message>
-            </Response>
-          `);
+      if (!result?.success) {
+        return sendResponse(
+          res,
+          `Gridbox ${boxNr} kan niet worden gesloten.`,
+          isJson
+        );
       }
 
-      return res
-        .status(200)
-        .type("text/xml")
-        .send(`
-          <Response>
-            <Message>
-              Gridbox ${boxNr} wordt gesloten.
-            </Message>
-          </Response>
-        `);
+      return sendResponse(
+        res,
+        `Gridbox ${boxNr} wordt gesloten.`,
+        isJson
+      );
     }
 
-    // fallback
     return res.sendStatus(200);
 
   } catch (err) {
     console.error("❌ smsWebhook error:", err);
 
-    return res
-      .status(200)
-      .type("text/xml")
-      .send(`
-        <Response>
-          <Message>
-            Er ging iets mis. Probeer later opnieuw.
-          </Message>
-        </Response>
-      `);
+    return sendResponse(
+      res,
+      "Er ging iets mis.",
+      req.is("application/json")
+    );
   }
 });
 
