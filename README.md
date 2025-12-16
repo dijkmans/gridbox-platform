@@ -272,7 +272,7 @@ Notificaties zijn optioneel en later instelbaar.
 
 Media bewaartermijn is instelbaar per organisatie.
 
-Default voorstel in v1.2.1:
+Default in v1.2.1:
 
 * 14 dagen
 
@@ -375,7 +375,6 @@ Eindgebruikers krijgen toegang zonder app.
 
 ### 9.1 Belangrijkste wijziging in v1.2.1
 
-We gaan niet verder met een los top-level model voor alles.
 We organiseren data onder organizations, zodat multi-tenant security eenvoudiger en veiliger is.
 
 ### 9.2 Collecties (voorkeur)
@@ -500,8 +499,7 @@ media:
 
 ### 10.2 Belangrijke afspraak
 
-We loggen niet standaard een event per foto. Dat maakt events te zwaar.
-Foto’s en video’s zijn media records. Alleen sessie start en stop zijn events.
+We loggen niet standaard een event per foto. Foto’s en video’s zijn media records. Alleen sessie start en stop zijn events.
 
 Uitzondering:
 
@@ -593,10 +591,33 @@ Een feature is pas “klaar” als:
 
 ### 16.3 Open punten en beslissingen
 
-In het document houden we 2 lijsten bij:
+#### 16.3.1 Beslissingen (vastgelegd)
 
-* Open punten: nog te beslissen
-* Beslissingen: wat is beslist en waarom (kort)
+Deze punten zijn beslist en gelden als standaard tot een versie-update.
+
+* Firestore structuur is organisatie-gebaseerd: data onder `organizations/{orgId}/...`.
+* Device command ophalen: default polling 5 seconden. Sneller mag tijdelijk tijdens een actieve actie. Long polling is toegestaan.
+* Events blijven licht: geen standaard event per foto. Alleen sessie start en stop als events. Foto’s en video’s zijn media records.
+* Media bewaartermijn default 14 dagen. Cleanup job is verplicht.
+* Telefoonnummers: opslaan in E.164, UI standaard maskeren, zoeken op telefoonnummer alleen voor Admin.
+* Gemachtigd (authorized) heeft nooit impact op bezetting of reservatie. Dit is een harde regel.
+* Offline definitie: offline als `now - lastSeenAt > 180s` (3 minuten) tenzij later per klant of box anders ingesteld.
+* Portal camera standaard foto’s. Video is optioneel per klant.
+* Nieuwe API features alleen in de nieuwe route-structuur. Legacy alleen bugfix of read-only en wordt afgebouwd.
+
+#### 16.3.2 Open punten (nog te beslissen)
+
+Deze punten mogen gebouwd worden als optie, maar niet hard vastzetten zonder beslissing en versie-update.
+
+* Bezetting logica: wanneer is een box bezet, door welke flow, en hoe resetten we dat betrouwbaar.
+* Notificaties: welke kanalen (SMS, mail) en welke triggers (alarm, share vervalt, device offline).
+* Video mode: wanneer gebruiken we video in plaats van foto’s, en impact op kosten en opslag.
+* Exports: CSV export voor events, shares en sessies, en voor welke rollen.
+* Auth aanpak portal: email wachtwoord, magic link, SSO, 2FA.
+* Config schermen: waar zetten we per org en per box instellingen (intervalSeconds, extraAfterCloseSeconds, offlineThresholdSeconds, bewaartermijn).
+* Alarm motion detectie: welke sensor of methode, en hoe vermijden we valse alarmen.
+* Device registry: of we een beperkte top-level collectie nodig hebben, of alles strikt onder org blijft.
+* Facturatie en licenties in portal: wat moet zichtbaar zijn voor klanten en wanneer.
 
 ## 17. Roadmap (richtinggevend)
 
@@ -633,12 +654,11 @@ v1.2.1 (2025-12-17)
 * “Gemachtigd” regel verankerd: nooit impact op bezetting of reservatie
 * offline definitie vastgelegd via lastSeenAt en threshold (default 3 minuten)
 * legacy routes afbouwregels toegevoegd
+* sectie 16.3 ingevuld met beslissingen en open punten
 
 v1.2 (2025-12-17)
 
-* Klantportal v0.1 toegevoegd
+* Klantportal afspraken vastgelegd
 * statusmodel rolluik vastgelegd
 * sessie en media regels vastgelegd
 * basis event types vastgelegd
-
-Als je wil, kan ik nu ook meteen “Open punten” en “Beslissingen” invullen met wat er vandaag al vastligt (bv. video optioneel, default foto, default retention 14 dagen), zodat je document meteen compleet “sturend” is.
