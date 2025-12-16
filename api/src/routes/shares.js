@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { getFirestore } from "firebase-admin/firestore";
+import { buildShareSms } from "../utils/shareMessages.js";
 
 const router = Router();
 const db = getFirestore();
@@ -12,12 +13,20 @@ router.post("/", async (req, res) => {
   try {
     const { phone, boxNumber, boxId } = req.body;
 
+    // -----------------------------
+    // 1. Validatie
+    // -----------------------------
+
     if (!phone || boxNumber === undefined || !boxId) {
       return res.status(400).json({
         ok: false,
         message: "phone, boxNumber en boxId zijn verplicht"
       });
     }
+
+    // -----------------------------
+    // 2. Share opslaan
+    // -----------------------------
 
     const share = {
       active: true,
@@ -27,16 +36,27 @@ router.post("/", async (req, res) => {
       createdAt: new Date().toISOString()
     };
 
-    const docRef = await db.collection("shares").add(share);
+    const docRef = await db
+      .collection("shares")
+      .add(share);
 
-    const smsText =
-      `Gridbox ${boxNumber} is met u gedeeld. ` +
-      `Antwoord op deze SMS met OPEN ${boxNumber} om de Gridbox te openen.`;
+    // -----------------------------
+    // 3. SMS-tekst genereren
+    // -----------------------------
 
+    const smsText = buildShareSms({
+      boxNumber: share.boxNumber
+    });
+
+    // Voor nu: simulatie via log
     console.log("📤 SHARE SMS (simulatie):", {
       to: phone,
       message: smsText
     });
+
+    // -----------------------------
+    // 4. Response
+    // -----------------------------
 
     return res.status(201).json({
       ok: true,
@@ -46,6 +66,7 @@ router.post("/", async (req, res) => {
 
   } catch (err) {
     console.error("❌ share create error:", err);
+
     return res.status(500).json({
       ok: false,
       message: "Share kon niet worden aangemaakt"
