@@ -108,9 +108,8 @@ router.post("/", async (req, res) => {
     // --------------------------------------------------
 
     const share =
-      await sharesService.findActiveShareByPhoneAndBox(
-        from,
-        boxNr
+      await sharesService.findActiveShareByPhoneAndBoxNumber(from, boxNr)
+
       );
 
     if (!share) {
