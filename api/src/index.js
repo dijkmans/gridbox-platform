@@ -4,7 +4,7 @@ import cors from "cors";
 // Routes
 import boxesRouter from "./routes/boxes.js";
 import statusRouter from "./routes/status.js";
-// import sharesRouter from "./routes/shares.js";
+import smsRouter from "./routes/smsWebhook.js";
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -31,11 +31,11 @@ app.get("/api/health", (req, res) => {
 // ------------------------------------------------------
 app.use("/api/boxes", boxesRouter);
 app.use("/api/status", statusRouter);
-// app.use("/api/shares", sharesRouter);
+app.use("/api/sms", smsRouter);
 
 // ------------------------------------------------------
 // Start server
 // ------------------------------------------------------
 app.listen(PORT, () => {
-  console.log(`Gridbox API listening on port ${PORT}`);
+  console.log("🚀 Gridbox API gestart – src/index.js");
 });
