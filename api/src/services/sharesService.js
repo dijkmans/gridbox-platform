@@ -2,7 +2,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import admin from "firebase-admin";
 
 // ------------------------------------------------------
-// Firestore init (exact één keer)
+// Firestore init (één keer)
 // ------------------------------------------------------
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -16,9 +16,7 @@ const db = getFirestore();
 
 /**
  * Zoekt een actieve share
- * op basis van telefoonnummer én boxnummer
- *
- * Dit is de kern voor SMS: OPEN <nummer>
+ * op basis van telefoonnummer en boxnummer
  */
 export async function findActiveShareByPhoneAndBoxNumber(
   phone,
@@ -50,7 +48,6 @@ export async function findActiveShareByPhoneAndBoxNumber(
 
 /**
  * Geeft alle actieve shares voor een telefoonnummer
- * (handig voor latere uitbreidingen)
  */
 export async function findActiveSharesByPhone(phone) {
   if (!phone) return [];
