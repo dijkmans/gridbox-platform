@@ -1,16 +1,9 @@
 import { initSimulatorHardware } from "./simulatorHardware.js";
-import { createStateManager } from "../../gridbox-core/state/stateManager.js";
-import { createShutterController } from "../../gridbox-core/logic/shutterController.js";
-import { createLightController } from "../../gridbox-core/logic/lightController.js";
-import { startSimulatorAgent } from "./simulatorAgent.js";
-
-const BOX_ID = "box-sim-001";
+import * as stateManager from "../core/state/stateManager.js";
+import { createShutterController } from "../core/logic/shutterController.js";
+import { createLightController } from "../core/logic/lightController.js";
 
 const hardware = initSimulatorHardware();
-
-const stateManager = createStateManager({
-  initialState: "closed"
-});
 
 const shutterController = createShutterController({
   hardware,
@@ -23,9 +16,9 @@ const lightController = createLightController({
   config: { delayAfterCloseMs: 60000 }
 });
 
-// lokale knop blijft werken
+// logica bij knop
 hardware.onButtonPress(() => {
-  if (stateManager.getState() === "open") {
+  if (stateManager.isOpen()) {
     shutterController.close("button");
     lightController.onClose();
   } else {
@@ -34,10 +27,10 @@ hardware.onButtonPress(() => {
   }
 });
 
-// start API agent (simuleert Raspberry Pi)
-startSimulatorAgent({
-  boxId: BOX_ID,
-  shutterController,
-  lightController,
-  stateManager
-});
+// HTML knop koppelen
+const btn = document.getElementById("btn");
+if (btn) {
+  btn.addEventListener("click", () => {
+    hardware.simulateButtonPress();
+  });
+}

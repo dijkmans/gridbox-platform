@@ -1,12 +1,41 @@
 import { fetchCommands, ackCommand, sendStatus } from "./apiClient.js";
 
+/**
+ * Simulator Agent
+ * Doet alsof dit een Raspberry Pi is
+ * Stuurt status naar de API
+ * (command polling is tijdelijk UIT)
+ */
 export function startSimulatorAgent({
   boxId,
   shutterController,
   lightController,
   stateManager
 }) {
-  // heartbeat
+
+  /**
+   * Interne helper om status te pushen
+   */
+  function pushStatus(source = "simulator") {
+    sendStatus(boxId, {
+      online: true,
+      state: stateManager.getState(),
+      source,
+      type: "status"
+    });
+  }
+
+  // --------------------------------------------------
+  // INIT
+  // --------------------------------------------------
+
+  // Stuur meteen status bij opstart
+  pushStatus("startup");
+
+  // --------------------------------------------------
+  // HEARTBEAT
+  // --------------------------------------------------
+
   setInterval(() => {
     sendStatus(boxId, {
       online: true,
@@ -15,7 +44,11 @@ export function startSimulatorAgent({
     });
   }, 30000);
 
-  // command polling
+  // --------------------------------------------------
+  // COMMAND POLLING (TIJDELIJK UIT)
+  // --------------------------------------------------
+  // Dit blijft uit tot /api/commands bestaat
+  /*
   setInterval(async () => {
     const commands = await fetchCommands(boxId);
 
@@ -24,11 +57,13 @@ export function startSimulatorAgent({
         if (cmd.type === "open") {
           shutterController.open("platform");
           lightController.onOpen();
+          pushStatus("command-open");
         }
 
         if (cmd.type === "close") {
           shutterController.close("platform");
           lightController.onClose();
+          pushStatus("command-close");
         }
 
         await ackCommand(boxId, cmd.id, "ok");
@@ -37,4 +72,15 @@ export function startSimulatorAgent({
       }
     }
   }, 3000);
+  */
+
+  // --------------------------------------------------
+  // STATUS BIJ MANUELE ACTIES
+  // --------------------------------------------------
+
+  if (typeof stateManager.onChange === "function") {
+    stateManager.onChange(() => {
+      pushStatus("button");
+    });
+  }
 }

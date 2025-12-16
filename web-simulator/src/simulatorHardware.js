@@ -1,5 +1,6 @@
 export function initSimulatorHardware() {
   let shutterOpen = false;
+  let lightOn = false;
   let buttonCallback = null;
 
   const shutterEl = document.getElementById("shutter");
@@ -8,6 +9,14 @@ export function initSimulatorHardware() {
   function updateUI() {
     if (shutterEl) {
       shutterEl.textContent = shutterOpen ? "open" : "closed";
+    }
+
+    if (lightEl) {
+      if (lightOn) {
+        lightEl.classList.add("on");
+      } else {
+        lightEl.classList.remove("on");
+      }
     }
   }
 
@@ -29,12 +38,14 @@ export function initSimulatorHardware() {
     },
 
     lightOn() {
-      if (lightEl) lightEl.classList.add("on");
+      lightOn = true;
+      updateUI();
       console.log("SIM: light ON");
     },
 
     lightOff() {
-      if (lightEl) lightEl.classList.remove("on");
+      lightOn = false;
+      updateUI();
       console.log("SIM: light OFF");
     },
 
