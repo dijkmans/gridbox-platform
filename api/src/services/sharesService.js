@@ -2,7 +2,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import admin from "firebase-admin";
 
 // ------------------------------------------------------
-// Firestore init (veilig, maar maar één keer)
+// Firestore init (exact één keer)
 // ------------------------------------------------------
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -11,39 +11,20 @@ if (!admin.apps.length) {
 const db = getFirestore();
 
 // ------------------------------------------------------
-// Interne mapping: boxnummer -> boxId
-// Dit is bewust hardcoded voor nu
-// ------------------------------------------------------
-const BOX_NUMBER_MAP = {
-  "1": "gbox-001",
-  "2": "gbox-002",
-  "3": "gbox-001", // voorbeeld: Gridbox 3 = gbox-001
-  "4": "gbox-002"
-};
-
-// ------------------------------------------------------
-// Hulpfunctie: boxnummer omzetten naar boxId
-// ------------------------------------------------------
-function resolveBoxId(boxNumber) {
-  if (!boxNumber) return null;
-  return BOX_NUMBER_MAP[String(boxNumber)] || null;
-}
-
-// ------------------------------------------------------
 // Publieke functies
 // ------------------------------------------------------
 
 /**
- * Zoekt een actieve share op basis van telefoonnummer én boxnummer
- * Wordt gebruikt door SMS inbound
+ * Zoekt een actieve share
+ * op basis van telefoonnummer én boxnummer
+ *
+ * Dit is de kern voor SMS: OPEN <nummer>
  */
-export async function findActiveShareByPhoneAndBox(phone, boxNumber) {
-  if (!phone || !boxNumber) {
-    return null;
-  }
-
-  const boxId = resolveBoxId(boxNumber);
-  if (!boxId) {
+export async function findActiveShareByPhoneAndBoxNumber(
+  phone,
+  boxNumber
+) {
+  if (!phone || boxNumber === undefined || boxNumber === null) {
     return null;
   }
 
@@ -51,7 +32,7 @@ export async function findActiveShareByPhoneAndBox(phone, boxNumber) {
     .collection("shares")
     .where("active", "==", true)
     .where("phone", "==", phone)
-    .where("boxId", "==", boxId)
+    .where("boxNumber", "==", Number(boxNumber))
     .limit(1)
     .get();
 
@@ -68,8 +49,8 @@ export async function findActiveShareByPhoneAndBox(phone, boxNumber) {
 }
 
 /**
- * (optioneel, handig voor debugging of later gebruik)
- * Zoekt alle actieve shares voor een telefoonnummer
+ * Geeft alle actieve shares voor een telefoonnummer
+ * (handig voor latere uitbreidingen)
  */
 export async function findActiveSharesByPhone(phone) {
   if (!phone) return [];
@@ -87,8 +68,7 @@ export async function findActiveSharesByPhone(phone) {
 }
 
 /**
- * (optioneel)
- * Share deactiveren
+ * Deactiveert een share
  */
 export async function deactivateShare(shareId) {
   if (!shareId) return false;
