@@ -7,25 +7,43 @@ const db = getFirestore();
 
 /**
  * POST /api/shares
- * Maakt een share aan en genereert een SMS-bericht
+ * Maakt een share aan met:
+ * - waarschuwing 1 uur vooraf
+ * - blokkering op eindmoment
  */
 router.post("/", async (req, res) => {
   try {
-    const { phone, boxNumber, boxId } = req.body;
+    const { phone, boxNumber, boxId, validUntil } = req.body;
 
     // -----------------------------
     // 1. Validatie
     // -----------------------------
 
-    if (!phone || boxNumber === undefined || !boxId) {
+    if (!phone || boxNumber === undefined || !boxId || !validUntil) {
       return res.status(400).json({
         ok: false,
-        message: "phone, boxNumber en boxId zijn verplicht"
+        message: "phone, boxNumber, boxId en validUntil zijn verplicht"
+      });
+    }
+
+    const blockedAt = new Date(validUntil);
+    if (isNaN(blockedAt.getTime())) {
+      return res.status(400).json({
+        ok: false,
+        message: "validUntil is geen geldige datum"
       });
     }
 
     // -----------------------------
-    // 2. Share opslaan
+    // 2. Waarschuwingsmoment bepalen
+    // -----------------------------
+
+    const expiresAt = new Date(
+      blockedAt.getTime() - 60 * 60 * 1000
+    );
+
+    // -----------------------------
+    // 3. Share opslaan
     // -----------------------------
 
     const share = {
@@ -33,7 +51,12 @@ router.post("/", async (req, res) => {
       phone,
       boxNumber: Number(boxNumber),
       boxId,
-      createdAt: new Date().toISOString()
+
+      createdAt: new Date().toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      blockedAt: blockedAt.toISOString(),
+
+      warningSent: false
     };
 
     const docRef = await db
@@ -41,27 +64,29 @@ router.post("/", async (req, res) => {
       .add(share);
 
     // -----------------------------
-    // 3. SMS-tekst genereren
+    // 4. SMS-tekst (informatief)
     // -----------------------------
 
     const smsText = buildShareSms({
-      boxNumber: share.boxNumber
+      boxNumber: share.boxNumber,
+      expiresAt: share.expiresAt
     });
 
-    // Voor nu: simulatie via log
     console.log("📤 SHARE SMS (simulatie):", {
       to: phone,
       message: smsText
     });
 
     // -----------------------------
-    // 4. Response
+    // 5. Response
     // -----------------------------
 
     return res.status(201).json({
       ok: true,
       shareId: docRef.id,
-      sms: smsText
+      sms: smsText,
+      expiresAt: share.expiresAt,
+      blockedAt: share.blockedAt
     });
 
   } catch (err) {
