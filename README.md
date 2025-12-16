@@ -1,470 +1,96 @@
-# 📘 GRIDBOX MASTER DOCUMENT – v1.2
+Ik hou hierbij expliciet rekening met het Gridbox Master Document v1.2.1 (en opvolgende versies) als vaste referentie en leidend kader. Dit document is officieel en bindend. Afwijkingen alleen na expliciete beslissing en versie-update.
 
-## Definitieve technische en conceptuele blauwdruk
-
-Dit document is de **officiële en bindende basis** voor alles wat met de ontwikkeling van het Gridbox‑platform te maken heeft.
-Bij **elke** ontwikkelingstaak moet dit document automatisch gevolgd worden.
-
-Afwijkingen zijn enkel toegestaan na expliciete beslissing en versie‑update.
-
----
-
-## 0. Doel van dit document
-
-Dit document legt vast:
-
-* architectuur
-* kernconcepten
-* modules
-* communicatieregels
-* datastructuren
-* ontwikkelfases
-* beslissingslogica
-
-Het dient als:
-
-* vaste referentie voor Gridbox
-* vaste handleiding voor ChatGPT
-* technisch kader voor API, frontend en IoT
-* basis voor teamleden, partners en audits
-
----
-
-## 1. Missie van Gridbox
-
-Gridbox is een **universeel, modulair en schaalbaar locker‑ en resourceplatform** waarmee organisaties fysieke toegang veilig en flexibel kunnen beheren.
-
-Het platform laat toe om:
-
-* items binnen te brengen of af te halen
-* toegang te verlenen via SMS (Twilio)
-* fysieke boxen te openen via Raspberry Pi en relais
-* camerabeelden te analyseren via AI
-* status, logs en gebruik te beheren via dashboards
-
-Gridbox moet:
-
-* betrouwbaar werken op tientallen locaties
-* uitbreidbaar zijn zonder herbouw
-* scenario‑onafhankelijk blijven
-* professioneel beheerd kunnen worden
-
----
-
-## 2. Architectuuroverzicht
-
-Gridbox bestaat uit **6 hoofdmodules**. Elke module heeft een strikt afgebakende verantwoordelijkheid.
-
----
-
-### ⭐ Module A — Cloud Run API (backend)
-
-**Het brein van het systeem.**
-
-Verantwoordelijkheden:
-
-* centrale beslissingslogica
-* communicatie met Twilio
-* communicatie met Raspberry Pi’s
-* verwerking van camera‑uploads
-* verwerking van AI‑resultaten
-* beheer van toegang, bezetting en tijdsvensters
-* logging en statusbeheer
-* communicatie naar dashboards
-
-Technologie:
-
-* Node.js (Express)
-* JSON‑only
-* draait op Google Cloud Run
-
-Beveiliging:
-
-* API‑keys voor alle routes
-* Twilio request signing
-
-Vaste REST‑routes:
-
-* GET  /api/health
-
-* GET  /api/boxes
-
-* GET  /api/boxes/:id
-
-* GET  /api/boxes/:id/access
-
-* POST /api/boxes/:id/open
-
-* POST /api/boxes/:id/close
-
-* POST /api/access
-
-* POST /api/sms-webhook
-
-* POST /api/camera/analyze
-
-❗ De route `/toggle` bestaat **niet**.
-Open en close zijn expliciete acties.
-
----
-
-### ⭐ Module B — Twilio SMS‑module
-
-Doel:
-
-* gebruikers toegang geven via eenvoudige SMS
-
-Principes:
-
-* Twilio praat **enkel** met de API
-* SMS is communicatie, geen beslisser
-
-Flow:
-Gebruiker → SMS → Twilio → `/api/sms-webhook` → API beslist → Pi → camera → AI → feedback
-
-Ontwikkelfases:
-
-* mock replies
-* parsing
-* validatie
-* finale logica
-
----
-
-### ⭐ Module C — Raspberry Pi module
-
-Elke Gridbox bevat een Raspberry Pi met:
-
-* relais (GPIO)
-* camera
-* optionele sensoren
-
-De Pi:
-
-* voert hardware‑acties uit
-* neemt geen beslissingen
-
-Endpoints:
-
-* POST /open
-* POST /close
-* POST /status
-
-Communicatiestrategie:
-
-* Fase 1: HTTP
-* Fase 2: MQTT
-
----
-
-### ⭐ Module D — Camera & AI
-
-Doel:
-
-* visuele controle en bewijs
-
-Flow:
-
-* foto bij open en dicht
-* upload naar API
-* AI‑analyse (Google Vision)
-* resultaat terug naar API
-
-AI:
-
-* adviserend
-* beslist nooit autonoom
-
----
-
-### ⭐ Module E — Frontend
-
-#### 1. Core‑frontend (HTML)
-
-* intern gebruik
-* eenvoudige interface
-* draait op Vercel
-* geen login
-
-#### 2. Web‑dashboard (Next.js)
-
-* multi‑tenant
-* beheer van boxen
-* beheer van toegang
-* logs en foto’s
-
-Frontends praten **enkel** met de API.
-
----
-
-### ⭐ Module F — Database
-
-Technologie:
-
-* Firestore (NoSQL)
-
-Collecties:
-
-**Boxes**
-
-* id
-* location
-* companyId
-* status
-* lastSeen
-
-**Access**
-
-* id
-* boxId
-* phone
-* validFrom
-* validUntil
-* accessType (occupying | privileged)
-* impactOnOccupancy
-* allowedActions
-
-**Commands**
-
-* id
-* boxId
-* type
-* source
-* actor
-* status
-* createdAt
-
-**Events**
-
-* id
-* boxId
-* type
-* source
-* actor
-* timestamp
-* commandId
-
-**CameraPhotos**
-
-* id
-* boxId
-* eventId
-* timestamp
-* photoUrl
-* aiResult
-
----
-
-## 3. Kernconcepten
-
-### 3.1 Resource
-
-* een fysieke Gridbox
-* inhoud is onbekend voor het platform
-
-### 3.2 Actor
-
-* gebruiker, gsm‑nummer, systeem of knop
-
-### 3.3 Toegang (Access)
-
-Toegang bepaalt **wat mag**, niet wat gebeurt.
-
-Types:
-
-* **Bezettende toegang**: veroorzaakt bezetting
-* **Gemachtigde toegang**: geen invloed op bezetting
-
-### 3.4 Tijd
-
-Tijd is een parameter:
-
-* begin
-* einde
-* marge
-
-Geen aparte reservatie‑engine.
-
-### 3.5 Command
-
-Een intentie.
-Kan slagen of mislukken.
-
-### 3.6 Event
-
-De waarheid.
-Alles wordt gelogd.
-
----
-
-## 4. Agenda‑integratie
-
-* Tijd wordt beheerd in het platform
-* Google Agenda wordt **gevuld** door het platform
-* Agenda is visualisatie en reminder
-* Agenda is nooit leidend
-
----
-
-## 5. Beslissingslogica (samenvatting)
-
-* geplande toegang wordt geactiveerd bij starttijd
-* boxkeuze gebeurt last‑minute
-* filtering op status, fout en bezetting
-* gemachtigde toegang blokkeert niets
-* camera optioneel als voorwaarde
-* toegang wordt pas actief na boxkeuze
-
----
-
-## 6. Ontwikkelstrategie
-
-Ontwikkeling gebeurt in **lagen**:
-
-1. API basis
-2. API routes (mock)
-3. Twilio koppeling (mock)
-4. Pi mock server
-5. GPIO
-6. Camera + AI
-7. End‑to‑end flow
-8. Dashboards
-
----
-
-## 7. Communicatieregels
-
-* Pi praat nooit met Twilio
-* Frontend praat nooit met Pi
-* Twilio praat enkel met API
-* API is enige bron van waarheid
-
----
-
-## 8. Veiligheid
-
-* API‑keys verplicht
-* Twilio signing verplicht
-* Pi endpoints afgeschermd
-* tenant‑scheiding voorzien
-
----
-
-## 9. Rol van AI
-
-AI is adviserend:
-
-* detecteert patronen
-* doet voorstellen
-* signaleert afwijkingen
-
-AI beslist nooit autonoom.
-
----
-
-## 10. Status van dit document
-
-Dit document:
-
-* is bindend
-* vervangt alle vorige versies
-* is versie 1.2
-
-Wijzigingen gebeuren enkel via expliciete versie‑update.
-
-Ik hou hierbij expliciet rekening met het Gridbox Master Document v1.1 (en opvolgende versies) als vaste referentie en leidend kader.
-
-Hier is een volledig, leesbaar masterdocument als 1 geheel. Ik noem dit v1.2, omdat ik het samenbreng en aanvul met de nieuwe afspraken rond de klantportal (Klantportal v0.1) die we net hebben vastgelegd. Copy paste mag.
-
-# GRIDBOX MASTER DOCUMENT v1.2
+# GRIDBOX MASTER DOCUMENT v1.2.1
 
 Laatste update: 2025-12-17
-Status: werkdocument, leidend kader voor ontwikkeling
+Status: officieel en bindend kader voor ontwikkeling
+
+Dit document is de officiële en bindende basis voor alles wat met de ontwikkeling van het Gridbox-platform te maken heeft. Bij elke ontwikkelingstaak moet dit document automatisch gevolgd worden.
+
+Afwijkingen zijn enkel toegestaan na expliciete beslissing en versie-update.
 
 ## 0. Doel van dit document
 
-Dit document is de officiële basis voor alles wat met Gridbox-ontwikkeling te maken heeft. Het beschrijft de architectuur, modules, regels, routes, datastructuren en ontwikkelstappen voor het volledige Gridbox-platform.
+Dit document beschrijft de architectuur, modules, regels, routes, datastructuren en ontwikkelafspraken voor het volledige Gridbox-platform.
 
 Het dient als:
 
-* vaste referentie voor jou
-* vaste handleiding voor ontwikkeling
-* technisch kader voor API, portal en IoT
-* basis voor toekomstige teamleden of partners
+* vaste referentie voor product en techniek
+* leidraad voor API, portal en IoT
+* basis voor testen, support en uitbreiding
+* startpunt voor toekomstige teamleden
 
-## 1. Missie van Gridbox
+## 1. Missie en principes
 
-Gridbox is een slim en modulair lockerplatform waarmee gebruikers:
+### 1.1 Missie
 
-* pakketten of fietsen kunnen ophalen en binnenbrengen
-* toegang krijgen via SMS (SMS-first)
-* fysieke toegang krijgen via een Raspberry Pi die het rolluik en eventueel licht en sensoren aanstuurt
-* camera-opnames kunnen raadplegen bij openmomenten of alarmsituaties
-* status en logs kunnen bekijken via een portal
+Gridbox is een slim en modulair lockerplatform waarmee gebruikers pakketten of fietsen kunnen ophalen en binnenbrengen, met toegang via SMS en beheer via een portal. Fysieke toegang gebeurt via een device-laag (Raspberry Pi) die een rolluik en optionele modules aanstuurt (camera, licht, sensoren).
 
-Belangrijke principes:
+### 1.2 Principes
 
-* SMS-first: geen app nodig voor eindklanten
-* multi-tenant: elke klant ziet enkel zijn eigen boxen en data
-* alles is gelogd: events zijn de “waarheid”
-* modulair: SMS-provider, camera, device-laag moeten vervangbaar zijn
+* SMS-first voor eindgebruikers, geen app verplicht
+* Multi-tenant: elke klant ziet alleen eigen data
+* Events zijn de waarheid: alles wat gebeurt komt in het logboek
+* Modulair: SMS-provider, camera, device-laag moeten vervangbaar blijven
+* Veilig by design: strakke afbakening per organisatie, duidelijke rollen
 
 ## 2. Rollen en doelgroepen
 
-### 2.1 Eindklant (gebruiker)
+### 2.1 Eindgebruiker (via SMS)
 
-* krijgt toegang via SMS om een box te openen
-* hoeft geen account in de portal
+* Geen portal account
+* Krijgt toegang op basis van share of toegangsregel
+* Interactie via SMS
 
-### 2.2 Klant (organisatie)
+### 2.2 Klant (organisatie) via portal
 
 Voorbeeld: PowerGrid.
-Dit is het bedrijf dat Gridbox gebruikt en de portal gebruikt om boxen te beheren:
+Kan:
 
 * locaties en boxen bekijken
-* openen en sluiten manueel (indien rechten)
-* shares beheren (toegang geven)
+* manueel open en close doen (indien rechten)
+* shares beheren
 * events en media bekijken
 
-### 2.3 Interne support (Gridbox team)
+### 2.3 Interne support (Gridbox)
 
-* kan debuggen en ondersteunen
-* acties zijn altijd gelogd
+* Ondersteunt klanten
+* Support-acties zijn altijd gelogd
 
-## 3. Kernconcepten en definities
+## 3. Kernbegrippen
 
-* Organisatie: klantbedrijf met eigen data-afbakening
-* Locatie (site of groep): bv. Heist, Winkel Bocholt, Winkel Mol, Winkel Geel
-* Box: één fysieke unit met rolluik, camera, eventueel licht en sensoren
+* Organisatie: klantbedrijf met eigen afbakening (orgId)
+* Locatie (site): groep boxen op één plaats
+* Box: fysieke Gridbox unit
 * Share: toegang gekoppeld aan telefoonnummer
-* Gemachtigd: vaste toegang voor personeel, telt niet als bezetting of reservatie
-* Command: opdracht naar een box (open, close, licht)
-* Status: huidige toestand van box (open, dicht, online, error)
+* Gemachtigd: vaste toegang voor personeel, zonder invloed op bezetting of reservatie
+* Command: opdracht naar box (open, close, licht)
+* Status: actuele toestand (open, dicht, online, error)
 * Event: logboekregel van wat er gebeurde
-* Sessie: openmoment van de box met bijhorende foto’s of video
-* Media: foto’s of video’s
+* Sessie: openmoment met bijhorende media
+* Media: foto of video gekoppeld aan sessie of alarm
 
 ## 4. Architectuur overzicht
 
 ### 4.1 Componenten
 
-* Web portal (dashboard) voor klanten
+* Web portal voor klanten
 * API backend (Node/Express) op Cloud Run
-* Database: Firestore
-* SMS provider (wisselbaar via adapter)
+* Firestore als database
+* SMS provider via adapterlaag
 * Device layer:
 
   * Raspberry Pi agent (productie)
-  * Simulator agent (ontwikkeling en tests zonder Pi)
-* Storage voor media (bv. cloud storage) of een vergelijkbare oplossing
+  * Simulator agent (ontwikkeling)
+* Media storage (bv. Cloud Storage) voor foto’s en video
 
-### 4.2 Hoofdflow in 1 zin
+### 4.2 Hoofdflow
 
-Een actie (SMS of portal) maakt een command en events, het device voert uit, rapporteert status terug, camera maakt sessie en media, alles komt in events en is zichtbaar in de portal.
+Actie (SMS of portal) maakt command + events. Device voert uit en rapporteert status terug. Camera maakt sessie + media. Alles is zichtbaar in portal via events en sessies.
 
 ## 5. Repository structuur (richtlijn)
 
-Monorepo, voorbeeld:
+Monorepo voorbeeld:
 
 * /api
 
@@ -476,131 +102,112 @@ Monorepo, voorbeeld:
     * /middleware
     * /adapters
 * /web-dashboard
-
-  * portal UI
 * /device
 
-  * raspberry agent
-  * simulator
+  * /agent (raspberry)
+  * /simulator
 * /docs
-
-  * master document
-  * technische notities
 * /scripts
 
-  * tooling, deployment helpers
-
-Afspraak:
+Afspraken:
 
 * API is ESM (import/export)
-* routes zijn klein en roepen services aan
-* Firestore logica zit in services
-* adapters voor SMS en media zodat we providers kunnen wisselen
+* routes zijn dun, services bevatten logica
+* adapters voor SMS en media providers
 
 ## 6. Klantportal (B2B dashboard)
 
 ### 6.1 Doel en scope
 
-De klantportal is de webomgeving voor een klant die het Gridbox-platform gebruikt (bv. PowerGrid). De klant ziet alle locaties en Gridboxen in 1 overzicht, kan boxen manueel openen en sluiten (als zijn rechten dat toelaten), kan toegang delen via telefoonnummer, kan een logboek raadplegen (Events) en kan beelden bekijken (Pictures).
+De klantportal is een operationeel dashboard voor een organisatie. Doel: eenvoudig beheer van locaties en boxen, shares beheren, events raadplegen, en beelden bekijken.
 
-De portal is bedoeld als operationeel dashboard, niet als technische tool. Alles moet duidelijk en eenvoudig blijven.
+### 6.2 Schermen en navigatie
 
-### 6.2 Begrippen
+#### 6.2.1 Overzicht (Home)
 
-* Organisatie (klant): bedrijf dat toegang heeft tot het platform
-* Locatie (site of groep): bv. Heist, Winkel Bocholt, Winkel Mol, Winkel Geel
-* Box: één fysieke Gridbox (bv. #3, #4)
-* Share: toegang gekoppeld aan een telefoonnummer
-* Gemachtigd: vaste toegang voor personeel of chauffeur, zonder invloed op bezetting of reservatie
-* Event: logboekregel van wat er gebeurde (open, share, fout, camera, alarm)
-* Sessie: periode waarin de box open stond, met bijhorende foto’s of video
-* Media: foto’s of video’s gekoppeld aan een sessie of alarm
-
-### 6.3 Schermen en navigatie
-
-#### 6.3.1 Overzichtsscherm (Home)
-
-Toont alle locaties met hun boxen.
+Toont alle locaties met boxkaarten.
 
 Per boxkaart:
 
-* Boxnaam en box-id (bv. “Winkel Bocholt #3”)
-* Status rolluik: Gesloten, Bezig met openen, Open, Bezig met sluiten, Fout
-* Online status: Online of Offline (op basis van lastSeen)
-* Last opened: laatste moment dat box open ging
-* Shares samenvatting:
+* boxnaam en box-id (uniek en duidelijk, bv. “Winkel Bocholt box 1”)
+* shutterState: Gesloten, Bezig met openen, Open, Bezig met sluiten, Fout
+* online status: Online of Offline (op basis van lastSeenAt, zie 6.4.2)
+* lastOpenedAt
+* shares samenvatting:
 
-  * tijdelijke shares zichtbaar met telefoonnummer
-  * comment zichtbaar (kort)
+  * tijdelijke shares zichtbaar met telefoonnummer (standaard gemaskeerd)
+  * comment zichtbaar
   * vervaldatum of “vervalt binnen X” indien van toepassing
-  * badge per share: Actief, Vervallen, Gemachtigd
-  * gemachtigden tonen als teller: “Gemachtigd: X”
-* Acties:
-
-  * knop Open of Close (afhankelijk van status)
-  * knop Events
-  * knop Shares
-  * knop Pictures
+  * badge per share: Actief, Vervallen
+  * gemachtigden niet uitschrijven als bezetting, wel teller “Gemachtigd: X”
+* knoppen: Open of Close, Events, Shares, Pictures
 
 Bovenaan:
 
-* Filter op locatie (dropdown “Alle groepen”)
-* Zoekveld: zoeken op boxnaam, site of telefoonnummer
+* filter op locatie
+* search op boxnaam en site
+* search op telefoonnummer alleen voor Admin (zie 6.6)
 
-#### 6.3.2 Shares scherm (per box)
+#### 6.2.2 Shares (per box)
 
 Formulier:
 
-* Phone number (+32…)
-* Comment (bv. Afhaling, Oplader, Chauffeur, Onderhoud)
-* Type: Tijdelijke share of Gemachtigd (checkbox)
-* Vervaldatum of duur (aanbevolen)
+* phone (E.164, bv. +32…)
+* comment
+* type:
+
+  * tijdelijk
+  * gemachtigd (aanvinkvak)
+* expiresAt of duur (aanbevolen voor tijdelijke shares)
 * Add Share
 
 Lijst:
 
-* Timestamp
-* Phone number
-* Comment
-* Status: Actief, Vervallen, Ingetrokken, Gemachtigd
+* createdAt
+* phone (standaard gemaskeerd)
+* comment
+* type of status: Actief, Vervallen, Ingetrokken, Gemachtigd
 * Delete (met korte bevestiging)
 
 Regels:
 
-* Tijdelijke share kan reservatie of bezetting beïnvloeden (business rules)
-* Gemachtigd beïnvloedt reservatie of bezetting niet
-* Gemachtigd is zichtbaar als teller op het overzicht
+* Tijdelijke share kan reservatie of bezetting beïnvloeden volgens business rules
+* Gemachtigd mag nooit bezetting of reservatie beïnvloeden, dit is een harde regel
 
-#### 6.3.3 Events scherm (per box)
+#### 6.2.3 Events (per box)
 
-Toont per event:
+Logboek met:
 
-* Tijd
-* Type
-* Trigger (portal, sms, systeem, device)
-* Actor
-* Resultaat ok of error
+* tijd
+* type
+* trigger (portal, sms, systeem, device)
+* actor (userId of telefoon, afhankelijk van trigger)
+* resultaat ok of error (met errorCode en korte fout)
 
 Filters:
 
-* Type
-* Actor (telefoon)
-* Periode
+* type
+* actor
+* periode
 
 Regel:
 
-* Alles komt in Events, ook mislukte acties.
+* Alles komt in Events, ook mislukte acties
 
-#### 6.3.4 Pictures scherm (per box)
+#### 6.2.4 Pictures (per box)
 
-Sessies:
+Toont sessies:
 
 * sessiestart, duur, trigger
-* thumbnails
-* optioneel download
-* video optioneel (per klant instelbaar)
+* thumbnails van media
+* openen of downloaden (optioneel)
 
-### 6.4 Rolluik statusmodel
+Optie:
+
+* foto’s standaard
+* video optioneel per klant
+
+### 6.3 Rolluik statusmodel
 
 shutterState:
 
@@ -612,56 +219,265 @@ shutterState:
 
 UI regels:
 
-* OPENING en CLOSING: knop disabled en “bezig”
-* ERROR: korte foutmelding en “Probeer opnieuw”
+* Tijdens OPENING en CLOSING is de knop disabled en toont UI “bezig”
+* Bij ERROR: korte foutmelding + “Probeer opnieuw” (als rechten dit toelaten)
+
+Timing:
+
+* openen ongeveer 20 seconden
+* sluiten ongeveer 20 seconden
+  De portal vertrouwt op statusupdates, niet op timers.
+
+### 6.4 Online en offline regels
+
+#### 6.4.1 lastSeenAt
+
+lastSeenAt komt alleen van het device (ping of status update).
+
+#### 6.4.2 Offline definitie
+
+Een box is Offline als `now - lastSeenAt > offlineThresholdSeconds`.
+
+Default:
+
+* offlineThresholdSeconds = 180 seconden (3 minuten)
+
+Dit moet per organisatie of per box instelbaar zijn (later via config).
 
 ### 6.5 Camera en media regels
 
-Opname bij openen:
+#### 6.5.1 Opname bij openen
 
-* start sessie wanneer box OPEN wordt
-* neem foto’s elke X seconden (instelbaar per klant)
-* stop bij sluiten + extra n seconden (instelbaar)
+Wanneer shutterState naar OPEN gaat:
 
-Alarm bij beweging terwijl gesloten:
+* start een sessie
+* neem foto’s elke intervalSeconds (instelbaar per organisatie, bv. 5 of 10)
+* blijf opnemen zolang OPEN
 
-* motion detected terwijl CLOSED
-* event “alarm”
+Bij sluiten:
+
+* stop sessie na extraAfterCloseSeconds (instelbaar, bv. 15)
+
+#### 6.5.2 Alarm bij beweging terwijl gesloten
+
+Wanneer motion detected en shutterState = CLOSED:
+
+* maak alarm event
 * start opname voor korte periode
-* media koppelen aan alarm-sessie
-* notificatie later optioneel
+* koppel media aan alarm-sessie
 
-Bewaartermijn:
+Notificaties zijn optioneel en later instelbaar.
 
-* instelbaar per organisatie, voorstel 30 dagen
+#### 6.5.3 Bewaartermijn media
 
-### 6.6 Rechten en rollen
+Media bewaartermijn is instelbaar per organisatie.
 
-Rollen:
+Default voorstel in v1.2.1:
 
-* Viewer
-* Operator
-* Admin
-* Support (intern, gelogd)
+* 14 dagen
 
-Rechten:
+Cleanup is verplicht (scheduled job), anders groeit dit onbeperkt.
 
-* Open/Close: Operator of Admin
-* Shares beheren: Operator of Admin
-* Instellingen: Admin
+### 6.6 Privacy en telefoonnummers
 
-### 6.7 Data entiteiten (logische structuur)
+Telefoonnummers zijn gevoelige data.
 
-Minimale entiteiten:
+Afspraken:
 
-* organizations, sites, boxes, shares, events, commands, sessions, media
+* opslag altijd in E.164 formaat (+32…)
+* UI toont standaard gemaskeerd, behalve voor Admin
+* zoeken op telefoonnummer alleen voor Admin
+* events mogen telefoonnummer bevatten, maar debug logs maskeren standaard
 
-Belangrijk:
+## 7. API ontwerp
 
-* orgId als basisfilter op alles
-* alles wat gebeurt maakt events
+### 7.1 Basisregels
 
-### 6.8 Event types (minimum set)
+* Alle endpoints onder /api
+* /api/health bestaat altijd
+* JSON in en uit
+* Auth verplicht voor portal endpoints
+* SMS webhook heeft eigen beveiliging (signature of secret)
+
+### 7.2 Route groepen (richtinggevend)
+
+Nieuwe structuur (voorkeur):
+
+* /api/orgs/{orgId}/sites
+* /api/orgs/{orgId}/boxes
+* /api/orgs/{orgId}/boxes/{boxId}/shares
+* /api/orgs/{orgId}/boxes/{boxId}/events
+* /api/orgs/{orgId}/boxes/{boxId}/sessions
+* /api/orgs/{orgId}/boxes/{boxId}/media
+* /api/orgs/{orgId}/boxes/{boxId}/commands
+* /api/sms/inbound (webhook)
+
+Legacy routes mogen tijdelijk blijven bestaan, maar:
+
+* Nieuwe features komen alleen in de nieuwe structuur
+* Legacy wordt afgebouwd volgens 7.5
+
+### 7.3 Command flow
+
+1. Portal of SMS vraagt actie aan
+2. API maakt command record met status queued
+3. API logt event command.open.requested of command.close.requested
+4. Device haalt command op of ontvangt command
+5. Device voert uit, stuurt status updates
+6. API update shutterState en logt events
+
+### 7.4 Device command ophalen
+
+Startaanpak:
+
+* polling interval default 5 seconden
+* bij actieve acties mag tijdelijk sneller (bv. 1 seconde) zolang nodig
+* long polling is toegestaan als verbetering (device wacht op next command)
+
+We zetten 1 tot 2 seconden polling niet als vaste regel.
+
+### 7.5 Legacy routes afbouw
+
+Afspraken:
+
+* Legacy is read-only of enkel bugfixes
+* Elke sprint: minstens 1 legacy endpoint vervangen of verplaatst
+* We documenteren wanneer legacy definitief uitgaat, pas na versie-update
+
+## 8. SMS flows
+
+### 8.1 Doel
+
+Eindgebruikers krijgen toegang zonder app.
+
+### 8.2 Basisflow
+
+* inbound SMS komt binnen
+* platform normaliseert nummer en tekst
+* platform zoekt actieve share of gemachtigde toegang
+* platform beslist: open toestaan of weigeren
+* platform logt alles in events
+* platform stuurt SMS terug met duidelijke tekst
+
+### 8.3 Share regels
+
+* tijdelijke shares kunnen vervallen
+* gemachtigd blijft geldig tot ingetrokken
+* reminders (bv. “vervalt binnen 1 uur”) zijn systeem events + SMS, optioneel per klant
+
+### 8.4 SMS adapter interface
+
+* sendSms(to, message)
+* validateWebhook(request)
+* parseInbound(request) -> { from, to, text, receivedAt }
+
+## 9. Firestore datamodel
+
+### 9.1 Belangrijkste wijziging in v1.2.1
+
+We gaan niet verder met een los top-level model voor alles.
+We organiseren data onder organizations, zodat multi-tenant security eenvoudiger en veiliger is.
+
+### 9.2 Collecties (voorkeur)
+
+* organizations/{orgId}
+
+  * sites/{siteId}
+  * boxes/{boxId}
+
+    * shares/{shareId}
+    * events/{eventId}
+    * commands/{commandId}
+    * sessions/{sessionId}
+
+      * media/{mediaId}
+  * users/{userId}
+  * config/{configId} of config/global
+
+Als we toch een top-level collectie nodig hebben (bv. device registry), dan alleen met strenge rules en duidelijke reden.
+
+### 9.3 Basisvelden (richtinggevend)
+
+organizations:
+
+* name
+* createdAt
+
+sites:
+
+* name
+* createdAt
+
+boxes:
+
+* name
+* shutterState
+* lastSeenAt
+* lastOpenedAt
+* capabilities
+* createdAt
+
+shares:
+
+* phoneE164
+* phoneMasked
+* comment
+* type: temporary of authorized
+* status: active, expired, revoked
+* createdAt
+* expiresAt
+
+commands:
+
+* type
+* requestedByType: portal, sms, system
+* requestedById: userId of phoneE164
+* requestedAt
+* status: queued, delivered, executed, failed
+* deliveredAt
+* executedAt
+* errorCode
+* errorMessage
+
+events:
+
+* type
+* triggerType
+* actorType
+* actorId
+* result: ok or error
+* errorCode
+* createdAt
+* payload (klein houden)
+
+sessions:
+
+* startedAt
+* endedAt
+* triggerType
+* triggerId
+* mode: photo of video
+* intervalSeconds
+* extraAfterCloseSeconds
+
+media:
+
+* createdAt
+* kind: photo or video
+* url
+* meta
+
+### 9.4 Indexen (richtinggevend)
+
+* boxes: order by name, filter per site
+* shares: status + expiresAt
+* events: createdAt desc
+* commands: status + requestedAt
+* sessions: startedAt desc
+
+## 10. Event types
+
+### 10.1 Kernset
 
 * command.open.requested
 * command.open.sent
@@ -675,7 +491,6 @@ Belangrijk:
 * share.deleted
 * share.expired
 * camera.session.started
-* camera.photo.captured
 * camera.session.stopped
 * alarm.motion.detected
 * alarm.recording.started
@@ -683,214 +498,147 @@ Belangrijk:
 * error.device.offline
 * error.command.failed
 
-### 6.9 Ontwikkelstrategie
+### 10.2 Belangrijke afspraak
 
-We bouwen per feature volledig af: UI + data + events + simulator test.
+We loggen niet standaard een event per foto. Dat maakt events te zwaar.
+Foto’s en video’s zijn media records. Alleen sessie start en stop zijn events.
 
-Volgorde:
+Uitzondering:
 
-* login en multi-tenant
-* open/close statusmodel + events
-* shares met verval + badges
-* pictures per sessie
-* alarm motion while closed
-* instellingen per klant en per box
+* debug mode kan tijdelijk extra events loggen, maar dit is niet standaard.
 
-## 7. API ontwerp (backend)
+## 11. Device laag (Raspberry Pi agent)
 
-### 7.1 Basisregels
+### 11.1 Taken
 
-* Alle endpoints onder /api
-* Healthcheck: /api/health
-* JSON in en uit
-* Auth verplicht voor portal endpoints
-* Webhooks (SMS) hebben eigen beveiliging (signature of secret)
+* commands uitvoeren (open, close, licht)
+* status updates sturen (shutterState, lastSeenAt)
+* camera sessies beheren
+* motion detectie (optioneel)
 
-### 7.2 Route groepen (richtinggevend)
+### 11.2 Communicatie
 
-* /api/health
-* /api/devices (device registratie en status)
-* /api/commands (create en ophalen van commands)
-* /api/status (current status per box)
-* /api/config (config per box of per org)
-* /api/events (events query)
-* /api/shares (shares beheer)
-* /api/media (lijsten van sessies en media)
-* /api/sms (inbound SMS webhook)
+Start:
 
-Legacy routes kunnen bestaan (bv. /api/boxes), maar het doel is naar bovenstaande structuur te evolueren.
+* device haalt commands op (polling of long polling)
+* device post status updates naar API
 
-### 7.3 Command flow (kern)
+Afspraken:
 
-1. Portal of SMS vraagt actie aan (open of close)
-2. API maakt command record aan met status queued
-3. API logt event command.*.requested
-4. Device haalt command op (polling of push)
-5. Device voert uit, stuurt status updates
-6. API logt events en update shutterState
+* status komt van device, portal maakt geen aannames
 
-### 7.4 Status regels
+### 11.3 Autossh en beheer
 
-* lastSeenAt komt van device pings
-* lastOpenedAt komt van shutter opened event
-* shutterState komt van device updates (niet gokken op basis van timers)
+* remote beheer via autossh tunnel is toegestaan
+* deployment via GitHub is ok, maar altijd met versie en rollback mogelijkheid
 
-## 8. SMS flows (SMS-first)
-
-### 8.1 Doel
-
-Eindklant moet zonder app toegang krijgen.
-
-### 8.2 Basisflow
-
-* klant stuurt SMS naar boxnummer of platformnummer
-* platform herkent telefoonnummer en kijkt naar actieve share
-* platform beslist wat mag: open, geen toegang, of foutmelding
-* platform logt alles in events
-
-### 8.3 Share regels
-
-* tijdelijke share: kan vervallen
-* gemachtigd: personeel of chauffeur, geen impact op bezetting
-* reminders kunnen later: “vervalt binnen 1 uur” is een systeem event + sms
-
-### 8.4 SMS provider adapter
-
-De SMS provider moet vervangbaar zijn. We werken met een adapterlaag:
-
-* sendSms(to, message)
-* validateWebhook(request)
-* normaliseer inbound message (from, to, text, timestamp)
-
-## 9. Firestore datamodel (concreet voorstel)
-
-Collecties (voorstel):
-
-* organizations/{orgId}
-* sites/{siteId}
-* boxes/{boxId}
-* shares/{shareId}
-* commands/{commandId}
-* events/{eventId}
-* sessions/{sessionId}
-* media/{mediaId}
-* users/{userId} (portal accounts)
-
-Basisvelden:
-
-* organizations: name, createdAt
-* sites: orgId, name
-* boxes: orgId, siteId, name, shutterState, lastSeenAt, lastOpenedAt, capabilities
-* shares: orgId, boxId, phone, comment, type, createdAt, expiresAt, status
-* commands: orgId, boxId, type, requestedBy, requestedAt, status, deliveredAt, executedAt, error
-* events: orgId, boxId, type, actorType, actorId, result, errorCode, createdAt, payload
-* sessions: orgId, boxId, startedAt, endedAt, triggerType, triggerId
-* media: orgId, boxId, sessionId, createdAt, kind, url, meta
-
-Indexen (richtinggevend):
-
-* boxes by orgId + siteId
-* shares by orgId + boxId + status
-* events by orgId + boxId + createdAt
-* commands by boxId + status + requestedAt
-* sessions by boxId + startedAt
-
-## 10. Device laag (Raspberry Pi agent)
-
-### 10.1 Taken
-
-* uitvoeren van commands (open, close, licht)
-* rapporteren van status (shutterState, lastSeenAt)
-* camera sessies starten en stoppen
-* motion detectie (optioneel) voor alarm
-
-### 10.2 Communicatie
-
-Eerste voorkeur voor eenvoud:
-
-* device pollt commands (bv. elke 1 tot 2 seconden) wanneer online
-* device stuurt status updates terug via API
-* device stuurt events terug of API maakt events op basis van updates
-
-Later kan realtime (websocket of pubsub), maar polling is prima voor start.
-
-### 10.3 Rolluik timing
-
-* openen ongeveer 20 seconden
-* sluiten ongeveer 20 seconden
-  Belangrijk: status komt van device, niet van timers in portal.
-
-### 10.4 Autossh en beheer
-
-* device is: autossh tunnel voor remote access
-* device code via GitHub beheren is ok, maar deployment moet gecontroleerd (versies, rollback)
-
-## 11. Simulator (ontwikkeling zonder Pi)
+## 12. Simulator (ontwikkeling zonder Pi)
 
 Doel:
 
-* alles testen zonder echte hardware
+* platform testen zonder hardware
 
 Simulator kan:
 
-* shutter state machine simuleren (OPENING, OPEN, CLOSING)
-* knop indrukken simuleren
+* shutter state machine simuleren
+* button press simuleren
 * events genereren
 * camera sessies simuleren met dummy media
 
-Afspraak:
+Afspraken:
 
-* elke core feature heeft minstens 1 simulator test scenario (zie sectie 6.10)
+* elke core feature heeft minstens 1 reproduceerbaar simulator scenario
 
-## 12. Media opslag
+## 13. Media opslag
 
-Media is zwaar. Richtlijn:
+* media files in storage
+* Firestore bewaart metadata + url
+* bewaartermijn via cleanup job (default 14 dagen)
 
-* media zelf in storage
-* in Firestore enkel metadata en URL
+## 14. Security
 
-Structuur:
+* portal auth met rollen: viewer, operator, admin
+* org afbakening verplicht in elke query en in rules
+* sms webhook beveiligd (signature of secret)
+* support acties altijd gelogd
+* debug logs maskeren gevoelige data standaard
 
-* per box, per sessie mappen of prefix
-* bewaartermijn via scheduled cleanup job
+## 15. Observability en logging
 
-## 13. Security
+* API logs voor errors en requests
+* functionele waarheid is Events
+* aparte error events voor offline en command failures
 
-* Portal auth met rollen (viewer, operator, admin)
-* Org afbakening is verplicht in elke query
-* Webhook beveiliging voor SMS (signature of secret)
-* Logging van support acties
-* Geen gevoelige data in logs (mask telefoonnummers in debug)
+## 16. Werkwijze en release
 
-## 14. Observability en logging
+### 16.1 Vertical slices
 
-* API logs: requests, errors
-* events zijn functionele logs voor de klant
-* aparte error events voor device offline en command failed
+We bouwen per feature volledig af:
 
-## 15. Release en versiebeheer
+* UI
+* data
+* events
+* rechten
+* simulator test
 
-* versie tags voor API en portal
-* changelog in docs
-* “definition of done” per feature (UI, data, events, rechten, simulator test)
+### 16.2 Definition of done
 
-## 16. Roadmap (richtinggevend)
+Een feature is pas “klaar” als:
 
-Fase 1: betrouwbaar open en close + shares + events
-Fase 2: pictures als sessies + basis opslag en bewaartermijn
-Fase 3: alarm motion while closed + meldingen
-Fase 4: per klant instellingen + exports + integraties
+* UI duidelijk werkt
+* data correct is
+* events compleet zijn, ook fouten
+* rollen en rechten kloppen
+* simulator scenario bestaat
 
-## 17. Changelog
+### 16.3 Open punten en beslissingen
+
+In het document houden we 2 lijsten bij:
+
+* Open punten: nog te beslissen
+* Beslissingen: wat is beslist en waarom (kort)
+
+## 17. Roadmap (richtinggevend)
+
+Fase 1:
+
+* betrouwbaar open en close
+* shares
+* events
+
+Fase 2:
+
+* pictures als sessies
+* media opslag + cleanup
+
+Fase 3:
+
+* alarm motion while closed
+* meldingen
+
+Fase 4:
+
+* instellingen per org en per box
+* exports en integraties
+
+## 18. Changelog
+
+v1.2.1 (2025-12-17)
+
+* Firestore model onder organizations gezet als voorkeur voor betere multi-tenant security
+* device polling afspraak aangepast: start 5s, sneller alleen tijdelijk, long polling toegestaan
+* camera events afgeslankt: sessie start en stop als events, geen standaard event per foto
+* media bewaartermijn: default 14 dagen en cleanup verplicht
+* privacy regels voor telefoonnummers toegevoegd (E.164, maskeren, zoeken enkel Admin)
+* “Gemachtigd” regel verankerd: nooit impact op bezetting of reservatie
+* offline definitie vastgelegd via lastSeenAt en threshold (default 3 minuten)
+* legacy routes afbouwregels toegevoegd
 
 v1.2 (2025-12-17)
 
-* Klantportal sectie toegevoegd en verankerd als leidend kader
+* Klantportal v0.1 toegevoegd
 * statusmodel rolluik vastgelegd
 * sessie en media regels vastgelegd
-* basis datamodel en event types vastgelegd
+* basis event types vastgelegd
 
----
-
-Als je wil, kan ik dit ook als netjes opgemaakt Word document of PDF zetten zodat je het makkelijker kan lezen en delen.
-
+Als je wil, kan ik nu ook meteen “Open punten” en “Beslissingen” invullen met wat er vandaag al vastligt (bv. video optioneel, default foto, default retention 14 dagen), zodat je document meteen compleet “sturend” is.
