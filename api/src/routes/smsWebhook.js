@@ -15,6 +15,21 @@ function normalizePhone(number) {
 }
 
 /**
+ * Controleert of een share effectief geblokkeerd is
+ * (enkel op basis van blockedAt)
+ */
+function isShareBlocked(share) {
+  if (!share.blockedAt) {
+    return false;
+  }
+
+  const now = new Date();
+  const blockedAt = new Date(share.blockedAt);
+
+  return now >= blockedAt;
+}
+
+/**
  * Antwoord helper
  * - JSON voor simulator / interne clients
  * - XML voor Twilio
@@ -120,7 +135,19 @@ router.post("/", async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 4. Box ophalen
+    // 4. Blokkering controleren
+    // --------------------------------------------------
+
+    if (isShareBlocked(share)) {
+      return sendResponse(
+        res,
+        `Uw toegang tot Gridbox ${boxNr} is verlopen.`,
+        isSimulator
+      );
+    }
+
+    // --------------------------------------------------
+    // 5. Box ophalen
     // --------------------------------------------------
 
     const box = await boxesService.getById(share.boxId);
@@ -134,7 +161,7 @@ router.post("/", async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 5. OPEN
+    // 6. OPEN
     // --------------------------------------------------
 
     if (command === "open") {
@@ -160,7 +187,7 @@ router.post("/", async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 6. CLOSE
+    // 7. CLOSE
     // --------------------------------------------------
 
     if (command === "close") {
