@@ -6,6 +6,7 @@ import boxesRouter from "./routes/boxes.js";
 import statusRouter from "./routes/status.js";
 import smsRouter from "./routes/smsWebhook.js";
 import sharesRouter from "./routes/shares.js";
+import internalJobsRouter from "./routes/internalJobs.js";
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -39,6 +40,9 @@ app.use("/api/boxes", boxesRouter);
 app.use("/api/status", statusRouter);
 app.use("/api/sms", smsRouter);
 app.use("/api/shares", sharesRouter);
+
+// interne jobs (waarschuwingen, later cleanup, enz.)
+app.use("/api/internal", internalJobsRouter);
 
 // ------------------------------------------------------
 // Fallback
