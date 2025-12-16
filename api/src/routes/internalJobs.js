@@ -30,14 +30,9 @@ router.post("/send-expiry-warnings", async (req, res) => {
       const diff = expiresAt.getTime() - now.getTime();
 
       if (diff > 0 && diff <= oneHourMs) {
-        const smsText =
-          `Uw toegang tot Gridbox ${share.boxNumber} ` +
-          `vervalt binnen 1 uur. ` +
-          `U kan de Gridbox nog gebruiken tot ${expiresAt.toLocaleString()}.`;
-
         console.log("⚠️ WAARSCHUWING SMS (simulatie):", {
           to: share.phone,
-          message: smsText
+          box: share.boxNumber
         });
 
         await db.collection("shares").doc(doc.id).update({
@@ -48,17 +43,59 @@ router.post("/send-expiry-warnings", async (req, res) => {
       }
     }
 
+    return res.json({ ok: true, result: { sent } });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false });
+  }
+});
+
+/**
+ * POST /api/internal/deactivate-expired-shares
+ * Zet verlopen shares automatisch inactief
+ */
+router.post("/deactivate-expired-shares", async (req, res) => {
+  try {
+    const now = new Date();
+
+    const snapshot = await db
+      .collection("shares")
+      .where("active", "==", true)
+      .get();
+
+    let deactivated = 0;
+
+    for (const doc of snapshot.docs) {
+      const share = doc.data();
+
+      if (!share.expiresAt) continue;
+
+      const expiresAt = new Date(share.expiresAt);
+
+      if (expiresAt <= now) {
+        console.log("⛔ SHARE VERLOPEN:", {
+          phone: share.phone,
+          box: share.boxNumber
+        });
+
+        await db.collection("shares").doc(doc.id).update({
+          active: false,
+          deactivatedAt: now.toISOString()
+        });
+
+        deactivated++;
+      }
+    }
+
     return res.json({
       ok: true,
-      result: { sent }
+      result: { deactivated }
     });
 
   } catch (err) {
-    console.error("❌ expiry warning error:", err);
-    return res.status(500).json({
-      ok: false,
-      message: "Fout bij versturen waarschuwingen"
-    });
+    console.error(err);
+    return res.status(500).json({ ok: false });
   }
 });
 
