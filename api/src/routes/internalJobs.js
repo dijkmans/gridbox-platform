@@ -26,28 +26,44 @@ router.post("/send-expiry-warnings", async (req, res) => {
       if (!share.expiresAt) continue;
       if (share.warnedAt) continue;
 
-      const expiresAt = new Date(share.expiresAt);
-      const diff = expiresAt.getTime() - now.getTime();
+      // Firestore Timestamp correct omzetten
+      const expiresAt =
+        share.expiresAt.toDate
+          ? share.expiresAt.toDate()
+          : new Date(share.expiresAt);
 
-      if (diff > 0 && diff <= oneHourMs) {
+      const diffMs = expiresAt.getTime() - now.getTime();
+
+      if (diffMs > 0 && diffMs <= oneHourMs) {
+        const smsText =
+          `Uw toegang tot Gridbox ${share.boxNumber} ` +
+          `vervalt binnen 1 uur. ` +
+          `U kan de Gridbox gebruiken tot ${expiresAt.toLocaleString("nl-BE")}.`;
+
         console.log("⚠️ WAARSCHUWING SMS (simulatie):", {
           to: share.phone,
-          box: share.boxNumber
+          message: smsText
         });
 
         await db.collection("shares").doc(doc.id).update({
-          warnedAt: now.toISOString()
+          warnedAt: now
         });
 
         sent++;
       }
     }
 
-    return res.json({ ok: true, result: { sent } });
+    return res.json({
+      ok: true,
+      result: { sent }
+    });
 
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ ok: false });
+    console.error("❌ send-expiry-warnings error:", err);
+    return res.status(500).json({
+      ok: false,
+      message: "Fout bij versturen waarschuwingen"
+    });
   }
 });
 
@@ -71,17 +87,20 @@ router.post("/deactivate-expired-shares", async (req, res) => {
 
       if (!share.expiresAt) continue;
 
-      const expiresAt = new Date(share.expiresAt);
+      const expiresAt =
+        share.expiresAt.toDate
+          ? share.expiresAt.toDate()
+          : new Date(share.expiresAt);
 
       if (expiresAt <= now) {
         console.log("⛔ SHARE VERLOPEN:", {
           phone: share.phone,
-          box: share.boxNumber
+          boxNumber: share.boxNumber
         });
 
         await db.collection("shares").doc(doc.id).update({
           active: false,
-          deactivatedAt: now.toISOString()
+          deactivatedAt: now
         });
 
         deactivated++;
@@ -94,8 +113,11 @@ router.post("/deactivate-expired-shares", async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ ok: false });
+    console.error("❌ deactivate-expired-shares error:", err);
+    return res.status(500).json({
+      ok: false,
+      message: "Fout bij deactiveren verlopen shares"
+    });
   }
 });
 
