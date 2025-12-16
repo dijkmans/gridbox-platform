@@ -6,7 +6,7 @@ const db = getFirestore();
 
 /**
  * POST /api/shares
- * Maakt een share aan en stuurt een bevestigingsbericht
+ * Maakt een share aan en genereert een SMS-bericht
  */
 router.post("/", async (req, res) => {
   try {
@@ -14,7 +14,8 @@ router.post("/", async (req, res) => {
 
     if (!phone || boxNumber === undefined || !boxId) {
       return res.status(400).json({
-        error: "phone, boxNumber en boxId zijn verplicht"
+        ok: false,
+        message: "phone, boxNumber en boxId zijn verplicht"
       });
     }
 
@@ -28,29 +29,26 @@ router.post("/", async (req, res) => {
 
     const docRef = await db.collection("shares").add(share);
 
-    // ----------------------------
-    // SMS-bericht genereren
-    // ----------------------------
-
-    const message =
+    const smsText =
       `Gridbox ${boxNumber} is met u gedeeld. ` +
       `Antwoord op deze SMS met OPEN ${boxNumber} om de Gridbox te openen.`;
 
-    // Voor nu: loggen (later echte SMS)
-    console.log("📤 SHARE SMS:", {
+    console.log("📤 SHARE SMS (simulatie):", {
       to: phone,
-      message
+      message: smsText
     });
 
     return res.status(201).json({
+      ok: true,
       shareId: docRef.id,
-      message
+      sms: smsText
     });
 
   } catch (err) {
     console.error("❌ share create error:", err);
     return res.status(500).json({
-      error: "Share kon niet worden aangemaakt"
+      ok: false,
+      message: "Share kon niet worden aangemaakt"
     });
   }
 });
