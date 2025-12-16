@@ -16,12 +16,14 @@ function normalizePhone(number) {
 
 /**
  * Antwoord helper
- * - JSON voor simulator
+ * - JSON voor simulator / interne clients
  * - XML voor Twilio
  */
-function sendResponse(res, message, isJson) {
-  if (isJson) {
-    return res.status(200).json({ reply: message });
+function sendResponse(res, message, isSimulator) {
+  if (isSimulator) {
+    return res.status(200).json({
+      reply: message
+    });
   }
 
   return res
@@ -37,16 +39,22 @@ function sendResponse(res, message, isJson) {
 /**
  * POST /api/sms
  * Enige ingang voor:
- * - SMS simulator (JSON)
+ * - SMS simulator (JSON + X-Simulator header)
  * - Twilio (form-urlencoded)
  */
 router.post("/", async (req, res) => {
   try {
-    const isJson = req.is("application/json");
+    // --------------------------------------------------
+    // 0. Bepaal kanaal
+    // --------------------------------------------------
 
-    // -----------------------------
+    const isSimulator =
+      req.headers["x-simulator"] === "true" ||
+      req.is("application/json");
+
+    // --------------------------------------------------
     // 1. Input normaliseren
-    // -----------------------------
+    // --------------------------------------------------
 
     const rawFrom =
       req.body.From ||
@@ -61,19 +69,23 @@ router.post("/", async (req, res) => {
     const from = normalizePhone(rawFrom);
     const body = rawBody.trim().toLowerCase();
 
-    console.log("📩 SMS inbound:", { from, body });
+    console.log("📩 SMS inbound:", {
+      from,
+      body,
+      simulator: isSimulator
+    });
 
     if (!from) {
       return sendResponse(
         res,
         "Ongeldig nummer.",
-        isJson
+        isSimulator
       );
     }
 
-    // -----------------------------
+    // --------------------------------------------------
     // 2. Commando parsen
-    // -----------------------------
+    // --------------------------------------------------
 
     const parts = body.split(/\s+/);
     const command = parts[0];
@@ -87,13 +99,13 @@ router.post("/", async (req, res) => {
       return sendResponse(
         res,
         "Gebruik: OPEN <nummer> of CLOSE <nummer>.",
-        isJson
+        isSimulator
       );
     }
 
-    // -----------------------------
+    // --------------------------------------------------
     // 3. Share zoeken
-    // -----------------------------
+    // --------------------------------------------------
 
     const share =
       await sharesService.findActiveShareByPhoneAndBox(
@@ -105,13 +117,13 @@ router.post("/", async (req, res) => {
       return sendResponse(
         res,
         `Geen toegang tot Gridbox ${boxNr}.`,
-        isJson
+        isSimulator
       );
     }
 
-    // -----------------------------
+    // --------------------------------------------------
     // 4. Box ophalen
-    // -----------------------------
+    // --------------------------------------------------
 
     const box = await boxesService.getById(share.boxId);
 
@@ -119,13 +131,13 @@ router.post("/", async (req, res) => {
       return sendResponse(
         res,
         "Gridbox niet gevonden.",
-        isJson
+        isSimulator
       );
     }
 
-    // -----------------------------
+    // --------------------------------------------------
     // 5. OPEN
-    // -----------------------------
+    // --------------------------------------------------
 
     if (command === "open") {
       const result = await boxesService.openBox(
@@ -134,24 +146,24 @@ router.post("/", async (req, res) => {
         from
       );
 
-      if (!result?.success) {
+      if (!result || !result.success) {
         return sendResponse(
           res,
           `Gridbox ${boxNr} kan niet worden geopend.`,
-          isJson
+          isSimulator
         );
       }
 
       return sendResponse(
         res,
         `Gridbox ${boxNr} wordt geopend.`,
-        isJson
+        isSimulator
       );
     }
 
-    // -----------------------------
+    // --------------------------------------------------
     // 6. CLOSE
-    // -----------------------------
+    // --------------------------------------------------
 
     if (command === "close") {
       const result = await boxesService.closeBox(
@@ -160,18 +172,18 @@ router.post("/", async (req, res) => {
         from
       );
 
-      if (!result?.success) {
+      if (!result || !result.success) {
         return sendResponse(
           res,
           `Gridbox ${boxNr} kan niet worden gesloten.`,
-          isJson
+          isSimulator
         );
       }
 
       return sendResponse(
         res,
         `Gridbox ${boxNr} wordt gesloten.`,
-        isJson
+        isSimulator
       );
     }
 
@@ -183,7 +195,7 @@ router.post("/", async (req, res) => {
     return sendResponse(
       res,
       "Er ging iets mis.",
-      req.is("application/json")
+      req.headers["x-simulator"] === "true"
     );
   }
 });
