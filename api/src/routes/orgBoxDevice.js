@@ -38,18 +38,24 @@ function internalError(res, req, err, context) {
   if (stack) console.error(stack);
 
   if (req.headers["x-debug"] === "1") {
-    return res.status(500).json({ ok: false, message: "Interne serverfout.", details });
+    return res.status(500).json({
+      ok: false,
+      message: "Interne serverfout.",
+      details
+    });
   }
 
   return res.status(500).json({ ok: false, message: "Interne serverfout." });
 }
 
+// --------------------------------------------------
+// 1) Device status / heartbeat
+// --------------------------------------------------
 router.post("/status", async (req, res) => {
   try {
     const { orgId, boxId } = getOrgBoxFromReq(req);
-
     if (!boxId) return res.status(400).json({ ok: false, message: "boxId ontbreekt." });
-    if (!db) throw new Error("db is null (Firestore niet geïnitialiseerd)");
+    if (!db) throw new Error("db is null");
 
     const status = req.body;
     if (!status || typeof status !== "object") {
@@ -67,16 +73,18 @@ router.post("/status", async (req, res) => {
   }
 });
 
+// --------------------------------------------------
+// 2) Device poll: volgende command
+// --------------------------------------------------
 async function handlePoll(req, res) {
   try {
-    const { orgId, boxId } = getOrgBoxFromReq(req);
-
+    const { boxId } = getOrgBoxFromReq(req);
     if (!boxId) return res.status(400).json({ ok: false, message: "boxId ontbreekt." });
-    if (!db) throw new Error("db is null (Firestore niet geïnitialiseerd)");
+    if (!db) throw new Error("db is null");
 
     const deviceId = req.query.deviceId ? String(req.query.deviceId) : null;
 
-    const cmd = await commandsService.popNextCommand({ orgId, boxId, deviceId });
+    const cmd = await commandsService.popNextCommand({ boxId, deviceId });
 
     return res.json({ ok: true, command: cmd || null });
   } catch (e) {
@@ -87,12 +95,14 @@ async function handlePoll(req, res) {
 router.get("/commands", handlePoll);
 router.get("/commands/next", handlePoll);
 
+// --------------------------------------------------
+// 3) Resultaat van command
+// --------------------------------------------------
 router.post("/commands/:commandId/result", async (req, res) => {
   try {
-    const { orgId, boxId } = getOrgBoxFromReq(req);
-
+    const { boxId } = getOrgBoxFromReq(req);
     if (!boxId) return res.status(400).json({ ok: false, message: "boxId ontbreekt." });
-    if (!db) throw new Error("db is null (Firestore niet geïnitialiseerd)");
+    if (!db) throw new Error("db is null");
 
     const commandId = req.params.commandId;
 
@@ -100,15 +110,24 @@ router.post("/commands/:commandId/result", async (req, res) => {
     const error = req.body?.error || null;
     const result = req.body?.result || null;
 
-    await commandsService.submitResult({ orgId, boxId, commandId, ok, error, result });
+    // 🔑 BELANGRIJK: GEEN orgId meer hier
+    await commandsService.submitResult({
+      boxId,
+      commandId,
+      ok,
+      error,
+      result
+    });
 
     if (ok) {
-      const ref = orgId
-        ? db.collection("orgs").doc(orgId).collection("boxes").doc(boxId).collection("commands").doc(commandId)
-        : db.collection("boxes").doc(boxId).collection("commands").doc(commandId);
+      const ref = db
+        .collection("boxes")
+        .doc(boxId)
+        .collection("commands")
+        .doc(commandId);
 
       const snap = await ref.get();
-      const type = snap.exists ? (snap.data()?.type || null) : null;
+      const type = snap.exists ? snap.data()?.type || null : null;
 
       if (type === "open") await boxesService.setBoxFinalState(boxId, "open");
       else if (type === "close") await boxesService.setBoxFinalState(boxId, "closed");
@@ -126,4 +145,3 @@ router.post("/commands/:commandId/result", async (req, res) => {
 });
 
 export default router;
-
