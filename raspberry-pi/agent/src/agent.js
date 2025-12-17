@@ -29,13 +29,19 @@ export function startAgent({ api, config }) {
 
       log("Command ontvangen:", cmd);
 
-      // Voorlopig: alleen bevestigen, geen uitvoering
+      // 1. Status melden: command ontvangen
       await api.sendStatus({
         type: "command-received",
         commandId: cmd.id,
         commandType: cmd.type,
         source: "agent"
       });
+
+      // 2. Command bevestigen aan API
+      await api.ackCommand(cmd.id, "received");
+
+      log("Command bevestigd:", cmd.id);
+
     } catch (err) {
       log("Fout bij command polling:", err.message);
     }
