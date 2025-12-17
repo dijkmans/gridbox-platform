@@ -29,6 +29,7 @@ const MAX_ATTEMPTS = intFromEnv("MAX_COMMAND_ATTEMPTS", 3);
 
 function boxRef({ orgId, boxId }) {
   if (!boxId) throw new Error("boxId is required");
+  if (!db) throw new Error("Firestore db is not initialized");
   if (orgId) return db.collection("orgs").doc(orgId).collection("boxes").doc(boxId);
   return db.collection("boxes").doc(boxId);
 }
@@ -37,7 +38,14 @@ function commandsCol({ orgId, boxId }) {
   return boxRef({ orgId, boxId }).collection("commands");
 }
 
-export async function createCommand({ orgId = null, boxId, type, source = "api", requestedBy = null, payload = {} }) {
+export async function createCommand({
+  orgId = null,
+  boxId,
+  type,
+  source = "api",
+  requestedBy = null,
+  payload = {}
+}) {
   const createdAt = nowMs();
   const deadlineAt = createdAt + COMMAND_TTL_MS;
 
@@ -69,6 +77,8 @@ export async function createCommand({ orgId = null, boxId, type, source = "api",
  * - delivered te lang geleden -> requeue of failed (als max attempts)
  */
 export async function reconcileQueue({ orgId = null, boxId }) {
+  if (!db) return { ok: true, updated: 0 };
+
   const col = commandsCol({ orgId, boxId });
   const now = nowMs();
 
@@ -145,16 +155,15 @@ export async function reconcileQueue({ orgId = null, boxId }) {
  * Device poll: haalt 1 queued command op en zet atomair op delivered.
  */
 export async function popNextCommand({ orgId = null, boxId, deviceId = null }) {
+  if (!db) return null;
+
   await reconcileQueue({ orgId, boxId });
 
   const col = commandsCol({ orgId, boxId });
   const now = nowMs();
 
-  const q = await col
-    .where("status", "==", "queued")
-    .orderBy("createdAt", "asc")
-    .limit(1)
-    .get();
+  // BELANGRIJK: geen orderBy, zodat Firestore geen extra index nodig heeft
+  const q = await col.where("status", "==", "queued").limit(1).get();
 
   if (q.empty) return null;
 
@@ -183,13 +192,21 @@ export async function popNextCommand({ orgId = null, boxId, deviceId = null }) {
       deliveredTo: deviceId || null
     });
 
-    return { id: snap.id, ...cmd, status: "delivered", deliveredAt: now, deliveredTo: deviceId || null };
+    return {
+      id: snap.id,
+      ...cmd,
+      status: "delivered",
+      deliveredAt: now,
+      deliveredTo: deviceId || null
+    };
   });
 
   return result;
 }
 
 export async function submitResult({ orgId = null, boxId, commandId, ok, error = null, result = null }) {
+  if (!db) return { ok: true };
+
   const ref = commandsCol({ orgId, boxId }).doc(commandId);
   const now = nowMs();
 
