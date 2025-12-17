@@ -11,23 +11,52 @@ function nowMs() {
 }
 
 function getOrgBoxFromReq(req) {
-  // Dit file wordt meestal gemount op iets als:
-  // /api/orgs/:orgId/boxes/:boxId/device
-  // Als orgId niet bestaat, werken we boxId-only.
   const orgId = req.params.orgId || null;
-  const boxId = req.params.boxId;
+  const boxId = req.params.boxId || null;
   return { orgId, boxId };
 }
 
 function deviceRef({ orgId, boxId }) {
-  if (orgId) return db.collection("orgs").doc(orgId).collection("boxes").doc(boxId).collection("devices").doc("primary");
+  if (!db) throw new Error("db is null (Firestore niet geïnitialiseerd)");
+  if (orgId) {
+    return db
+      .collection("orgs")
+      .doc(orgId)
+      .collection("boxes")
+      .doc(boxId)
+      .collection("devices")
+      .doc("primary");
+  }
   return db.collection("boxes").doc(boxId).collection("devices").doc("primary");
+}
+
+function internalError(res, req, err, context) {
+  const details = String(err?.message || err || "unknown error");
+  const stack = err?.stack ? String(err.stack) : "";
+
+  console.error(`❌ ${context}: ${details}`);
+  if (stack) console.error(stack);
+
+  // Alleen details teruggeven als je expliciet debug vraagt
+  if (req.headers["x-debug"] === "1") {
+    return res.status(500).json({ ok: false, message: "Interne serverfout.", details });
+  }
+
+  return res.status(500).json({ ok: false, message: "Interne serverfout." });
 }
 
 // 1) Device heartbeat en status
 router.post("/status", async (req, res) => {
   try {
     const { orgId, boxId } = getOrgBoxFromReq(req);
+
+    if (!boxId) {
+      return res.status(400).json({ ok: false, message: "boxId ontbreekt." });
+    }
+    if (!db) {
+      throw new Error("db is null (Firestore niet geïnitialiseerd)");
+    }
+
     const status = req.body;
 
     if (!status || typeof status !== "object") {
@@ -44,8 +73,7 @@ router.post("/status", async (req, res) => {
 
     return res.json({ ok: true, message: "Status ontvangen." });
   } catch (e) {
-    console.error("device status error", e);
-    return res.status(500).json({ ok: false, message: "Interne serverfout." });
+    return internalError(res, req, e, "device status error");
   }
 });
 
@@ -53,6 +81,14 @@ router.post("/status", async (req, res) => {
 async function handlePoll(req, res) {
   try {
     const { orgId, boxId } = getOrgBoxFromReq(req);
+
+    if (!boxId) {
+      return res.status(400).json({ ok: false, message: "boxId ontbreekt." });
+    }
+    if (!db) {
+      throw new Error("db is null (Firestore niet geïnitialiseerd)");
+    }
+
     const deviceId = req.query.deviceId ? String(req.query.deviceId) : null;
 
     const cmd = await commandsService.popNextCommand({ orgId, boxId, deviceId });
@@ -62,8 +98,7 @@ async function handlePoll(req, res) {
       command: cmd || null
     });
   } catch (e) {
-    console.error("poll command error", e);
-    return res.status(500).json({ ok: false, message: "Interne serverfout." });
+    return internalError(res, req, e, "poll command error");
   }
 }
 
@@ -74,6 +109,14 @@ router.get("/commands/next", handlePoll);
 router.post("/commands/:commandId/result", async (req, res) => {
   try {
     const { orgId, boxId } = getOrgBoxFromReq(req);
+
+    if (!boxId) {
+      return res.status(400).json({ ok: false, message: "boxId ontbreekt." });
+    }
+    if (!db) {
+      throw new Error("db is null (Firestore niet geïnitialiseerd)");
+    }
+
     const commandId = req.params.commandId;
 
     const ok = !!req.body?.ok;
@@ -99,15 +142,16 @@ router.post("/commands/:commandId/result", async (req, res) => {
 
       if (type === "open") await boxesService.setBoxFinalState(boxId, "open");
       else if (type === "close") await boxesService.setBoxFinalState(boxId, "closed");
-      else await boxesService.setBoxFinalState(boxId, "open"); // fallback
+      else await boxesService.setBoxFinalState(boxId, "open");
     } else {
-      await boxesService.setBoxFinalState(boxId, "error", { lastError: String(error || "unknown error") });
+      await boxesService.setBoxFinalState(boxId, "error", {
+        lastError: String(error || "unknown error")
+      });
     }
 
     return res.json({ ok: true });
   } catch (e) {
-    console.error("command result error", e);
-    return res.status(500).json({ ok: false, message: "Interne serverfout." });
+    return internalError(res, req, e, "command result error");
   }
 });
 
