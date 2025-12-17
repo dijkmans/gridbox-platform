@@ -13,17 +13,17 @@ export function startAgent({ api, hardware, config }) {
   let busy = false;
   let shutterState = "CLOSED";
 
-  // -----------------------------
+  // -------------------------------------------------
   // Logging
-  // -----------------------------
+  // -------------------------------------------------
 
   function log(...args) {
     console.log(`[AGENT ${boxId}]`, ...args);
   }
 
-  // -----------------------------
-  // Status & events naar API
-  // -----------------------------
+  // -------------------------------------------------
+  // API helpers
+  // -------------------------------------------------
 
   async function sendStatus(type = "heartbeat") {
     await api.sendStatus({
@@ -40,13 +40,13 @@ export function startAgent({ api, hardware, config }) {
     });
   }
 
-  // -----------------------------
-  // Shutter acties
-  // -----------------------------
+  // -------------------------------------------------
+  // Shutter control
+  // -------------------------------------------------
 
-  async function open(commandId) {
+  async function open(commandId = null, source = "api") {
     if (busy) {
-      log("Open genegeerd, agent is bezig");
+      log("OPEN genegeerd, agent bezig");
       return;
     }
 
@@ -54,14 +54,15 @@ export function startAgent({ api, hardware, config }) {
 
     try {
       shutterState = "OPENING";
-      await sendEvent("shutter.opening", { commandId });
+      log("Rolluik openen", source);
+      await sendEvent("shutter.opening", { commandId, source });
       await sendStatus("state");
 
       await hardware.open();
       await sleep(moveMs);
 
       shutterState = "OPEN";
-      await sendEvent("shutter.opened", { commandId });
+      await sendEvent("shutter.opened", { commandId, source });
       await sendStatus("state");
 
       if (commandId) {
@@ -78,9 +79,9 @@ export function startAgent({ api, hardware, config }) {
     }
   }
 
-  async function close(commandId) {
+  async function close(commandId = null, source = "api") {
     if (busy) {
-      log("Close genegeerd, agent is bezig");
+      log("CLOSE genegeerd, agent bezig");
       return;
     }
 
@@ -88,14 +89,15 @@ export function startAgent({ api, hardware, config }) {
 
     try {
       shutterState = "CLOSING";
-      await sendEvent("shutter.closing", { commandId });
+      log("Rolluik sluiten", source);
+      await sendEvent("shutter.closing", { commandId, source });
       await sendStatus("state");
 
       await hardware.close();
       await sleep(moveMs);
 
       shutterState = "CLOSED";
-      await sendEvent("shutter.closed", { commandId });
+      await sendEvent("shutter.closed", { commandId, source });
       await sendStatus("state");
 
       if (commandId) {
@@ -112,9 +114,25 @@ export function startAgent({ api, hardware, config }) {
     }
   }
 
-  // -----------------------------
+  // -------------------------------------------------
+  // Fysieke knop (optioneel)
+  // -------------------------------------------------
+
+  if (hardware.onButtonPress) {
+    hardware.onButtonPress(async () => {
+      log("Fysieke knop ingedrukt");
+
+      if (shutterState === "OPEN") {
+        await close(null, "button");
+      } else if (shutterState === "CLOSED") {
+        await open(null, "button");
+      }
+    });
+  }
+
+  // -------------------------------------------------
   // Command polling
-  // -----------------------------
+  // -------------------------------------------------
 
   async function commandLoop() {
     while (true) {
@@ -129,11 +147,11 @@ export function startAgent({ api, hardware, config }) {
         log("Command ontvangen", cmd.type, cmd.id);
 
         if (cmd.type === "open") {
-          await open(cmd.id);
+          await open(cmd.id, "api");
         }
 
         if (cmd.type === "close") {
-          await close(cmd.id);
+          await close(cmd.id, "api");
         }
       } catch (err) {
         log("Command loop fout", err.message);
@@ -142,9 +160,9 @@ export function startAgent({ api, hardware, config }) {
     }
   }
 
-  // -----------------------------
+  // -------------------------------------------------
   // Heartbeat
-  // -----------------------------
+  // -------------------------------------------------
 
   async function heartbeatLoop() {
     while (true) {
@@ -158,9 +176,9 @@ export function startAgent({ api, hardware, config }) {
     }
   }
 
-  // -----------------------------
+  // -------------------------------------------------
   // Start agent
-  // -----------------------------
+  // -------------------------------------------------
 
   (async () => {
     log("Agent gestart");
