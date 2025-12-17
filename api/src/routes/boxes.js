@@ -97,38 +97,38 @@ router.get("/:id/shares", async (req, res) => {
  * POST /api/boxes/:id/open
  * Maakt een OPEN command aan
  */
-router.post("/:id/open", async (req, res) => {
-  try {
-    pendingCommands.set(req.params.id, {
-      id: "cmd-001",
-      type: "open"
-    });
+router.post("/:id/open", (req, res) => {
+  const { id } = req.params;
 
-    const result = await boxesService.open(req.params.id);
-    res.json(result);
-  } catch (err) {
-    console.error("Fout bij openen box:", err);
-    res.status(500).json({ error: "Interne serverfout" });
-  }
+  pendingCommands.set(id, {
+    id: "cmd-001",
+    type: "open"
+  });
+
+  res.json({
+    ok: true,
+    command: "open",
+    boxId: id
+  });
 });
 
 /**
  * POST /api/boxes/:id/close
  * Maakt een CLOSE command aan
  */
-router.post("/:id/close", async (req, res) => {
-  try {
-    pendingCommands.set(req.params.id, {
-      id: "cmd-002",
-      type: "close"
-    });
+router.post("/:id/close", (req, res) => {
+  const { id } = req.params;
 
-    const result = await boxesService.close(req.params.id);
-    res.json(result);
-  } catch (err) {
-    console.error("Fout bij sluiten box:", err);
-    res.status(500).json({ error: "Interne serverfout" });
-  }
+  pendingCommands.set(id, {
+    id: "cmd-002",
+    type: "close"
+  });
+
+  res.json({
+    ok: true,
+    command: "close",
+    boxId: id
+  });
 });
 
 export default router;
