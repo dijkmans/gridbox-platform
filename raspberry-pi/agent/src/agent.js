@@ -1,12 +1,10 @@
 // raspberry-pi/agent/src/agent.js
+// Gridbox Raspberry Pi Agent – hardware-agnostisch
+// Gebruikt door simulator én echte Raspberry Pi
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export function startAgent({
-  api,
-  hardware,
-  config
-}) {
+export function startAgent({ api, hardware, config }) {
   const {
     pollMs = 5000,
     heartbeatMs = 10000,
@@ -17,9 +15,17 @@ export function startAgent({
   let busy = false;
   let shutterState = "CLOSED";
 
-  // -----------------------------
-  // STATUS & EVENTS
-  // -----------------------------
+  // --------------------------------------------------
+  // Helpers
+  // --------------------------------------------------
+
+  function log(...args) {
+    console.log(`[AGENT ${boxId}]`, ...args);
+  }
+
+  // --------------------------------------------------
+  // Status & Events
+  // --------------------------------------------------
 
   async function sendStatus(type = "heartbeat") {
     await api.sendStatus({
@@ -35,16 +41,22 @@ export function startAgent({
     });
   }
 
-  // -----------------------------
-  // OPEN / CLOSE
-  // -----------------------------
+  // --------------------------------------------------
+  // Open / Close
+  // --------------------------------------------------
 
   async function open(commandId) {
-    if (busy) return;
+    if (busy) {
+      log("open genegeerd – agent is bezig");
+      return;
+    }
+
     busy = true;
 
     try {
+      log("OPEN gestart");
       shutterState = "OPENING";
+
       await sendEvent("shutter.opening", { commandId });
       await sendStatus("state");
 
@@ -55,20 +67,34 @@ export function startAgent({
       await sendEvent("shutter.opened", { commandId });
       await sendStatus("state");
 
-      if (commandId) await api.ackCommand(commandId, true);
+      if (commandId) {
+        await api.ackCommand(commandId, true);
+      }
+
+      log("OPEN klaar");
     } catch (err) {
-      if (commandId) await api.ackCommand(commandId, false, "open_failed", err.message);
+      log("OPEN fout:", err.message);
+
+      if (commandId) {
+        await api.ackCommand(commandId, false, "open_failed", err.message);
+      }
     } finally {
       busy = false;
     }
   }
 
   async function close(commandId) {
-    if (busy) return;
+    if (busy) {
+      log("close genegeerd – agent is bezig");
+      return;
+    }
+
     busy = true;
 
     try {
+      log("CLOSE gestart");
       shutterState = "CLOSING";
+
       await sendEvent("shutter.closing", { commandId });
       await sendStatus("state");
 
@@ -79,54 +105,71 @@ export function startAgent({
       await sendEvent("shutter.closed", { commandId });
       await sendStatus("state");
 
-      if (commandId) await api.ackCommand(commandId, true);
+      if (commandId) {
+        await api.ackCommand(commandId, true);
+      }
+
+      log("CLOSE klaar");
     } catch (err) {
-      if (commandId) await api.ackCommand(commandId, false, "close_failed", err.message);
+      log("CLOSE fout:", err.message);
+
+      if (commandId) {
+        await api.ackCommand(commandId, false, "close_failed", err.message);
+      }
     } finally {
       busy = false;
     }
   }
 
-  // -----------------------------
-  // COMMAND LOOP
-  // -----------------------------
+  // --------------------------------------------------
+  // Command polling
+  // --------------------------------------------------
 
   async function commandLoop() {
     while (true) {
       try {
         const cmd = await api.fetchNextCommand();
-        if (cmd) {
+
+        if (cmd && cmd.type) {
+          log("Command ontvangen:", cmd.type, cmd.id);
+
           if (cmd.type === "open") await open(cmd.id);
-          if (cmd.type === "close") await close(cmd.id);
+          else if (cmd.type === "close") await close(cmd.id);
+          else log("Onbekend command type:", cmd.type);
         }
       } catch (err) {
-        console.error("command loop error", err.message);
+        log("commandLoop fout:", err.message);
       }
+
       await sleep(pollMs);
     }
   }
 
-  // -----------------------------
-  // HEARTBEAT
-  // -----------------------------
+  // --------------------------------------------------
+  // Heartbeat
+  // --------------------------------------------------
 
   async function heartbeatLoop() {
     while (true) {
       try {
         await sendStatus("heartbeat");
-      } catch {}
+      } catch (err) {
+        log("heartbeat fout:", err.message);
+      }
+
       await sleep(heartbeatMs);
     }
   }
 
-  // -----------------------------
-  // START
-  // -----------------------------
+  // --------------------------------------------------
+  // Start
+  // --------------------------------------------------
 
   (async () => {
-    console.log("Gridbox agent gestart voor box", boxId);
+    log("Agent gestart");
     await sendEvent("device.agent.started", { boxId });
     await sendStatus("startup");
+
     heartbeatLoop();
     commandLoop();
   })();
