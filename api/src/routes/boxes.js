@@ -12,25 +12,22 @@ const pendingCommands = new Map();
 
 /**
  * GET /api/boxes/:boxId/commands
+ * Geeft huidig command terug of null
  */
 router.get("/:boxId/commands", (req, res) => {
   const { boxId } = req.params;
 
   if (!pendingCommands.has(boxId)) {
-    pendingCommands.set(boxId, {
-      id: "cmd-001",
-      type: "open"
-    });
+    return res.json(null);
   }
 
   const cmd = pendingCommands.get(boxId);
-  if (!cmd) return res.json(null);
-
   return res.json(cmd);
 });
 
 /**
  * POST /api/boxes/:boxId/commands/:commandId/ack
+ * Verwijdert command na uitvoering
  */
 router.post("/:boxId/commands/:commandId/ack", (req, res) => {
   const { boxId, commandId } = req.params;
@@ -98,9 +95,15 @@ router.get("/:id/shares", async (req, res) => {
 
 /**
  * POST /api/boxes/:id/open
+ * Maakt een OPEN command aan
  */
 router.post("/:id/open", async (req, res) => {
   try {
+    pendingCommands.set(req.params.id, {
+      id: "cmd-001",
+      type: "open"
+    });
+
     const result = await boxesService.open(req.params.id);
     res.json(result);
   } catch (err) {
@@ -111,9 +114,15 @@ router.post("/:id/open", async (req, res) => {
 
 /**
  * POST /api/boxes/:id/close
+ * Maakt een CLOSE command aan
  */
 router.post("/:id/close", async (req, res) => {
   try {
+    pendingCommands.set(req.params.id, {
+      id: "cmd-002",
+      type: "close"
+    });
+
     const result = await boxesService.close(req.params.id);
     res.json(result);
   } catch (err) {
