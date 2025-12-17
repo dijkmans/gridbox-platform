@@ -1,12 +1,59 @@
-// api/src/routes/boxes.js
+﻿// api/src/routes/boxes.js
 import { Router } from "express";
 import * as boxesService from "../services/boxesService.js";
 
 const router = Router();
 
+// ------------------------------------------------------
+// COMMANDS (MOET BOVENAAN STAAN)
+// ------------------------------------------------------
+
+const pendingCommands = new Map();
+
+/**
+ * GET /api/boxes/:boxId/commands
+ */
+router.get("/:boxId/commands", (req, res) => {
+  const { boxId } = req.params;
+
+  if (!pendingCommands.has(boxId)) {
+    pendingCommands.set(boxId, {
+      id: "cmd-001",
+      type: "open"
+    });
+  }
+
+  const cmd = pendingCommands.get(boxId);
+  if (!cmd) return res.json(null);
+
+  return res.json(cmd);
+});
+
+/**
+ * POST /api/boxes/:boxId/commands/:commandId/ack
+ */
+router.post("/:boxId/commands/:commandId/ack", (req, res) => {
+  const { boxId, commandId } = req.params;
+  const { result, shutterState } = req.body;
+
+  console.log("COMMAND ACK:", {
+    boxId,
+    commandId,
+    result,
+    shutterState
+  });
+
+  pendingCommands.delete(boxId);
+
+  res.json({ ok: true });
+});
+
+// ------------------------------------------------------
+// BOX ROUTES
+// ------------------------------------------------------
+
 /**
  * GET /api/boxes
- * Haal alle boxen op
  */
 router.get("/", async (req, res) => {
   try {
@@ -20,7 +67,6 @@ router.get("/", async (req, res) => {
 
 /**
  * GET /api/boxes/:id
- * Haal een specifieke box op
  */
 router.get("/:id", async (req, res) => {
   try {
@@ -39,7 +85,6 @@ router.get("/:id", async (req, res) => {
 
 /**
  * GET /api/boxes/:id/shares
- * Haal alle shares voor deze box op
  */
 router.get("/:id/shares", async (req, res) => {
   try {
@@ -53,7 +98,6 @@ router.get("/:id/shares", async (req, res) => {
 
 /**
  * POST /api/boxes/:id/open
- * Box openen (simulatie)
  */
 router.post("/:id/open", async (req, res) => {
   try {
@@ -67,7 +111,6 @@ router.post("/:id/open", async (req, res) => {
 
 /**
  * POST /api/boxes/:id/close
- * Box sluiten (simulatie)
  */
 router.post("/:id/close", async (req, res) => {
   try {
