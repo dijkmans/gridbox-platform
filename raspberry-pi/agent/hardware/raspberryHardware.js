@@ -1,43 +1,53 @@
 // raspberry-pi/agent/hardware/raspberryHardware.js
+// Hardware-adapter voor echte Raspberry Pi
+// Bevat GEEN logica, enkel fysieke aansturing
 
-export function initHardware() {
-  console.log("Initializing Raspberry Pi hardware (stub)");
+export function createRaspberryHardware() {
+  console.log("[HW] Raspberry Pi hardware initialiseren");
 
-  let shutterOpen = false;
   let buttonCallback = null;
 
   return {
+    // ---------------------------------
+    // Fysieke knop
+    // ---------------------------------
     onButtonPress(callback) {
       buttonCallback = callback;
-      console.log("Button handler registered");
+      console.log("[HW] Button handler geregistreerd");
     },
 
-    // Deze functies worden door gridbox-core aangeroepen
-    relayOpen() {
-      console.log("RELAY OPEN");
-      shutterOpen = true;
+    // ---------------------------------
+    // Rolluik
+    // ---------------------------------
+    async open() {
+      console.log("[HW] ROLLUIK OPEN (GPIO)");
+      // hier komt later echte GPIO-aansturing
     },
 
-    relayClose() {
-      console.log("RELAY CLOSE");
-      shutterOpen = false;
+    async close() {
+      console.log("[HW] ROLLUIK SLUITEN (GPIO)");
+      // hier komt later echte GPIO-aansturing
     },
 
-    lightOn() {
-      console.log("LIGHT ON");
+    // ---------------------------------
+    // Licht
+    // ---------------------------------
+    async lightOn() {
+      console.log("[HW] LICHT AAN");
+      // GPIO HIGH
     },
 
-    lightOff() {
-      console.log("LIGHT OFF");
+    async lightOff() {
+      console.log("[HW] LICHT UIT");
+      // GPIO LOW
     },
 
-    isShutterOpen() {
-      return shutterOpen;
-    },
-
-    // Tijdelijke testfunctie (kan je later verwijderen)
+    // ---------------------------------
+    // Simulator / test helper
+    // ---------------------------------
     _simulateButtonPress() {
       if (buttonCallback) {
+        console.log("[HW] Gesimuleerde knopdruk");
         buttonCallback();
       }
     }
