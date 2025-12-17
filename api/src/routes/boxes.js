@@ -18,7 +18,7 @@ const router = Router();
 
 /**
  * GET /api/boxes/:boxId/commands
- * Geeft huidig command terug of null
+ * Agent haalt huidig command op
  */
 router.get("/:boxId/commands", async (req, res) => {
   try {
@@ -32,25 +32,22 @@ router.get("/:boxId/commands", async (req, res) => {
 
     return res.json(snap.data());
   } catch (err) {
-    console.error("Fout bij ophalen command:", err);
+    console.error("Command fetch error:", err);
     res.status(500).json(null);
   }
 });
 
 /**
  * POST /api/boxes/:boxId/commands/:commandId/ack
- * Verwijdert command na uitvoering
+ * Agent bevestigt uitvoering → command wordt verwijderd
  */
 router.post("/:boxId/commands/:commandId/ack", async (req, res) => {
   try {
     const { boxId } = req.params;
-    const ref = doc(db, "boxCommands", boxId);
-
-    await deleteDoc(ref);
-
+    await deleteDoc(doc(db, "boxCommands", boxId));
     res.json({ ok: true });
   } catch (err) {
-    console.error("Fout bij ack command:", err);
+    console.error("Command ack error:", err);
     res.status(500).json({ ok: false });
   }
 });
@@ -64,10 +61,25 @@ router.post("/:boxId/commands/:commandId/ack", async (req, res) => {
  */
 router.get("/", async (req, res) => {
   try {
-    const boxes = await boxesService.getAll();
-    res.json(boxes);
+    res.json(await boxesService.getAll());
   } catch (err) {
-    console.error("Fout bij ophalen boxen:", err);
+    console.error(err);
+    res.status(500).json({ error: "Interne serverfout" });
+  }
+});
+
+/**
+ * GET /api/boxes/:id
+ */
+router.get("/:id", async (req, res) => {
+  try {
+    const box = await boxesService.getById(req.params.id);
+    if (!box) {
+      return res.status(404).json({ error: "Box niet gevonden" });
+    }
+    res.json(box);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Interne serverfout" });
   }
 });
@@ -87,13 +99,9 @@ router.post("/:id/open", async (req, res) => {
       createdAt: serverTimestamp()
     });
 
-    res.json({
-      ok: true,
-      command: "open",
-      boxId: id
-    });
+    res.json({ ok: true, command: "open", boxId: id });
   } catch (err) {
-    console.error("Fout bij open command:", err);
+    console.error("Open command error:", err);
     res.status(500).json({ error: "Interne serverfout" });
   }
 });
@@ -113,13 +121,9 @@ router.post("/:id/close", async (req, res) => {
       createdAt: serverTimestamp()
     });
 
-    res.json({
-      ok: true,
-      command: "close",
-      boxId: id
-    });
+    res.json({ ok: true, command: "close", boxId: id });
   } catch (err) {
-    console.error("Fout bij close command:", err);
+    console.error("Close command error:", err);
     res.status(500).json({ error: "Interne serverfout" });
   }
 });
