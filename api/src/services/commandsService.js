@@ -1,22 +1,20 @@
 // api/src/services/commandsService.js
 import { db } from "../db.js";
 
-/**
- * Command lifecycle – definitief contract
- *
- * Statussen:
- * - queued     : aangemaakt, nog niet opgehaald
- * - delivered  : opgehaald door een device (deviceId gekend)
- * - done       : succesvol uitgevoerd (result ok = true)
- * - error      : uitgevoerd maar gefaald (result ok = false)
- * - expired    : niet uitgevoerd binnen deadline
- *
- * Flow:
- * SMS / API  -> createCommand (queued)
- * Device     -> popNextCommand (queued -> delivered)
- * Device     -> submitResult (delivered -> done | error)
- * Systeem    -> expire oude commands
- */
+/*
+Command lifecycle – definitief
+
+Status:
+- queued     : aangemaakt, nog niet opgehaald
+- delivered  : opgehaald door device
+- done       : succesvol uitgevoerd
+- error      : uitgevoerd maar gefaald
+- expired    : niet uitgevoerd binnen deadline
+
+Belangrijk:
+- commands worden NOOIT verplaatst of verwijderd
+- alleen statusvelden veranderen
+*/
 
 function nowMs() {
   return Date.now();
@@ -27,53 +25,45 @@ function intFromEnv(name, fallback) {
   return Number.isFinite(v) && v > 0 ? v : fallback;
 }
 
-// defaults (veilig, geen Firestore indexes nodig)
-const COMMAND_DEADLINE_MS = intFromEnv("COMMAND_DEADLINE_MS", 2 * 60 * 1000); // 2 min
+const COMMAND_DEADLINE_MS = intFromEnv("COMMAND_DEADLINE_MS", 2 * 60 * 1000);
 const COMMAND_MAX_ATTEMPTS = intFromEnv("COMMAND_MAX_ATTEMPTS", 3);
 
-/**
- * Helpers om de juiste collection te kiezen
- */
-function commandsCollection({ orgId, boxId }) {
-  if (!boxId) throw new Error("boxId ontbreekt.");
-  if (orgId) {
-    return db
-      .collection("orgs")
-      .doc(orgId)
-      .collection("boxes")
-      .doc(boxId)
-      .collection("commands");
-  }
+function commandsCollection(boxId) {
+  if (!boxId) throw new Error("boxId ontbreekt");
   return db.collection("boxes").doc(boxId).collection("commands");
 }
 
 /**
- * 1. Command aanmaken
+ * Command aanmaken
  */
 export async function createCommand({
-  orgId = null,
   boxId,
   type,
   source = "api",
   requestedBy = null,
   payload = {}
 }) {
-  const col = commandsCollection({ orgId, boxId });
-
+  const col = commandsCollection(boxId);
   const now = nowMs();
+
   const command = {
     type,
     source,
     requestedBy,
     payload,
+
     status: "queued",
     attempts: 0,
+
     createdAt: now,
     deadlineAt: now + COMMAND_DEADLINE_MS,
+
     deliveredAt: null,
     deliveredTo: null,
+
     executedAt: null,
-    lastError: null
+    lastError: null,
+    result: null
   };
 
   const ref = await col.add(command);
@@ -81,26 +71,21 @@ export async function createCommand({
 }
 
 /**
- * 2. Volgende command ophalen voor device
- *    - atomair: queued -> delivered
- *    - geen orderBy (vermijdt index issues)
+ * Volgende command ophalen voor device
+ * queued -> delivered
  */
-export async function popNextCommand({
-  orgId = null,
-  boxId,
-  deviceId = null
-}) {
-  const col = commandsCollection({ orgId, boxId });
+export async function popNextCommand({ boxId, deviceId }) {
+  const col = commandsCollection(boxId);
   const now = nowMs();
 
-  // 2.1 eerst verlopen commands markeren
-  const expiredSnap = await col
+  // 1. Verlopen commands markeren
+  const activeSnap = await col
     .where("status", "in", ["queued", "delivered"])
     .get();
 
-  for (const doc of expiredSnap.docs) {
-    const data = doc.data();
-    if (data.deadlineAt && data.deadlineAt < now) {
+  for (const doc of activeSnap.docs) {
+    const d = doc.data();
+    if (d.deadlineAt && d.deadlineAt < now) {
       await doc.ref.update({
         status: "expired",
         executedAt: now,
@@ -109,35 +94,53 @@ export async function popNextCommand({
     }
   }
 
-  // 2.2 zoek eerst queued commands
-  const snap = await col.where("status", "==", "queued").limit(1).get();
+  // 2. Zoek eerstvolgende queued command
+  const snap = await col
+    .where("status", "==", "queued")
+    .limit(1)
+    .get();
+
   if (snap.empty) return null;
 
   const doc = snap.docs[0];
+  const data = doc.data();
 
-  // 2.3 atomair claimen
+  // 3. Max attempts check
+  if ((data.attempts || 0) >= COMMAND_MAX_ATTEMPTS) {
+    await doc.ref.update({
+      status: "error",
+      executedAt: now,
+      lastError: "max attempts exceeded"
+    });
+    return null;
+  }
+
+  // 4. Claim command
   await doc.ref.update({
     status: "delivered",
     deliveredAt: now,
     deliveredTo: deviceId || null,
-    attempts: (doc.data().attempts || 0) + 1
+    attempts: (data.attempts || 0) + 1
   });
 
-  return { id: doc.id, ...doc.data(), status: "delivered" };
+  return {
+    id: doc.id,
+    ...data,
+    status: "delivered"
+  };
 }
 
 /**
- * 3. Resultaat van command verwerken
+ * Resultaat van command
  */
 export async function submitResult({
-  orgId = null,
   boxId,
   commandId,
   ok,
   error = null,
   result = null
 }) {
-  const col = commandsCollection({ orgId, boxId });
+  const col = commandsCollection(boxId);
   const ref = col.doc(commandId);
 
   const snap = await ref.get();
@@ -146,20 +149,18 @@ export async function submitResult({
   }
 
   const data = snap.data();
-
   if (data.status !== "delivered") {
     throw new Error(
       `Command ${commandId} heeft status ${data.status}, verwacht delivered`
     );
   }
 
-  const update = {
-    executedAt: nowMs(),
+  await ref.update({
     status: ok ? "done" : "error",
+    executedAt: nowMs(),
     lastError: ok ? null : String(error || "unknown error"),
     result: result || null
-  };
+  });
 
-  await ref.update(update);
-  return { id: commandId, ...update };
+  return { ok: true };
 }
