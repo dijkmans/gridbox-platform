@@ -1,48 +1,58 @@
-﻿// api/src/routes/boxes.js
+// api/src/routes/boxes.js
 import { Router } from "express";
 import * as boxesService from "../services/boxesService.js";
+import { db } from "../firebase.js";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  serverTimestamp
+} from "firebase/firestore";
 
 const router = Router();
 
 // ------------------------------------------------------
-// COMMANDS (MOET BOVENAAN STAAN)
+// COMMANDS (Firestore-based, Cloud Run proof)
 // ------------------------------------------------------
-
-const pendingCommands = new Map();
 
 /**
  * GET /api/boxes/:boxId/commands
  * Geeft huidig command terug of null
  */
-router.get("/:boxId/commands", (req, res) => {
-  const { boxId } = req.params;
+router.get("/:boxId/commands", async (req, res) => {
+  try {
+    const { boxId } = req.params;
+    const ref = doc(db, "boxCommands", boxId);
+    const snap = await getDoc(ref);
 
-  if (!pendingCommands.has(boxId)) {
-    return res.json(null);
+    if (!snap.exists()) {
+      return res.json(null);
+    }
+
+    return res.json(snap.data());
+  } catch (err) {
+    console.error("Fout bij ophalen command:", err);
+    res.status(500).json(null);
   }
-
-  const cmd = pendingCommands.get(boxId);
-  return res.json(cmd);
 });
 
 /**
  * POST /api/boxes/:boxId/commands/:commandId/ack
  * Verwijdert command na uitvoering
  */
-router.post("/:boxId/commands/:commandId/ack", (req, res) => {
-  const { boxId, commandId } = req.params;
-  const { result, shutterState } = req.body;
+router.post("/:boxId/commands/:commandId/ack", async (req, res) => {
+  try {
+    const { boxId } = req.params;
+    const ref = doc(db, "boxCommands", boxId);
 
-  console.log("COMMAND ACK:", {
-    boxId,
-    commandId,
-    result,
-    shutterState
-  });
+    await deleteDoc(ref);
 
-  pendingCommands.delete(boxId);
-
-  res.json({ ok: true });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Fout bij ack command:", err);
+    res.status(500).json({ ok: false });
+  }
 });
 
 // ------------------------------------------------------
@@ -63,72 +73,55 @@ router.get("/", async (req, res) => {
 });
 
 /**
- * GET /api/boxes/:id
- */
-router.get("/:id", async (req, res) => {
-  try {
-    const box = await boxesService.getById(req.params.id);
-
-    if (!box) {
-      return res.status(404).json({ error: "Box niet gevonden" });
-    }
-
-    res.json(box);
-  } catch (err) {
-    console.error("Fout bij ophalen box:", err);
-    res.status(500).json({ error: "Interne serverfout" });
-  }
-});
-
-/**
- * GET /api/boxes/:id/shares
- */
-router.get("/:id/shares", async (req, res) => {
-  try {
-    const shares = await boxesService.getShares(req.params.id);
-    res.json(shares);
-  } catch (err) {
-    console.error("Fout bij ophalen shares:", err);
-    res.status(500).json({ error: "Interne serverfout" });
-  }
-});
-
-/**
  * POST /api/boxes/:id/open
- * Maakt een OPEN command aan
+ * Maakt OPEN command aan in Firestore
  */
-router.post("/:id/open", (req, res) => {
-  const { id } = req.params;
+router.post("/:id/open", async (req, res) => {
+  try {
+    const { id } = req.params;
 
-  pendingCommands.set(id, {
-    id: "cmd-001",
-    type: "open"
-  });
+    await setDoc(doc(db, "boxCommands", id), {
+      commandId: `cmd-${Date.now()}`,
+      type: "open",
+      status: "pending",
+      createdAt: serverTimestamp()
+    });
 
-  res.json({
-    ok: true,
-    command: "open",
-    boxId: id
-  });
+    res.json({
+      ok: true,
+      command: "open",
+      boxId: id
+    });
+  } catch (err) {
+    console.error("Fout bij open command:", err);
+    res.status(500).json({ error: "Interne serverfout" });
+  }
 });
 
 /**
  * POST /api/boxes/:id/close
- * Maakt een CLOSE command aan
+ * Maakt CLOSE command aan in Firestore
  */
-router.post("/:id/close", (req, res) => {
-  const { id } = req.params;
+router.post("/:id/close", async (req, res) => {
+  try {
+    const { id } = req.params;
 
-  pendingCommands.set(id, {
-    id: "cmd-002",
-    type: "close"
-  });
+    await setDoc(doc(db, "boxCommands", id), {
+      commandId: `cmd-${Date.now()}`,
+      type: "close",
+      status: "pending",
+      createdAt: serverTimestamp()
+    });
 
-  res.json({
-    ok: true,
-    command: "close",
-    boxId: id
-  });
+    res.json({
+      ok: true,
+      command: "close",
+      boxId: id
+    });
+  } catch (err) {
+    console.error("Fout bij close command:", err);
+    res.status(500).json({ error: "Interne serverfout" });
+  }
 });
 
 export default router;
