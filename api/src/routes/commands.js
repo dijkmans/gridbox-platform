@@ -8,22 +8,29 @@ const router = Router();
 /**
  * GET /api/commands/:boxId
  * Raspberry Pi vraagt of er een commando klaarstaat
- * Antwoord:
- *   - null
- *   - of één command object
+ *
+ * TESTVERSIE:
+ * We forceren tijdelijk altijd één "open" command
  */
 router.get("/:boxId", async (req, res) => {
   try {
     const { boxId } = req.params;
 
+    // ---- TEST COMMAND (tijdelijk) ----
+    return res.json({
+      id: "test-001",
+      type: "open",
+      payload: null
+    });
+
+    // ---- NORMALE LOGICA (later terug activeren) ----
+    /*
     const commands = await commandsService.getPendingCommands(boxId);
 
-    // Geen commands
     if (!commands || commands.length === 0) {
       return res.json(null);
     }
 
-    // Exact één command teruggeven
     const command = commands[0];
 
     return res.json({
@@ -31,6 +38,7 @@ router.get("/:boxId", async (req, res) => {
       type: command.type,
       payload: command.payload || null
     });
+    */
 
   } catch (err) {
     console.error("Fout in GET /api/commands/:boxId:", err);
@@ -54,7 +62,11 @@ router.post("/:boxId/ack", async (req, res) => {
       });
     }
 
-    await commandsService.ackCommand(boxId, commandId, result || "ok");
+    // Voor test: gewoon loggen
+    console.log("ACK ontvangen:", { boxId, commandId, result });
+
+    // Later:
+    // await commandsService.ackCommand(boxId, commandId, result || "ok");
 
     return res.json({
       ok: true
