@@ -3,34 +3,39 @@ import { Router } from "express";
 
 const router = Router();
 
-// tijdelijke in-memory opslag
-// later te vervangen door Firestore
+// Tijdelijke in-memory opslag
+// Wordt later vervangen door Firestore
 const STATUS = {};
 
 /**
  * POST /api/status/:boxId
- * Ontvang status of heartbeat van Raspberry of simulator
+ * Ontvang statusupdates en heartbeats van agent (simulator of Raspberry Pi)
  */
 router.post("/:boxId", (req, res) => {
   const { boxId } = req.params;
 
   const {
-    state = null,
-    source = null,
+    shutterState = null,   // OPEN | CLOSED | OPENING | CLOSING
+    type = "heartbeat",    // heartbeat | state | startup
+    source = "agent",      // agent | simulator | manual
     uptime = null,
-    temp = null,
-    type = "heartbeat"
+    temperature = null
   } = req.body || {};
 
+  const now = new Date().toISOString();
+
   STATUS[boxId] = {
+    boxId,
     online: true,
-    state,
+    shutterState,
+    type,
     source,
     uptime,
-    temp,
-    type,
-    lastSeen: new Date().toISOString()
+    temperature,
+    lastSeen: now
   };
+
+  console.log("STATUS update:", STATUS[boxId]);
 
   res.json({
     ok: true,
@@ -41,7 +46,7 @@ router.post("/:boxId", (req, res) => {
 
 /**
  * GET /api/status/:boxId
- * Status opvragen voor dashboard of debug
+ * Status opvragen voor dashboard, portal of debug
  */
 router.get("/:boxId", (req, res) => {
   const { boxId } = req.params;
@@ -50,7 +55,7 @@ router.get("/:boxId", (req, res) => {
   if (!status) {
     return res.status(404).json({
       ok: false,
-      error: "Geen status bekend"
+      message: "Geen status bekend voor deze box"
     });
   }
 
@@ -58,6 +63,17 @@ router.get("/:boxId", (req, res) => {
     ok: true,
     boxId,
     status
+  });
+});
+
+/**
+ * GET /api/status
+ * Overzicht van alle bekende boxen (admin / debug)
+ */
+router.get("/", (req, res) => {
+  res.json({
+    ok: true,
+    boxes: Object.values(STATUS)
   });
 });
 
