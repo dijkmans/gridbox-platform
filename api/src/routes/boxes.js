@@ -12,13 +12,13 @@ import {
 
 const router = Router();
 
-// ------------------------------------------------------
-// COMMANDS (Firestore – single source of truth)
-// ------------------------------------------------------
+// ======================================================
+// COMMANDS (Firestore is single source of truth)
+// ======================================================
 
 /**
  * GET /api/boxes/:boxId/commands
- * Agent polling endpoint
+ * Agent haalt huidig command op
  */
 router.get("/:boxId/commands", async (req, res) => {
   try {
@@ -39,7 +39,7 @@ router.get("/:boxId/commands", async (req, res) => {
 
 /**
  * POST /api/boxes/:boxId/commands/:commandId/ack
- * Agent bevestigt uitvoering
+ * Agent bevestigt uitvoering, command wordt verwijderd
  */
 router.post("/:boxId/commands/:commandId/ack", async (req, res) => {
   try {
@@ -52,9 +52,9 @@ router.post("/:boxId/commands/:commandId/ack", async (req, res) => {
   }
 });
 
-// ------------------------------------------------------
+// ======================================================
 // BOX ROUTES
-// ------------------------------------------------------
+// ======================================================
 
 /**
  * GET /api/boxes
@@ -73,7 +73,9 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const box = await boxesService.getById(req.params.id);
-    if (!box) return res.status(404).json({ error: "Box niet gevonden" });
+    if (!box) {
+      return res.status(404).json({ error: "Box niet gevonden" });
+    }
     res.json(box);
   } catch {
     res.status(500).json({ error: "Interne serverfout" });
@@ -89,9 +91,8 @@ router.post("/:id/open", async (req, res) => {
     const { id } = req.params;
 
     await setDoc(doc(db, "boxCommands", id), {
-      commandId: `cmd-${Date.now()}`,
+      id: `cmd-${Date.now()}`,
       type: "open",
-      status: "pending",
       createdAt: serverTimestamp()
     });
 
@@ -111,9 +112,8 @@ router.post("/:id/close", async (req, res) => {
     const { id } = req.params;
 
     await setDoc(doc(db, "boxCommands", id), {
-      commandId: `cmd-${Date.now()}`,
+      id: `cmd-${Date.now()}`,
       type: "close",
-      status: "pending",
       createdAt: serverTimestamp()
     });
 
@@ -125,3 +125,4 @@ router.post("/:id/close", async (req, res) => {
 });
 
 export default router;
+
