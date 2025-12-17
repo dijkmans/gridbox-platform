@@ -1,6 +1,93 @@
 // api/src/routes/boxes.js
 import { Router } from "express";
 import * as boxesService from "../services/boxesService.js";
+
+const router = Router();
+
+// ------------------------------------------------------
+// COMMANDS (MOET BOVENAAN STAAN)
+// ------------------------------------------------------
+
+const pendingCommands = new Map();
+
+/**
+ * GET /api/boxes/:boxId/commands
+<<<<<<< HEAD
+ * Agent haalt huidig command op
+=======
+ * Geeft huidig command terug of null
+>>>>>>> 4224a44 (Simplify commands: open/close only create pending command)
+ */
+router.get("/:boxId/commands", (req, res) => {
+  const { boxId } = req.params;
+
+  if (!pendingCommands.has(boxId)) {
+    return res.json(null);
+  }
+
+  return res.json(pendingCommands.get(boxId));
+});
+
+/**
+ * POST /api/boxes/:boxId/commands/:commandId/ack
+<<<<<<< HEAD
+ * Agent bevestigt uitvoering → command wordt verwijderd
+=======
+ * Verwijdert command na uitvoering
+>>>>>>> 4224a44 (Simplify commands: open/close only create pending command)
+ */
+router.post("/:boxId/commands/:commandId/ack", (req, res) => {
+  const { boxId, commandId } = req.params;
+  const { result, shutterState } = req.body;
+
+  console.log("COMMAND ACK:", {
+    boxId,
+    commandId,
+    result,
+    shutterState
+  });
+
+  pendingCommands.delete(boxId);
+
+  res.json({ ok: true });
+});
+
+// ------------------------------------------------------
+// BOX ROUTES
+// ------------------------------------------------------
+
+/**
+ * GET /api/boxes
+ */
+router.get("/", async (req, res) => {
+  try {
+<<<<<<< HEAD
+    res.json(await boxesService.getAll());
+  } catch (err) {
+    console.error(err);
+=======
+    const boxes = await boxesService.getAll();
+    res.json(boxes);
+  } catch (err) {
+    console.error("Fout bij ophalen boxen:", err);
+>>>>>>> 4224a44 (Simplify commands: open/close only create pending command)
+    res.status(500).json({ error: "Interne serverfout" });
+  }
+});
+
+/**
+ * GET /api/boxes/:id
+ */
+router.get("/:id", async (req, res) => {
+  try {
+    const box = await boxesService.getById(req.params.id);
+<<<<<<< HEAD
+    if (!box) {
+      return res.status(404).json({ error: "Box niet gevonden" });
+    }
+ // api/src/routes/boxes.js
+import { Router } from "express";
+import * as boxesService from "../services/boxesService.js";
 import { db } from "../firebase.js";
 import {
   doc,
@@ -13,12 +100,12 @@ import {
 const router = Router();
 
 // ------------------------------------------------------
-// COMMANDS (Firestore-based, Cloud Run proof)
+// COMMANDS (Firestore-based)
 // ------------------------------------------------------
 
 /**
  * GET /api/boxes/:boxId/commands
- * Agent haalt huidig command op
+ * Agent haalt huidig pending command op
  */
 router.get("/:boxId/commands", async (req, res) => {
   try {
@@ -39,7 +126,7 @@ router.get("/:boxId/commands", async (req, res) => {
 
 /**
  * POST /api/boxes/:boxId/commands/:commandId/ack
- * Agent bevestigt uitvoering → command wordt verwijderd
+ * Agent bevestigt uitvoering, command wordt verwijderd
  */
 router.post("/:boxId/commands/:commandId/ack", async (req, res) => {
   try {
@@ -56,37 +143,27 @@ router.post("/:boxId/commands/:commandId/ack", async (req, res) => {
 // BOX ROUTES
 // ------------------------------------------------------
 
-/**
- * GET /api/boxes
- */
 router.get("/", async (req, res) => {
   try {
     res.json(await boxesService.getAll());
-  } catch (err) {
-    console.error(err);
+  } catch {
     res.status(500).json({ error: "Interne serverfout" });
   }
 });
 
-/**
- * GET /api/boxes/:id
- */
 router.get("/:id", async (req, res) => {
   try {
     const box = await boxesService.getById(req.params.id);
-    if (!box) {
-      return res.status(404).json({ error: "Box niet gevonden" });
-    }
+    if (!box) return res.status(404).json({ error: "Box niet gevonden" });
     res.json(box);
-  } catch (err) {
-    console.error(err);
+  } catch {
     res.status(500).json({ error: "Interne serverfout" });
   }
 });
 
 /**
  * POST /api/boxes/:id/open
- * Maakt OPEN command aan in Firestore
+ * Maakt OPEN command aan (pending)
  */
 router.post("/:id/open", async (req, res) => {
   try {
@@ -101,14 +178,14 @@ router.post("/:id/open", async (req, res) => {
 
     res.json({ ok: true, command: "open", boxId: id });
   } catch (err) {
-    console.error("Open command error:", err);
+    console.error(err);
     res.status(500).json({ error: "Interne serverfout" });
   }
 });
 
 /**
  * POST /api/boxes/:id/close
- * Maakt CLOSE command aan in Firestore
+ * Maakt CLOSE command aan (pending)
  */
 router.post("/:id/close", async (req, res) => {
   try {
@@ -123,7 +200,7 @@ router.post("/:id/close", async (req, res) => {
 
     res.json({ ok: true, command: "close", boxId: id });
   } catch (err) {
-    console.error("Close command error:", err);
+    console.error(err);
     res.status(500).json({ error: "Interne serverfout" });
   }
 });
