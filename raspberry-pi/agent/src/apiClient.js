@@ -46,6 +46,13 @@ export function createApiClient({ apiBaseUrl, boxId }) {
     // ------------------------------------
     async getNextCommand() {
       return get(`/commands/${boxId}`);
+    },
+
+    async ackCommand(commandId, result = "received") {
+      await post(`/commands/${boxId}/ack`, {
+        commandId,
+        result
+      });
     }
   };
 }
