@@ -1,137 +1,90 @@
 // api/src/services/boxesService.js
+import { db } from "../db.js";
+import * as commandsService from "./commandsService.js";
 
-import { Firestore } from "@google-cloud/firestore";
-import { getBox } from "../db.js";
+function nowMs() {
+  return Date.now();
+}
 
-const runningOnCloudRun = !!process.env.K_SERVICE;
-const firestore = runningOnCloudRun ? new Firestore() : null;
+function boxRefById(boxId) {
+  // legacy: boxes/{boxId}
+  return db.collection("boxes").doc(boxId);
+}
+
+export async function getById(boxId) {
+  const snap = await boxRefById(boxId).get();
+  if (!snap.exists) return null;
+  return { id: snap.id, ...snap.data() };
+}
 
 /**
- * Lokale mock (enkel voor development)
+ * Open en Close zetten box status op pending,
+ * en maken een command aan met deadline en retries.
+ * Box status wordt pas "open/closed" als device result ok is (zie orgBoxDevice route).
  */
-const localBoxes = [
-  {
-    id: "gbox-001",
-    lifecycle: {
-      state: "closed"
-    },
-    status: {
-      door: "closed",
-      lock: "locked",
-      online: true
-    }
-  }
-];
+export async function openBox(boxId, source = "api", requestedBy = null) {
+  const ref = boxRefById(boxId);
 
-// ---------------------------------------------------------
-// Alle boxen ophalen
-// ---------------------------------------------------------
-export async function getAll() {
-  if (!runningOnCloudRun) {
-    return localBoxes;
-  }
-
-  // later uitbreidbaar
-  return [];
-}
-
-// ---------------------------------------------------------
-// Eén box ophalen
-// ---------------------------------------------------------
-export async function getById(boxId) {
-  if (!runningOnCloudRun) {
-    return localBoxes.find(b => b.id === boxId) || null;
-  }
-
-  return await getBox(boxId);
-}
-
-// ---------------------------------------------------------
-// OPEN
-// ---------------------------------------------------------
-export async function openBox(boxId, source = "api", requestedBy = "system") {
-  if (!runningOnCloudRun) {
-    console.log(`🧪 [LOCAL] OPEN ${boxId}`);
-    return { success: true };
-  }
-
-  const boxRef = firestore.collection("boxes").doc(boxId);
-  const snap = await boxRef.get();
-
-  if (!snap.exists) {
-    return { success: false, message: "Box niet gevonden" };
-  }
-
-  const nowIso = new Date().toISOString();
-
-  // 1. Lifecycle is LEIDEND
-  await boxRef.set(
+  await ref.set(
     {
-      lifecycle: {
-        state: "open",
-        openedAt: nowIso,
-        openedBy: requestedBy,
-        source
-      },
-      updatedAt: nowIso
+      status: {
+        state: "pending",
+        desired: "open",
+        updatedAt: nowMs(),
+        lastError: null
+      }
     },
     { merge: true }
   );
 
-  // 2. Command voor hardware / simulator
-  await boxRef.collection("commands").add({
-    type: "OPEN",
-    status: "pending",
+  const cmd = await commandsService.createCommand({
+    boxId,
+    type: "open",
     source,
     requestedBy,
-    createdAt: new Date(),
-    requestedAt: nowIso
+    payload: {}
   });
 
-  return { success: true };
+  return { success: true, commandId: cmd.id };
 }
 
-// ---------------------------------------------------------
-// CLOSE
-// ---------------------------------------------------------
-export async function closeBox(boxId, source = "api", requestedBy = "system") {
-  if (!runningOnCloudRun) {
-    console.log(`🧪 [LOCAL] CLOSE ${boxId}`);
-    return { success: true };
-  }
+export async function closeBox(boxId, source = "api", requestedBy = null) {
+  const ref = boxRefById(boxId);
 
-  const boxRef = firestore.collection("boxes").doc(boxId);
-  const snap = await boxRef.get();
-
-  if (!snap.exists) {
-    return { success: false, message: "Box niet gevonden" };
-  }
-
-  const nowIso = new Date().toISOString();
-
-  // 1. Lifecycle is LEIDEND
-  await boxRef.set(
+  await ref.set(
     {
-      lifecycle: {
-        state: "closed",
-        closedAt: nowIso,
-        closedBy: requestedBy,
-        source
-      },
-      updatedAt: nowIso
+      status: {
+        state: "pending",
+        desired: "close",
+        updatedAt: nowMs(),
+        lastError: null
+      }
     },
     { merge: true }
   );
 
-  // 2. Command voor hardware / simulator
-  await boxRef.collection("commands").add({
-    type: "CLOSE",
-    status: "pending",
+  const cmd = await commandsService.createCommand({
+    boxId,
+    type: "close",
     source,
     requestedBy,
-    createdAt: new Date(),
-    requestedAt: nowIso
+    payload: {}
   });
 
-  return { success: true };
+  return { success: true, commandId: cmd.id };
+}
+
+export async function setBoxFinalState(boxId, finalState, extra = {}) {
+  const ref = boxRefById(boxId);
+  await ref.set(
+    {
+      status: {
+        state: finalState, // "open" | "closed" | "error"
+        desired: null,
+        updatedAt: nowMs(),
+        ...extra
+      }
+    },
+    { merge: true }
+  );
 }
