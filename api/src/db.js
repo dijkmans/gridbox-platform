@@ -4,13 +4,18 @@ import { Firestore } from "@google-cloud/firestore";
 // Cloud Run detectie
 const runningOnCloudRun = !!process.env.K_SERVICE;
 
-let firestore = null;
-if (runningOnCloudRun) {
-  firestore = new Firestore();
+// Gebruik Firestore als we op Cloud Run zitten of als de emulator actief is
+const useFirestore = runningOnCloudRun || !!process.env.FIRESTORE_EMULATOR_HOST;
+
+// Named export die andere files kunnen importeren
+export let db = null;
+
+if (useFirestore) {
+  db = new Firestore();
 }
 
 // ----------------------------------------------------
-// Lokale mock data (enkel lokaal, Cloud Run gebruikt Firestore)
+// Lokale mock data (enkel lokaal, Cloud Run of emulator gebruikt Firestore)
 // ----------------------------------------------------
 const localBoxes = new Map([
   [
@@ -21,9 +26,9 @@ const localBoxes = new Map([
       number: 1,
       status: "online",
       description: "Gridbox Heist #1 (lokale mock)",
-      cameraEnabled: true,
-    },
-  ],
+      cameraEnabled: true
+    }
+  ]
 ]);
 
 const localShares = [];
@@ -46,7 +51,7 @@ function normalizeShare(raw) {
   return {
     ...raw,
     boxId,
-    phone,
+    phone
   };
 }
 
@@ -54,12 +59,12 @@ function normalizeShare(raw) {
 // BOXES
 // ----------------------------------------------------
 export async function getBox(boxId) {
-  if (!firestore) {
+  if (!db) {
     const box = localBoxes.get(boxId);
     return box ? { ...box } : null;
   }
 
-  const doc = await firestore.collection("boxes").doc(boxId).get();
+  const doc = await db.collection("boxes").doc(boxId).get();
   if (!doc.exists) return null;
 
   return { id: doc.id, ...doc.data() };
@@ -69,13 +74,13 @@ export async function getBox(boxId) {
 // SHARES
 // ----------------------------------------------------
 export async function listSharesForBox(boxId) {
-  if (!firestore) {
+  if (!db) {
     return localShares
       .map((s) => normalizeShare(s))
       .filter((s) => s.boxId === boxId && isActiveShare(s));
   }
 
-  const snap = await firestore
+  const snap = await db
     .collection("shares")
     .where("boxId", "==", boxId)
     .limit(50)
@@ -91,21 +96,21 @@ export async function createShare({ boxId, phone }) {
     boxId,
     phone,
     active: true,
-    createdAt: new Date().toISOString(),
+    createdAt: new Date().toISOString()
   };
 
-  if (!firestore) {
+  if (!db) {
     const local = { id: `mock-${localShares.length + 1}`, ...share };
     localShares.push(local);
     return local;
   }
 
-  const ref = await firestore.collection("shares").add(share);
+  const ref = await db.collection("shares").add(share);
   return { id: ref.id, ...share };
 }
 
 export async function findActiveShare(boxId, phone) {
-  if (!firestore) {
+  if (!db) {
     return (
       localShares
         .map((s) => normalizeShare(s))
@@ -114,7 +119,7 @@ export async function findActiveShare(boxId, phone) {
     );
   }
 
-  const snap = await firestore
+  const snap = await db
     .collection("shares")
     .where("boxId", "==", boxId)
     .where("phone", "==", phone)
@@ -128,7 +133,7 @@ export async function findActiveShare(boxId, phone) {
   if (matches.length > 0) return matches[0];
 
   // fallback: oude veldnaam phoneNumber
-  const snap2 = await firestore
+  const snap2 = await db
     .collection("shares")
     .where("boxId", "==", boxId)
     .where("phoneNumber", "==", phone)
@@ -143,7 +148,7 @@ export async function findActiveShare(boxId, phone) {
 }
 
 export async function findActiveShareByPhone(phone) {
-  if (!firestore) {
+  if (!db) {
     return (
       localShares
         .map((s) => normalizeShare(s))
@@ -153,7 +158,7 @@ export async function findActiveShareByPhone(phone) {
 
   const results = [];
 
-  const snap1 = await firestore
+  const snap1 = await db
     .collection("shares")
     .where("phone", "==", phone)
     .limit(20)
@@ -161,7 +166,7 @@ export async function findActiveShareByPhone(phone) {
 
   snap1.docs.forEach((d) => results.push(normalizeShare({ id: d.id, ...d.data() })));
 
-  const snap2 = await firestore
+  const snap2 = await db
     .collection("shares")
     .where("phoneNumber", "==", phone)
     .limit(20)
