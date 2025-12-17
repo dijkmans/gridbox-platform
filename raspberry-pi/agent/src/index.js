@@ -1,3 +1,5 @@
+console.log("### INDEX.JS WORDT GELADEN ###");
+
 // raspberry-pi/agent/src/index.js
 
 import { startAgent } from "./agent.js";
