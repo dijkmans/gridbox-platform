@@ -1,32 +1,32 @@
 // api/src/routes/boxes.js
 import { Router } from "express";
 import * as boxesService from "../services/boxesService.js";
-import { db } from "../firebase.js";
-import {
-  doc,
-  getDoc,
-  setDoc,
-  deleteDoc,
-  serverTimestamp
-} from "firebase/firestore";
+import admin from "firebase-admin";
 
 const router = Router();
 
-// ======================================================
-// COMMANDS (Firestore is single source of truth)
-// ======================================================
+// ------------------------------------------------------
+// Firestore (via firebase-admin)
+// ------------------------------------------------------
+
+const db = admin.firestore();
+
+// ------------------------------------------------------
+// COMMANDS (Firestore based, backend-safe)
+// ------------------------------------------------------
 
 /**
  * GET /api/boxes/:boxId/commands
- * Agent haalt huidig command op
+ * Geeft huidig pending command terug of null
  */
 router.get("/:boxId/commands", async (req, res) => {
   try {
     const { boxId } = req.params;
-    const ref = doc(db, "boxCommands", boxId);
-    const snap = await getDoc(ref);
 
-    if (!snap.exists()) {
+    const ref = db.collection("boxCommands").doc(boxId);
+    const snap = await ref.get();
+
+    if (!snap.exists) {
       return res.json(null);
     }
 
@@ -39,12 +39,14 @@ router.get("/:boxId/commands", async (req, res) => {
 
 /**
  * POST /api/boxes/:boxId/commands/:commandId/ack
- * Agent bevestigt uitvoering, command wordt verwijderd
+ * Verwijdert command na uitvoering door agent
  */
 router.post("/:boxId/commands/:commandId/ack", async (req, res) => {
   try {
     const { boxId } = req.params;
-    await deleteDoc(doc(db, "boxCommands", boxId));
+
+    await db.collection("boxCommands").doc(boxId).delete();
+
     res.json({ ok: true });
   } catch (err) {
     console.error("Command ack error:", err);
@@ -52,17 +54,18 @@ router.post("/:boxId/commands/:commandId/ack", async (req, res) => {
   }
 });
 
-// ======================================================
+// ------------------------------------------------------
 // BOX ROUTES
-// ======================================================
+// ------------------------------------------------------
 
 /**
  * GET /api/boxes
  */
 router.get("/", async (req, res) => {
   try {
-    res.json(await boxesService.getAll());
-  } catch {
+    const boxes = await boxesService.getAll();
+    res.json(boxes);
+  } catch (err) {
     res.status(500).json({ error: "Interne serverfout" });
   }
 });
@@ -77,26 +80,31 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ error: "Box niet gevonden" });
     }
     res.json(box);
-  } catch {
+  } catch (err) {
     res.status(500).json({ error: "Interne serverfout" });
   }
 });
 
 /**
  * POST /api/boxes/:id/open
- * Maakt OPEN command aan in Firestore
+ * Zet OPEN command in Firestore
  */
 router.post("/:id/open", async (req, res) => {
   try {
     const { id } = req.params;
 
-    await setDoc(doc(db, "boxCommands", id), {
-      id: `cmd-${Date.now()}`,
+    await db.collection("boxCommands").doc(id).set({
+      commandId: `cmd-${Date.now()}`,
       type: "open",
-      createdAt: serverTimestamp()
+      status: "pending",
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    res.json({ ok: true, command: "open", boxId: id });
+    res.json({
+      ok: true,
+      command: "open",
+      boxId: id
+    });
   } catch (err) {
     console.error("Open command error:", err);
     res.status(500).json({ error: "Interne serverfout" });
@@ -105,19 +113,24 @@ router.post("/:id/open", async (req, res) => {
 
 /**
  * POST /api/boxes/:id/close
- * Maakt CLOSE command aan in Firestore
+ * Zet CLOSE command in Firestore
  */
 router.post("/:id/close", async (req, res) => {
   try {
     const { id } = req.params;
 
-    await setDoc(doc(db, "boxCommands", id), {
-      id: `cmd-${Date.now()}`,
+    await db.collection("boxCommands").doc(id).set({
+      commandId: `cmd-${Date.now()}`,
       type: "close",
-      createdAt: serverTimestamp()
+      status: "pending",
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    res.json({ ok: true, command: "close", boxId: id });
+    res.json({
+      ok: true,
+      command: "close",
+      boxId: id
+    });
   } catch (err) {
     console.error("Close command error:", err);
     res.status(500).json({ error: "Interne serverfout" });
