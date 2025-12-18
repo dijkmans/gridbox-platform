@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { getFirestore } from "firebase-admin/firestore";
+import { buildShareSms } from "../utils/shareMessages.js";
 
 const router = Router();
 const db = getFirestore();
@@ -20,12 +21,11 @@ router.post("/", async (req, res) => {
     if (
       !phone ||
       boxNumber === undefined ||
-      !boxId ||
-      !expiresAt
+      !boxId
     ) {
       return res.status(400).json({
         ok: false,
-        message: "phone, boxNumber, boxId en expiresAt zijn verplicht"
+        message: "phone, boxNumber en boxId zijn verplicht"
       });
     }
 
@@ -37,19 +37,23 @@ router.post("/", async (req, res) => {
       active: true,
 
       createdAt: new Date().toISOString(),
-      expiresAt,
+      expiresAt: expiresAt || null,
 
-      warningSent: false
+      warnedAt: null
     };
 
-    const docRef = await db.collection("shares").add(share);
+    const docRef = await db
+      .collection("shares")
+      .add(share);
 
-    const smsText =
-      `Gridbox ${boxNumber} is met u gedeeld. ` +
-      `U kan deze Gridbox gebruiken tot ${new Date(expiresAt).toLocaleString("nl-BE")}. ` +
-      `Antwoord met OPEN ${boxNumber} om te openen.`;
+    // 👉 ENIGE BRON VAN WAARHEID VOOR SHARE-SMS
+    const smsText = buildShareSms({
+      boxNumber: Number(boxNumber),
+      expiresAt: expiresAt || null
+    });
 
-    console.log("📤 SHARE SMS (simulatie):", {
+    // In productie wordt dit via smsAdapter verstuurd
+    console.log("📤 SHARE SMS:", {
       to: phone,
       message: smsText
     });
