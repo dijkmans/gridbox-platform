@@ -4,7 +4,7 @@ import * as sharesService from "../services/sharesService.js";
 
 const router = Router();
 
-// Zorg dat deze route altijd bodies kan lezen
+// bodies kunnen lezen (Twilio + JSON providers)
 router.use(urlencoded({ extended: false }));
 router.use(json());
 
@@ -23,12 +23,11 @@ function normalizePhone(number) {
 }
 
 function isValidE164(number) {
-  if (!number) return false;
-  return /^\+[1-9]\d{7,14}$/.test(number);
+  return /^\+[1-9]\d{7,14}$/.test(number || "");
 }
 
 /**
- * XML escapen (voor Twilio)
+ * XML escapen (alleen nodig voor Twilio)
  */
 function escapeXml(str) {
   return String(str || "")
@@ -40,37 +39,30 @@ function escapeXml(str) {
 }
 
 /**
- * XML entities decoden (voor SMS demo)
+ * Antwoord versturen
+ * - Twilio → TwiML (XML)
+ * - andere providers → JSON
  */
-function decodeHtmlEntities(str) {
-  return String(str || "")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&");
-}
+function sendResponse(req, res, message) {
+  // message is ALTIJD pure tekst (bv: OPEN <nummer>)
+  const isTwilio =
+    req.headers["x-twilio-signature"] ||
+    req.is("application/x-www-form-urlencoded");
 
-/**
- * Antwoord helper
- * - JSON voor simulator
- * - XML voor Twilio
- */
-function sendResponse(res, message, isSimulator) {
-  if (isSimulator) {
-    return res.status(200).json({
-      reply: decodeHtmlEntities(message)
-    });
+  if (isTwilio) {
+    const safe = escapeXml(message);
+    return res
+      .status(200)
+      .type("text/xml")
+      .send(`<Response><Message>${safe}</Message></Response>`);
   }
 
-  const safe = escapeXml(message);
-
-  return res
-    .status(200)
-    .type("text/xml")
-    .send(`<Response><Message>${safe}</Message></Response>`);
+  // generiek / future-proof
+  return res.status(200).json({ message });
 }
 
 /**
- * Parse "open 3", "close 10"
+ * Commando parser
  */
 function parseCommand(rawBody) {
   const parts = String(rawBody || "")
@@ -86,22 +78,18 @@ function parseCommand(rawBody) {
 }
 
 /**
- * Controleert of een share effectief geblokkeerd is
+ * Share blokkering check
  */
 function isShareBlocked(share) {
-  if (!share || !share.blockedAt) return false;
+  if (!share?.blockedAt) return false;
 
   const now = new Date();
 
   try {
-    if (typeof share.blockedAt?.toDate === "function") {
+    if (typeof share.blockedAt.toDate === "function") {
       return now >= share.blockedAt.toDate();
     }
-
-    const blockedAt = new Date(share.blockedAt);
-    if (isNaN(blockedAt.getTime())) return false;
-
-    return now >= blockedAt;
+    return now >= new Date(share.blockedAt);
   } catch {
     return false;
   }
@@ -109,13 +97,10 @@ function isShareBlocked(share) {
 
 /**
  * POST /api/sms
+ * Eén endpoint, productie-waardig
  */
 router.post("/", async (req, res) => {
   try {
-    const isSimulator =
-      req.headers["x-simulator"] === "true" ||
-      req.is("application/json");
-
     const rawFrom =
       req.body?.From ??
       req.body?.from ??
@@ -131,24 +116,24 @@ router.post("/", async (req, res) => {
     const from = normalizePhone(rawFrom);
     const body = String(rawBody || "").trim();
 
-    console.log("📩 SMS inbound:", { from, body, simulator: isSimulator });
+    console.log("📩 SMS inbound:", { from, body });
 
     if (!from || !isValidE164(from)) {
-      return sendResponse(res, "Ongeldig nummer.", isSimulator);
+      return sendResponse(req, res, "Ongeldig nummer.");
     }
 
     const { command, arg } = parseCommand(body);
 
-    // SMS-CONTRACT: altijd nummer verplicht
+    // SMS-CONTRACT: nummer is altijd verplicht
     if (
       !["open", "close"].includes(command) ||
       !arg ||
       !/^\d+$/.test(arg)
     ) {
       return sendResponse(
+        req,
         res,
-        "Gebruik: OPEN <nummer> of CLOSE <nummer>.",
-        isSimulator
+        "Gebruik: OPEN <nummer> of CLOSE <nummer>."
       );
     }
 
@@ -158,24 +143,24 @@ router.post("/", async (req, res) => {
 
     if (!share) {
       return sendResponse(
+        req,
         res,
-        "Geen toegang. Gebruik: OPEN <nummer> of CLOSE <nummer>.",
-        isSimulator
+        "Geen toegang. Gebruik: OPEN <nummer> of CLOSE <nummer>."
       );
     }
 
     if (isShareBlocked(share)) {
       return sendResponse(
+        req,
         res,
-        `Uw toegang tot Gridbox ${boxNr} is verlopen.`,
-        isSimulator
+        `Uw toegang tot Gridbox ${boxNr} is verlopen.`
       );
     }
 
     const box = await boxesService.getById(share.boxId);
 
     if (!box) {
-      return sendResponse(res, "Gridbox niet gevonden.", isSimulator);
+      return sendResponse(req, res, "Gridbox niet gevonden.");
     }
 
     if (command === "open") {
@@ -185,18 +170,18 @@ router.post("/", async (req, res) => {
         from
       );
 
-      if (!result || !result.success) {
+      if (!result?.success) {
         return sendResponse(
+          req,
           res,
-          `Gridbox ${boxNr} kan niet worden geopend.`,
-          isSimulator
+          `Gridbox ${boxNr} kan niet worden geopend.`
         );
       }
 
       return sendResponse(
+        req,
         res,
-        `Gridbox ${boxNr} wordt geopend.`,
-        isSimulator
+        `Gridbox ${boxNr} wordt geopend.`
       );
     }
 
@@ -207,30 +192,25 @@ router.post("/", async (req, res) => {
         from
       );
 
-      if (!result || !result.success) {
+      if (!result?.success) {
         return sendResponse(
+          req,
           res,
-          `Gridbox ${boxNr} kan niet worden gesloten.`,
-          isSimulator
+          `Gridbox ${boxNr} kan niet worden gesloten.`
         );
       }
 
       return sendResponse(
+        req,
         res,
-        `Gridbox ${boxNr} wordt gesloten.`,
-        isSimulator
+        `Gridbox ${boxNr} wordt gesloten.`
       );
     }
 
     return res.sendStatus(200);
   } catch (err) {
     console.error("❌ smsWebhook error:", err);
-
-    return sendResponse(
-      res,
-      "Er ging iets mis.",
-      req.headers["x-simulator"] === "true"
-    );
+    return sendResponse(req, res, "Er ging iets mis.");
   }
 });
 
