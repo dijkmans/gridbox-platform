@@ -10,9 +10,6 @@ router.use(json());
 
 /**
  * Telefoonnummer normaliseren
- * - verwijdert spaties
- * - 00... -> +...
- * - 0... (BE) -> +32...
  */
 function normalizePhone(number) {
   if (!number) return null;
@@ -31,7 +28,7 @@ function isValidE164(number) {
 }
 
 /**
- * XML escapen (TwiML)
+ * XML escapen (voor Twilio)
  */
 function escapeXml(str) {
   return String(str || "")
@@ -43,13 +40,25 @@ function escapeXml(str) {
 }
 
 /**
+ * XML entities decoden (voor SMS demo)
+ */
+function decodeHtmlEntities(str) {
+  return String(str || "")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+/**
  * Antwoord helper
- * - JSON voor simulator / interne clients
+ * - JSON voor simulator
  * - XML voor Twilio
  */
 function sendResponse(res, message, isSimulator) {
   if (isSimulator) {
-    return res.status(200).json({ reply: message });
+    return res.status(200).json({
+      reply: decodeHtmlEntities(message)
+    });
   }
 
   const safe = escapeXml(message);
@@ -100,18 +109,13 @@ function isShareBlocked(share) {
 
 /**
  * POST /api/sms
- * Enige ingang voor:
- * - SMS simulator (JSON + X-Simulator header)
- * - Twilio (form-urlencoded)
  */
 router.post("/", async (req, res) => {
   try {
-    // 0. Kanaal bepalen
     const isSimulator =
       req.headers["x-simulator"] === "true" ||
       req.is("application/json");
 
-    // 1. Input normaliseren
     const rawFrom =
       req.body?.From ??
       req.body?.from ??
@@ -127,22 +131,15 @@ router.post("/", async (req, res) => {
     const from = normalizePhone(rawFrom);
     const body = String(rawBody || "").trim();
 
-    console.log("📩 SMS inbound:", {
-      from,
-      body,
-      simulator: isSimulator
-    });
+    console.log("📩 SMS inbound:", { from, body, simulator: isSimulator });
 
-    // Nummer check
     if (!from || !isValidE164(from)) {
       return sendResponse(res, "Ongeldig nummer.", isSimulator);
     }
 
-    // 2. Commando parsen
     const { command, arg } = parseCommand(body);
 
-    // 3. SMS-CONTRACT afdwingen
-    // Alleen OPEN <nummer> of CLOSE <nummer> is geldig
+    // SMS-CONTRACT: altijd nummer verplicht
     if (
       !["open", "close"].includes(command) ||
       !arg ||
@@ -167,7 +164,6 @@ router.post("/", async (req, res) => {
       );
     }
 
-    // 4. Blokkering controleren
     if (isShareBlocked(share)) {
       return sendResponse(
         res,
@@ -176,14 +172,12 @@ router.post("/", async (req, res) => {
       );
     }
 
-    // 5. Box ophalen
     const box = await boxesService.getById(share.boxId);
 
     if (!box) {
       return sendResponse(res, "Gridbox niet gevonden.", isSimulator);
     }
 
-    // 6. OPEN
     if (command === "open") {
       const result = await boxesService.openBox(
         share.boxId,
@@ -206,7 +200,6 @@ router.post("/", async (req, res) => {
       );
     }
 
-    // 7. CLOSE
     if (command === "close") {
       const result = await boxesService.closeBox(
         share.boxId,
