@@ -43,8 +43,41 @@ function escapeXml(str) {
 }
 
 /**
+ * Antwoord helper
+ * - JSON voor simulator / interne clients
+ * - XML voor Twilio
+ */
+function sendResponse(res, message, isSimulator) {
+  if (isSimulator) {
+    return res.status(200).json({ reply: message });
+  }
+
+  const safe = escapeXml(message);
+
+  return res
+    .status(200)
+    .type("text/xml")
+    .send(`<Response><Message>${safe}</Message></Response>`);
+}
+
+/**
+ * Parse "open 3", "close 10"
+ */
+function parseCommand(rawBody) {
+  const parts = String(rawBody || "")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return {
+    command: parts[0] || "",
+    arg: parts[1] || ""
+  };
+}
+
+/**
  * Controleert of een share effectief geblokkeerd is
- * (enkel op basis van blockedAt)
  */
 function isShareBlocked(share) {
   if (!share || !share.blockedAt) return false;
@@ -66,63 +99,6 @@ function isShareBlocked(share) {
 }
 
 /**
- * Antwoord helper
- * - JSON voor simulator / interne clients
- * - XML voor Twilio
- */
-function sendResponse(res, message, isSimulator) {
-  if (isSimulator) {
-    return res.status(200).json({ reply: message });
-  }
-
-  const safe = escapeXml(message);
-
-  return res
-    .status(200)
-    .type("text/xml")
-    .send(`<Response><Message>${safe}</Message></Response>`);
-}
-
-/**
- * Parse "open", "close", "open 2", "close 10"
- */
-function parseCommand(rawBody) {
-  const parts = String(rawBody || "")
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  return {
-    command: parts[0] || "",
-    arg: parts[1] || ""
-  };
-}
-
-/**
- * Zonder boxNr: zoek automatisch een actieve share door boxnummers te scannen.
- * Max aantal te scannen boxes via env: SMS_BOX_SCAN_MAX (default 20)
- */
-async function findFirstActiveShareByPhone(from) {
-  const max = Number(process.env.SMS_BOX_SCAN_MAX || 20);
-  const scanMax = Number.isFinite(max) && max > 0 ? Math.min(max, 200) : 20;
-
-  for (let i = 1; i <= scanMax; i++) {
-    // eslint-disable-next-line no-await-in-loop
-    const share = await sharesService.findActiveShareByPhoneAndBoxNumber(
-      from,
-      String(i)
-    );
-
-    if (share) {
-      return { share, boxNr: String(i) };
-    }
-  }
-
-  return { share: null, boxNr: null };
-}
-
-/**
  * POST /api/sms
  * Enige ingang voor:
  * - SMS simulator (JSON + X-Simulator header)
@@ -130,7 +106,6 @@ async function findFirstActiveShareByPhone(from) {
  */
 router.post("/", async (req, res) => {
   try {
-    //ा
     // 0. Kanaal bepalen
     const isSimulator =
       req.headers["x-simulator"] === "true" ||
@@ -158,7 +133,7 @@ router.post("/", async (req, res) => {
       simulator: isSimulator
     });
 
-    // From check
+    // Nummer check
     if (!from || !isValidE164(from)) {
       return sendResponse(res, "Ongeldig nummer.", isSimulator);
     }
@@ -166,30 +141,25 @@ router.post("/", async (req, res) => {
     // 2. Commando parsen
     const { command, arg } = parseCommand(body);
 
-    if (!["open", "close"].includes(command)) {
+    // 3. SMS-CONTRACT afdwingen
+    // Alleen OPEN <nummer> of CLOSE <nummer> is geldig
+    if (
+      !["open", "close"].includes(command) ||
+      !arg ||
+      !/^\d+$/.test(arg)
+    ) {
       return sendResponse(
         res,
-        "Gebruik: OPEN of CLOSE. Optioneel: OPEN <nummer> of CLOSE <nummer>.",
+        "Gebruik: OPEN <nummer> of CLOSE <nummer>.",
         isSimulator
       );
     }
 
-    // 3. BoxNr en Share bepalen
-    let boxNr = null;
-    let share = null;
+    const boxNr = String(Number(arg));
+    const share =
+      await sharesService.findActiveShareByPhoneAndBoxNumber(from, boxNr);
 
-    // Als user een nummer meegeeft: gebruik dat
-    if (arg && /^\d+$/.test(arg)) {
-      boxNr = String(Number(arg)); // "02" -> "2"
-      share = await sharesService.findActiveShareByPhoneAndBoxNumber(from, boxNr);
-    } else {
-      // Geen nummer: zoek automatisch
-      const found = await findFirstActiveShareByPhone(from);
-      share = found.share;
-      boxNr = found.boxNr;
-    }
-
-    if (!share || !boxNr) {
+    if (!share) {
       return sendResponse(
         res,
         "Geen toegang. Gebruik: OPEN <nummer> of CLOSE <nummer>.",
@@ -215,7 +185,11 @@ router.post("/", async (req, res) => {
 
     // 6. OPEN
     if (command === "open") {
-      const result = await boxesService.openBox(share.boxId, "sms", from);
+      const result = await boxesService.openBox(
+        share.boxId,
+        "sms",
+        from
+      );
 
       if (!result || !result.success) {
         return sendResponse(
@@ -225,12 +199,20 @@ router.post("/", async (req, res) => {
         );
       }
 
-      return sendResponse(res, `Gridbox ${boxNr} wordt geopend.`, isSimulator);
+      return sendResponse(
+        res,
+        `Gridbox ${boxNr} wordt geopend.`,
+        isSimulator
+      );
     }
 
     // 7. CLOSE
     if (command === "close") {
-      const result = await boxesService.closeBox(share.boxId, "sms", from);
+      const result = await boxesService.closeBox(
+        share.boxId,
+        "sms",
+        from
+      );
 
       if (!result || !result.success) {
         return sendResponse(
@@ -240,7 +222,11 @@ router.post("/", async (req, res) => {
         );
       }
 
-      return sendResponse(res, `Gridbox ${boxNr} wordt gesloten.`, isSimulator);
+      return sendResponse(
+        res,
+        `Gridbox ${boxNr} wordt gesloten.`,
+        isSimulator
+      );
     }
 
     return res.sendStatus(200);
@@ -256,4 +242,3 @@ router.post("/", async (req, res) => {
 });
 
 export default router;
-
