@@ -491,8 +491,48 @@
               <span id="kvAddress">-</span><span class="hint">(adres)</span>
             </div>
 
+            <div class="muted">Actief</div>
+            <div title="Portal.active uit Firestore.">
+              <span id="kvActive">-</span><span class="hint">(portal)</span>
+            </div>
+
+            <div class="muted">24/7</div>
+            <div title="box.access24h uit Firestore.">
+              <span id="kvAccess24h">-</span><span class="hint">(toegang)</span>
+            </div>
+
+            <div class="muted">Type</div>
+            <div title="box.type uit Firestore.">
+              <span id="kvType">-</span><span class="hint">(box)</span>
+            </div>
+
+            <div class="muted">Beschrijving</div>
+            <div title="box.description uit Firestore.">
+              <span id="kvDescription">-</span><span class="hint">(box)</span>
+            </div>
+
+            <div class="muted">Lifecycle</div>
+            <div title="lifecycle.state uit Firestore.">
+              <span id="kvLifecycleState">-</span><span class="hint">(open of closed)</span>
+            </div>
+
+            <div class="muted">Opened</div>
+            <div title="lifecycle.openedAt en openedBy.">
+              <span id="kvOpened">-</span><span class="hint">(tijd en nr)</span>
+            </div>
+
+            <div class="muted">Closed</div>
+            <div title="lifecycle.closedAt en closedBy.">
+              <span id="kvClosed">-</span><span class="hint">(tijd en nr)</span>
+            </div>
+
+            <div class="muted">Source</div>
+            <div title="lifecycle.source uit Firestore.">
+              <span id="kvSource">-</span><span class="hint">(bv sms)</span>
+            </div>
+
             <div class="muted">Agent</div>
-            <div title="Versie van de controller software in deze box.">
+            <div title="Versie of naam van de controller software in deze box.">
               <span id="kvAgent">-</span><span class="hint">(software)</span>
             </div>
 
@@ -509,6 +549,11 @@
             <div class="muted">Online</div>
             <div title="Online is recent contact. Offline is langer geen contact.">
               <span id="kvStatus" class="status-pill">-</span><span class="hint">(verbinding)</span>
+            </div>
+
+            <div class="muted">Geo</div>
+            <div title="location.geo uit Firestore.">
+              <span id="kvGeo">-</span><span class="hint">(coordinaten)</span>
             </div>
           </div>
 
@@ -592,7 +637,8 @@
 
   <script>
     (function(){
-const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
+      const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
+
       const apiUrl = (path) => {
         const base = (API_BASE || "").replace(/\/$/,"");
         return base + path;
@@ -705,21 +751,115 @@ const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
       }
 
       function pickCustomer(box){
-        return pick(box, ['organisation.name', 'customer']) ?? null;
+        return pick(box, [
+          'Portal.Customer',
+          'portal.customer',
+          'organisation.name',
+          'organization.name',
+          'customer'
+        ]) ?? null;
       }
 
       function pickSite(box){
-        return pick(box, ['site.name', 'site.code', 'site']) ?? null;
+        return pick(box, [
+          'Portal.Site',
+          'portal.site',
+          'site.name',
+          'site.code',
+          'site'
+        ]) ?? null;
       }
 
       function pickBoxNumber(box){
-        return pick(box, ['box.number', 'boxNumber']) ?? null;
+        return pick(box, [
+          'Portal.BoxNumber',
+          'portal.boxNumber',
+          'box.number',
+          'boxNumber'
+        ]) ?? null;
+      }
+
+      function pickActive(box){
+        const v = pick(box, ['Portal.active','portal.active','active']);
+        if (v === true) return 'ja';
+        if (v === false) return 'nee';
+        return fmtMaybe(v);
+      }
+
+      function pickAccess24h(box){
+        const v = pick(box, ['box.access24h','box.access_24h','access24h','Portal.access24h','portal.access24h']);
+        if (v === true) return 'ja';
+        if (v === false) return 'nee';
+        return fmtMaybe(v);
+      }
+
+      function pickBoxType(box){
+        return pick(box, ['box.type','Portal.type','portal.type','type','hardwareProfile','Profile','profile']) ?? null;
+      }
+
+      function pickBoxDescription(box){
+        return pick(box, ['box.description','Portal.description','portal.description','description']) ?? null;
+      }
+
+      function pickLifecycleState(box){
+        return pick(box, ['lifecycle.state','lifecycle.status','state','status']) ?? null;
+      }
+
+      function pickLifecycleOpenedAt(box){
+        return pick(box, ['lifecycle.openedAt','lifecycle.opened_at','openedAt']) ?? null;
+      }
+
+      function pickLifecycleOpenedBy(box){
+        return pick(box, ['lifecycle.openedBy','lifecycle.opened_by','openedBy']) ?? null;
+      }
+
+      function pickLifecycleClosedAt(box){
+        return pick(box, ['lifecycle.closedAt','lifecycle.closed_at','closedAt']) ?? null;
+      }
+
+      function pickLifecycleClosedBy(box){
+        return pick(box, ['lifecycle.closedBy','lifecycle.closed_by','closedBy']) ?? null;
+      }
+
+      function pickLifecycleSource(box){
+        return pick(box, ['lifecycle.source','source']) ?? null;
+      }
+
+      function pickGeo(box){
+        const v = pick(box, ['location.geo','location.geopoint','location.geoPoint','geo','geoPoint']);
+        if (!v) return null;
+        if (typeof v === 'string') return v;
+        if (typeof v === 'object'){
+          const lat = v.latitude ?? v._latitude;
+          const lng = v.longitude ?? v._longitude;
+          if (lat !== undefined && lng !== undefined) return `${lat}, ${lng}`;
+        }
+        return fmtMaybe(v);
+      }
+
+      function pickAgent(box){
+        return pick(box, [
+          'Agent',
+          'agent',
+          'agent.version',
+          'agentVersion',
+          'softwareVersion'
+        ]) ?? null;
+      }
+
+      function pickProfile(box){
+        return pick(box, [
+          'Profile',
+          'profile',
+          'hardwareProfile',
+          'box.type'
+        ]) ?? null;
       }
 
       function buildAddressFromBox(box){
         const street = pick(box, ['location.street']) ?? '';
         const number = pick(box, ['location.number']) ?? '';
-        const postCode = pick(box, ['location.postCode']) ?? '';
+        const postCode = pick(box, ['location.postalCode','location.postCode','location.postcode']) ?? '';
         const city = pick(box, ['location.city']) ?? '';
 
         let line1 = `${street} ${number}`.trim();
@@ -787,14 +927,14 @@ const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
         const site = fmtMaybe(sitePicked);
         const boxNumber = fmtMaybe(boxNrPicked);
 
-        const agent = box.agentVersion ?? null;
-        const profile = box.hardwareProfile ?? null;
+        const agent = pickAgent(box);
+        const profile = pickProfile(box);
 
-        const lastSeen = box.lastSeenMinutes ?? null;
+        const lastSeen = pick(box, ['lastSeenMinutes','last_seen_minutes','lastSeen']) ?? null;
         const lastSeenNum = (lastSeen === null || lastSeen === undefined) ? NaN : Number(lastSeen);
         const s = computeOnlineStateFromMinutes(lastSeenNum);
 
-        const sharesCount = box.sharesCount ?? null;
+        const sharesCount = pick(box, ['sharesCount','shares_count']) ?? null;
 
         const phones = Array.isArray(box.phones) ? box.phones : [];
         const phonesAttr = buildPhonesDataAttr(phones);
@@ -802,9 +942,23 @@ const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
 
         const address = buildAddressFromBox(box);
 
+        const active = pickActive(box);
+        const access24h = pickAccess24h(box);
+        const bType = fmtMaybe(pickBoxType(box));
+        const bDesc = fmtMaybe(pickBoxDescription(box));
+        const lcState = fmtMaybe(pickLifecycleState(box));
+        const openedAt = fmtMaybe(pickLifecycleOpenedAt(box));
+        const openedBy = fmtMaybe(pickLifecycleOpenedBy(box));
+        const closedAt = fmtMaybe(pickLifecycleClosedAt(box));
+        const closedBy = fmtMaybe(pickLifecycleClosedBy(box));
+        const lcSource = fmtMaybe(pickLifecycleSource(box));
+        const geo = fmtMaybe(pickGeo(box));
+
         const card = document.createElement('article');
         card.className = 'gb-card';
-        if ((box.status || '').toLowerCase() === 'open') card.classList.add('is-open');
+
+        const statusVal = String(pickLifecycleState(box) ?? pick(box, ['status','state']) ?? '').toLowerCase();
+        if (statusVal === 'open') card.classList.add('is-open');
 
         card.setAttribute('data-id', id);
         card.setAttribute('data-site', site === '-' ? '' : site);
@@ -816,6 +970,18 @@ const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
 
         card.setAttribute('data-customer', customer ?? '');
         card.setAttribute('data-address', address ?? '');
+
+        card.setAttribute('data-active', active ?? '');
+        card.setAttribute('data-access24h', access24h ?? '');
+        card.setAttribute('data-type', bType ?? '');
+        card.setAttribute('data-desc', bDesc ?? '');
+        card.setAttribute('data-lifecycle-state', lcState ?? '');
+        card.setAttribute('data-opened-at', openedAt ?? '');
+        card.setAttribute('data-opened-by', openedBy ?? '');
+        card.setAttribute('data-closed-at', closedAt ?? '');
+        card.setAttribute('data-closed-by', closedBy ?? '');
+        card.setAttribute('data-source', lcSource ?? '');
+        card.setAttribute('data-geo', geo ?? '');
 
         const toggleLabel = card.classList.contains('is-open') ? 'CLOSE' : 'OPEN';
 
@@ -831,9 +997,9 @@ const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
 
             <div class="gb-meta">
               <span class="pill ${s.cls}" title="Op basis van last seen"><span class="dot"></span><span>${escapeHtml(s.label)}</span></span>
-              <span class="pill ghost" title="Controller software versie">v ${escapeHtml(agent || '-')}</span>
-              <span class="pill ghost" title="Hardware profiel">${escapeHtml(profile || '-')}</span>
-              <span class="pill ghost" title="Aantal actieve shares">shares ${escapeHtml(sharesCount === null ? '-' : sharesCount)}</span>
+              <span class="pill ghost" title="Portal.active">active ${escapeHtml(active || '-')}</span>
+              <span class="pill ghost" title="box.access24h">24/7 ${escapeHtml(access24h || '-')}</span>
+              <span class="pill ghost" title="box.type">${escapeHtml(bType || '-')}</span>
             </div>
 
             <ul class="gb-phones">
@@ -923,6 +1089,11 @@ const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
           throw new Error(payload.error || 'Interne serverfout');
         }
         return payload;
+      }
+
+      function openLink(path){
+        const url = apiUrl(path);
+        window.open(url, '_blank', 'noopener');
       }
 
       const customerFilter = document.getElementById('customerFilter');
@@ -1031,6 +1202,17 @@ const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
       const kvSite    = document.getElementById('kvSite');
       const kvBox     = document.getElementById('kvBox');
       const kvAddress = document.getElementById('kvAddress');
+
+      const kvActive  = document.getElementById('kvActive');
+      const kvAccess24h = document.getElementById('kvAccess24h');
+      const kvType    = document.getElementById('kvType');
+      const kvDescription = document.getElementById('kvDescription');
+      const kvLifecycleState = document.getElementById('kvLifecycleState');
+      const kvOpened  = document.getElementById('kvOpened');
+      const kvClosed  = document.getElementById('kvClosed');
+      const kvSource  = document.getElementById('kvSource');
+      const kvGeo     = document.getElementById('kvGeo');
+
       const kvAgent   = document.getElementById('kvAgent');
       const kvProfile = document.getElementById('kvProfile');
       const kvSeen    = document.getElementById('kvSeen');
@@ -1143,6 +1325,14 @@ const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
         side.scrollTo({ top, behavior:'smooth' });
       }
 
+      function fmtLifecycleLine(at, by){
+        const a = (at && at !== '-') ? at : '';
+        const b = (by && by !== '-') ? by : '';
+        if (!a && !b) return '-';
+        if (a && b) return a + ' (' + b + ')';
+        return a || b;
+      }
+
       function updateSideFromCard(card, contextLabel){
         currentCard = card;
         selectCard(card);
@@ -1161,7 +1351,24 @@ const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
         kvSite.textContent = siteName || '-';
         kvBox.textContent = '# ' + (boxNr || '-');
         kvAddress.textContent = address || '-';
-        kvAgent.textContent = 'v ' + (card.getAttribute('data-agent') || '-');
+
+        kvActive.textContent = card.getAttribute('data-active') || '-';
+        kvAccess24h.textContent = card.getAttribute('data-access24h') || '-';
+        kvType.textContent = card.getAttribute('data-type') || '-';
+        kvDescription.textContent = card.getAttribute('data-desc') || '-';
+        kvLifecycleState.textContent = card.getAttribute('data-lifecycle-state') || '-';
+
+        const openedAt = card.getAttribute('data-opened-at') || '-';
+        const openedBy = card.getAttribute('data-opened-by') || '-';
+        const closedAt = card.getAttribute('data-closed-at') || '-';
+        const closedBy = card.getAttribute('data-closed-by') || '-';
+
+        kvOpened.textContent = fmtLifecycleLine(openedAt, openedBy);
+        kvClosed.textContent = fmtLifecycleLine(closedAt, closedBy);
+        kvSource.textContent = card.getAttribute('data-source') || '-';
+        kvGeo.textContent = card.getAttribute('data-geo') || '-';
+
+        kvAgent.textContent = (card.getAttribute('data-agent') ? ('v ' + card.getAttribute('data-agent')) : '-');
         kvProfile.textContent = (card.getAttribute('data-profile') || '-');
 
         setStatusPill(card);
@@ -1224,6 +1431,8 @@ const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
           if(action === 'events'){
             e.preventDefault(); e.stopPropagation();
             updateSideFromCard(card, 'Beheer en overzicht');
+            const boxId = card.getAttribute('data-id');
+            if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/events`);
             setTimeout(()=>scrollSideToBlock('blockEvents'), 0);
             return;
           }
@@ -1231,7 +1440,8 @@ const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
           if(action === 'pictures'){
             e.preventDefault(); e.stopPropagation();
             updateSideFromCard(card, 'Beheer en overzicht');
-            alert('PICTURES (demo)');
+            const boxId = card.getAttribute('data-id');
+            if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/pictures`);
             return;
           }
         }
@@ -1273,8 +1483,17 @@ const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
         }
       });
 
-      document.getElementById('btnEvents').addEventListener('click', ()=> alert('EVENTS (demo)'));
-      document.getElementById('btnPictures').addEventListener('click', ()=> alert('PICTURES (demo)'));
+      document.getElementById('btnEvents').addEventListener('click', ()=>{
+        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
+        const boxId = currentCard.getAttribute('data-id');
+        if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/events`);
+      });
+
+      document.getElementById('btnPictures').addEventListener('click', ()=>{
+        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
+        const boxId = currentCard.getAttribute('data-id');
+        if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/pictures`);
+      });
 
       (async function init(){
         try{
