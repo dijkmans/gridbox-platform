@@ -240,7 +240,6 @@
       white-space:nowrap;
     }
 
-    /* Rechter detailpaneel */
     .side{
       background:var(--panel);
       overflow:auto;
@@ -370,7 +369,6 @@
 
     #btnCloseSide{display:none;}
 
-    /* Backdrop voor mobile overlay */
     .backdrop{
       position:fixed;
       inset:0;
@@ -382,7 +380,6 @@
     }
     .backdrop.is-open{opacity:1;pointer-events:auto}
 
-    /* Mobile: detailpaneel schuift in */
     @media (max-width: 980px){
       .app, .app.is-collapsed, .app.is-expanded{ grid-template-columns: 1fr; }
 
@@ -449,140 +446,8 @@
         </div>
       </div>
 
-      <div id="sections" aria-live="polite">
-        <section class="gb-section" data-customer="Powergrid" data-group="Heist">
-          <h3 class="gb-section__title">Heist</h3>
-          <div class="gb-list">
-            <article class="gb-card"
-              data-site="Heist"
-              data-box="2"
-              data-hours="2880"
-              data-agent="1.0.2"
-              data-profile="HP01"
-              data-lastseen-min="2880"
-              data-phones="+32474414557|DEMA TECH,+32471095207|Andy Coomans,+32474749853|Andreas Ketels,+32473809198|Robin Sprinterbus,+32486746112|Cédric">
-              <div class="gb-shutter" aria-hidden="true"><div class="gb-shutter__door"></div></div>
-
-              <div>
-                <div class="gb-head">
-                  <div class="gb-site">Heist</div>
-                  <div class="gb-box"># 2</div>
-                  <div class="gb-time">Last opened 4 months ago</div>
-                </div>
-
-                <div class="gb-meta">
-                  <span class="pill bad" title="Op basis van last seen"><span class="dot"></span><span>Offline</span></span>
-                  <span class="pill ghost" title="Controller software versie">v 1.0.2</span>
-                  <span class="pill ghost" title="Hardware profiel">HP01</span>
-                  <span class="pill ghost" title="Aantal actieve shares">shares 5</span>
-                </div>
-
-                <ul class="gb-phones">
-                  <li><span title="DEMA TECH">+32474414557</span></li>
-                  <li><span title="Andy Coomans">+32471095207</span></li>
-                  <li><span title="Andreas Ketels">+32474749853</span></li>
-                  <li><span title="Robin Sprinterbus">+32473809198</span></li>
-                  <li><span title="Cédric">+32486746112</span></li>
-                </ul>
-              </div>
-
-              <div class="gb-actions">
-                <button class="btn" data-action="toggle" type="button">OPEN</button>
-                <div class="gb-row">
-                  <button class="btn-ghost" data-action="events" type="button">EVENTS</button>
-                  <button class="btn-ghost" data-action="shares" type="button">SHARES</button>
-                  <button class="btn-ghost" data-action="pictures" type="button">PICTURES</button>
-                </div>
-              </div>
-            </article>
-          </div>
-        </section>
-
-        <section class="gb-section" data-customer="Powergrid" data-group="Winkel Bocholt">
-          <h3 class="gb-section__title">Winkel Bocholt</h3>
-          <div class="gb-list">
-            <article class="gb-card"
-              data-site="Winkel Bocholt"
-              data-box="3"
-              data-hours="10"
-              data-agent="1.0.3"
-              data-profile="HP01"
-              data-lastseen-min="1"
-              data-phones="+32476384775|Afhaling vervangfiets,+32486463136|DAAN CHAUFFEUR">
-              <div class="gb-shutter" aria-hidden="true"><div class="gb-shutter__door"></div></div>
-
-              <div>
-                <div class="gb-head">
-                  <div class="gb-site">Winkel Bocholt</div>
-                  <div class="gb-box"># 3</div>
-                  <div class="gb-time">Last opened 10 hours ago</div>
-                </div>
-
-                <div class="gb-meta">
-                  <span class="pill ok" title="Op basis van last seen"><span class="dot"></span><span>Online</span></span>
-                  <span class="pill ghost" title="Controller software versie">v 1.0.3</span>
-                  <span class="pill ghost" title="Hardware profiel">HP01</span>
-                  <span class="pill ghost" title="Aantal actieve shares">shares 2</span>
-                </div>
-
-                <ul class="gb-phones">
-                  <li><span title="Afhaling vervangfiets">+32476384775</span></li>
-                  <li><span title="DAAN CHAUFFEUR">+32486463136</span></li>
-                </ul>
-              </div>
-
-              <div class="gb-actions">
-                <button class="btn" data-action="toggle" type="button">OPEN</button>
-                <div class="gb-row">
-                  <button class="btn-ghost" data-action="events" type="button">EVENTS</button>
-                  <button class="btn-ghost" data-action="shares" type="button">SHARES</button>
-                  <button class="btn-ghost" data-action="pictures" type="button">PICTURES</button>
-                </div>
-              </div>
-            </article>
-
-            <article class="gb-card"
-              data-site="Winkel Bocholt"
-              data-box="4"
-              data-hours="9"
-              data-agent="1.0.3"
-              data-profile="HP02"
-              data-lastseen-min="7"
-              data-phones="+32479346704|Afhaling fiets,+32470125080|Binnenbrengen">
-              <div class="gb-shutter" aria-hidden="true"><div class="gb-shutter__door"></div></div>
-
-              <div>
-                <div class="gb-head">
-                  <div class="gb-site">Winkel Bocholt</div>
-                  <div class="gb-box"># 4</div>
-                  <div class="gb-time">Last opened 9 hours ago</div>
-                </div>
-
-                <div class="gb-meta">
-                  <span class="pill warn" title="Op basis van last seen"><span class="dot"></span><span>Opgelet</span></span>
-                  <span class="pill ghost" title="Controller software versie">v 1.0.3</span>
-                  <span class="pill ghost" title="Hardware profiel">HP02</span>
-                  <span class="pill ghost" title="Aantal actieve shares">shares 2</span>
-                </div>
-
-                <ul class="gb-phones">
-                  <li><span title="Afhaling fiets">+32479346704</span></li>
-                  <li><span title="Binnenbrengen">+32470125080</span></li>
-                </ul>
-              </div>
-
-              <div class="gb-actions">
-                <button class="btn" data-action="toggle" type="button">OPEN</button>
-                <div class="gb-row">
-                  <button class="btn-ghost" data-action="events" type="button">EVENTS</button>
-                  <button class="btn-ghost" data-action="shares" type="button">SHARES</button>
-                  <button class="btn-ghost" data-action="pictures" type="button">PICTURES</button>
-                </div>
-              </div>
-            </article>
-          </div>
-        </section>
-      </div>
+      <!-- Wordt dynamisch gevuld via Firestore (via API) -->
+      <div id="sections" aria-live="polite"></div>
     </main>
 
     <aside id="side" class="side" aria-label="Detail">
@@ -722,9 +587,23 @@
 
   <script>
     (function(){
+      /*
+        API_BASE:
+        - Laat leeg als je via Vercel een proxy/rewrite hebt: /api -> Cloud Run
+        - Vul in als je rechtstreeks naar Cloud Run wil fetchen, bv:
+          const API_BASE = "https://jouw-cloud-run-url";
+      */
+      const API_BASE = "";
+      const apiUrl = (path) => {
+        const base = (API_BASE || "").replace(/\/$/,"");
+        return base + path;
+      };
+
       const app = document.getElementById('app');
       const side = document.getElementById('side');
       const backdrop = document.getElementById('backdrop');
+
+      const sectionsWrap = document.getElementById('sections');
 
       function isOverlayMode(){
         return !!(window.matchMedia && window.matchMedia('(max-width: 980px)').matches);
@@ -765,7 +644,7 @@
         if (!isOverlayMode()){
           backdrop.classList.remove('is-open');
           document.body.classList.remove('lock-scroll');
-          side.classList.remove('is-open');  // desktop: geen overlay
+          side.classList.remove('is-open');
         }
       });
 
@@ -773,7 +652,6 @@
         if(ev.key === 'Escape') closeSide();
       });
 
-      // Swipe to close op mobiel
       let touchStartX = null, touchStartY = null;
       side.addEventListener('touchstart', (e)=>{
         const t = e.touches && e.touches[0];
@@ -791,37 +669,239 @@
         touchStartX = null; touchStartY = null;
       }, { passive:true });
 
-      // Border kleur per hours
-      function setBorderByHours(card){
-        const h = Number(card.getAttribute('data-hours')||9999);
+      function computeOnlineStateFromMinutes(min){
+        if (min === null || Number.isNaN(min)) return { label:'Onbekend', cls:'' };
+        if (min <= 2) return { label:'Online', cls:'ok' };
+        if (min <= 10) return { label:'Opgelet', cls:'warn' };
+        return { label:'Offline', cls:'bad' };
+      }
+
+      function fmtMaybe(v){
+        if (v === null || v === undefined || v === '') return '-';
+        return String(v);
+      }
+
+      function fmtLastSeen(min){
+        if (min === null || min === undefined) return '-';
+        const n = Number(min);
+        if (Number.isNaN(n)) return '-';
+        return n + ' min geleden';
+      }
+
+      function escapeHtml(s){
+        return String(s || '')
+          .replace(/&/g,'&amp;')
+          .replace(/</g,'&lt;')
+          .replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;')
+          .replace(/'/g,'&#39;');
+      }
+
+      function setBorderByLastSeen(card){
+        const min = Number(card.getAttribute('data-lastseen-min'));
+        const s = computeOnlineStateFromMinutes(min);
         let color = getComputedStyle(document.documentElement).getPropertyValue('--bad').trim();
-        if (h <= 6) color = getComputedStyle(document.documentElement).getPropertyValue('--ok').trim();
-        else if (h <= 24) color = getComputedStyle(document.documentElement).getPropertyValue('--warn').trim();
+        if (s.cls === 'ok') color = getComputedStyle(document.documentElement).getPropertyValue('--ok').trim();
+        else if (s.cls === 'warn') color = getComputedStyle(document.documentElement).getPropertyValue('--warn').trim();
         card.style.borderLeftColor = color;
       }
-      document.querySelectorAll('.gb-card').forEach(setBorderByHours);
 
-      // Filters
+      function buildPhonesListHtml(phones){
+        if (!phones || !Array.isArray(phones) || !phones.length){
+          return '<li class="muted">Geen nummers</li>';
+        }
+        return phones.map(p=>{
+          const phone = escapeHtml(p.phone || '');
+          const label = escapeHtml(p.label || '');
+          if (!phone) return '';
+          return `<li><span title="${label}">${phone}</span></li>`;
+        }).join('');
+      }
+
+      function buildPhonesDataAttr(phones){
+        if (!phones || !Array.isArray(phones) || !phones.length) return '';
+        return phones
+          .map(p => `${(p.phone||'').trim()}|${(p.label||'').trim()}`)
+          .filter(Boolean)
+          .join(',');
+      }
+
+      function createCard(box){
+        const id = fmtMaybe(box.id);
+        const customer = box.customer ?? null;
+        const site = fmtMaybe(box.site);
+        const boxNumber = fmtMaybe(box.boxNumber);
+
+        const agent = box.agentVersion ?? null;
+        const profile = box.hardwareProfile ?? null;
+
+        const lastSeen = box.lastSeenMinutes ?? null;
+        const lastSeenNum = (lastSeen === null || lastSeen === undefined) ? NaN : Number(lastSeen);
+        const s = computeOnlineStateFromMinutes(lastSeenNum);
+
+        const sharesCount = box.sharesCount ?? null;
+
+        const phones = Array.isArray(box.phones) ? box.phones : [];
+        const phonesAttr = buildPhonesDataAttr(phones);
+        const phonesHtml = buildPhonesListHtml(phones);
+
+        const card = document.createElement('article');
+        card.className = 'gb-card';
+        if ((box.status || '').toLowerCase() === 'open') card.classList.add('is-open');
+
+        card.setAttribute('data-id', id);
+        card.setAttribute('data-site', site === '-' ? '' : site);
+        card.setAttribute('data-box', boxNumber === '-' ? '' : boxNumber);
+        card.setAttribute('data-agent', agent ?? '');
+        card.setAttribute('data-profile', profile ?? '');
+        card.setAttribute('data-lastseen-min', (lastSeen === null || lastSeen === undefined) ? '' : String(lastSeen));
+        card.setAttribute('data-phones', phonesAttr);
+
+        const toggleLabel = card.classList.contains('is-open') ? 'CLOSE' : 'OPEN';
+
+        card.innerHTML = `
+          <div class="gb-shutter" aria-hidden="true"><div class="gb-shutter__door"></div></div>
+
+          <div>
+            <div class="gb-head">
+              <div class="gb-site">${escapeHtml(site)}</div>
+              <div class="gb-box"># ${escapeHtml(boxNumber)}</div>
+              <div class="gb-time">Last seen ${escapeHtml(fmtLastSeen(lastSeen))}</div>
+            </div>
+
+            <div class="gb-meta">
+              <span class="pill ${s.cls}" title="Op basis van last seen"><span class="dot"></span><span>${escapeHtml(s.label)}</span></span>
+              <span class="pill ghost" title="Controller software versie">v ${escapeHtml(agent || '-')}</span>
+              <span class="pill ghost" title="Hardware profiel">${escapeHtml(profile || '-')}</span>
+              <span class="pill ghost" title="Aantal actieve shares">shares ${escapeHtml(sharesCount === null ? '-' : sharesCount)}</span>
+            </div>
+
+            <ul class="gb-phones">
+              ${phonesHtml}
+            </ul>
+          </div>
+
+          <div class="gb-actions">
+            <button class="btn" data-action="toggle" type="button">${toggleLabel}</button>
+            <div class="gb-row">
+              <button class="btn-ghost" data-action="events" type="button">EVENTS</button>
+              <button class="btn-ghost" data-action="shares" type="button">SHARES</button>
+              <button class="btn-ghost" data-action="pictures" type="button">PICTURES</button>
+            </div>
+          </div>
+        `;
+
+        setBorderByLastSeen(card);
+
+        const sec = card.closest && card.closest('.gb-section');
+        if (sec){
+          sec.setAttribute('data-customer', customer || '');
+        }
+
+        return card;
+      }
+
+      function groupBoxesIntoSections(boxes){
+        const map = new Map();
+        boxes.forEach(b=>{
+          const site = (b.site || 'Onbekend').toString();
+          if (!map.has(site)) map.set(site, []);
+          map.get(site).push(b);
+        });
+        return map;
+      }
+
+      function renderSectionsFromBoxes(boxes){
+        sectionsWrap.innerHTML = '';
+
+        if (!boxes || !boxes.length){
+          sectionsWrap.innerHTML = `<div class="muted">Geen gridboxen gevonden</div>`;
+          rebuildFilters();
+          return;
+        }
+
+        const grouped = groupBoxesIntoSections(boxes);
+
+        [...grouped.entries()].forEach(([site, items])=>{
+          const sec = document.createElement('section');
+          sec.className = 'gb-section';
+          sec.setAttribute('data-group', site);
+
+          const customer = (items[0] && items[0].customer) ? String(items[0].customer) : '';
+          sec.setAttribute('data-customer', customer);
+
+          sec.innerHTML = `
+            <h3 class="gb-section__title">${escapeHtml(site)}</h3>
+            <div class="gb-list"></div>
+          `;
+
+          const list = sec.querySelector('.gb-list');
+          items.forEach(b=>{
+            const card = createCard(b);
+            list.appendChild(card);
+          });
+
+          sectionsWrap.appendChild(sec);
+        });
+
+        rebuildFilters();
+        applyFilters();
+      }
+
+      async function loadBoxes(){
+        const res = await fetch(apiUrl('/api/boxes'), { method:'GET' });
+        if (!res.ok){
+          const t = await res.text().catch(()=> '');
+          throw new Error('API fout: ' + res.status + ' ' + t);
+        }
+        const data = await res.json().catch(()=> []);
+        return Array.isArray(data) ? data : [];
+      }
+
+      async function sendCommand(boxId, type){
+        const url = apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/${type}`);
+        const res = await fetch(url, { method:'POST' });
+        const payload = await res.json().catch(()=> ({}));
+        if (!res.ok || !payload || payload.ok !== true){
+          throw new Error(payload.error || 'Interne serverfout');
+        }
+        return payload;
+      }
+
       const customerFilter = document.getElementById('customerFilter');
       const locationFilter = document.getElementById('locationFilter');
       const search = document.getElementById('search');
-      const sections = [...document.querySelectorAll('.gb-section')];
 
+      function getSections(){
+        return [...document.querySelectorAll('.gb-section')];
+      }
       function getCustomerOfSection(sec){ return (sec.getAttribute('data-customer') || '').trim(); }
       function getLocationOfSection(sec){ return (sec.getAttribute('data-group') || '').trim(); }
 
-      const customers = [...new Set(sections.map(getCustomerOfSection))].filter(Boolean).sort();
-      customers.forEach(c=>{
-        const o=document.createElement('option');
-        o.value=c; o.textContent=c;
-        customerFilter.appendChild(o);
-      });
+      function rebuildCustomerDropdown(){
+        const sections = getSections();
+        const customers = [...new Set(sections.map(getCustomerOfSection))].filter(Boolean).sort();
+        const current = customerFilter.value;
+
+        customerFilter.innerHTML = '<option value="all">Alle klanten</option>';
+        customers.forEach(c=>{
+          const o=document.createElement('option');
+          o.value=c; o.textContent=c;
+          customerFilter.appendChild(o);
+        });
+
+        const stillExists = [...customerFilter.options].some(opt => opt.value === current);
+        customerFilter.value = stillExists ? current : 'all';
+      }
 
       function rebuildLocationDropdown(){
+        const sections = getSections();
         const selectedCustomer = customerFilter.value;
+
         const locations = sections
           .filter(sec => selectedCustomer === 'all' || getCustomerOfSection(sec) === selectedCustomer)
           .map(getLocationOfSection).filter(Boolean);
+
         const uniq = [...new Set(locations)].sort();
 
         const current = locationFilter.value;
@@ -850,7 +930,9 @@
         const loc = locationFilter.value;
         const term = search.value.trim();
 
+        const sections = getSections();
         const cards = [...document.querySelectorAll('.gb-card')];
+
         cards.forEach(card=>{
           const sec = card.closest('.gb-section');
           const secCustomer = getCustomerOfSection(sec);
@@ -870,16 +952,18 @@
         });
       }
 
+      function rebuildFilters(){
+        rebuildCustomerDropdown();
+        rebuildLocationDropdown();
+      }
+
       customerFilter.addEventListener('change', ()=>{
         rebuildLocationDropdown();
         applyFilters();
       });
       locationFilter.addEventListener('change', applyFilters);
       search.addEventListener('input', applyFilters);
-      rebuildLocationDropdown();
-      applyFilters();
 
-      // Detail pane data refs
       let currentCard = null;
 
       const sideTitle = document.getElementById('sideTitle');
@@ -894,13 +978,6 @@
       const kvStatus  = document.getElementById('kvStatus');
 
       const sidePhones = document.getElementById('sidePhones');
-
-      function computeOnlineStateFromMinutes(min){
-        if (min === null || Number.isNaN(min)) return { label:'Onbekend', cls:'' };
-        if (min <= 2) return { label:'Online', cls:'ok' };
-        if (min <= 10) return { label:'Opgelet', cls:'warn' };
-        return { label:'Offline', cls:'bad' };
-      }
 
       function setStatusPill(card){
         const min = Number(card.getAttribute('data-lastseen-min'));
@@ -937,17 +1014,7 @@
         card.classList.add('is-selected');
       }
 
-      const sharesStore = {
-        "3": [
-          { ts:"22/08/2025 13:04", phone:"+32476384775", comment:"Afhaling vervangfiets", expires:"", auth:false },
-          { ts:"14/08/2025 11:07", phone:"+32486463136", comment:"DAAN CHAUFFEUR", expires:"", auth:true }
-        ],
-        "4": [
-          { ts:"19/12/2025 20:11", phone:"+32479346704", comment:"Afhaling fiets", expires:"19/12/2025 22:00", auth:false },
-          { ts:"19/12/2025 18:02", phone:"+32470125080", comment:"Binnenbrengen", expires:"", auth:false }
-        ]
-      };
-
+      const sharesStore = {};
       const sharesBody = document.querySelector('#sharesTable tbody');
       const sharePhone   = document.getElementById('sharePhone');
       const shareExpires = document.getElementById('shareExpires');
@@ -979,15 +1046,17 @@
       sharesBody.addEventListener('click',(e)=>{
         const del = e.target.closest('button[data-del]');
         if(!del || !currentCard) return;
-        const boxId = currentCard.getAttribute('data-box');
+        const boxId = currentCard.getAttribute('data-id');
         const idx = Number(del.getAttribute('data-del'));
+        if (!sharesStore[boxId]) return;
         sharesStore[boxId].splice(idx,1);
         renderShares(boxId);
       });
 
       document.getElementById('shareAdd').addEventListener('click', ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
-        const boxId = currentCard.getAttribute('data-box');
+        const boxId = currentCard.getAttribute('data-id');
+
         const phone = sharePhone.value.trim();
         const comment = shareComment.value.trim();
         const expires = shareExpires.value.trim();
@@ -1022,37 +1091,28 @@
         const sec = card.closest('.gb-section');
         const customer = (sec ? sec.getAttribute('data-customer') : '-') || '-';
 
-        sideTitle.textContent = `${card.getAttribute('data-site')} #${card.getAttribute('data-box')}`;
+        const siteName = card.getAttribute('data-site') || '-';
+        const boxNr = card.getAttribute('data-box') || '-';
+
+        sideTitle.textContent = `${siteName} #${boxNr}`;
         sideSub.textContent = contextLabel || 'Beheer en overzicht';
 
         kvCustomer.textContent = customer;
-        kvSite.textContent = card.getAttribute('data-site') || '-';
-        kvBox.textContent = '# ' + (card.getAttribute('data-box') || '-');
+        kvSite.textContent = siteName || '-';
+        kvBox.textContent = '# ' + (boxNr || '-');
         kvAgent.textContent = 'v ' + (card.getAttribute('data-agent') || '-');
         kvProfile.textContent = (card.getAttribute('data-profile') || '-');
 
         setStatusPill(card);
         renderPhones(card);
-        renderShares(card.getAttribute('data-box'));
+
+        const boxId = card.getAttribute('data-id');
+        renderShares(boxId);
 
         openSide();
       }
 
-      function initOnlineBadges(){
-        document.querySelectorAll('.gb-card').forEach(card=>{
-          const min = Number(card.getAttribute('data-lastseen-min'));
-          const pill = card.querySelector('.gb-meta .pill');
-          if(!pill) return;
-          const s = computeOnlineStateFromMinutes(min);
-          pill.classList.remove('ok','warn','bad');
-          if(s.cls) pill.classList.add(s.cls);
-          pill.innerHTML = `<span class="dot"></span><span>${s.label}</span>`;
-        });
-      }
-      initOnlineBadges();
-
-      // 1 klik handler (geen pointerup, geen dubbele events)
-      document.addEventListener('click', (e)=>{
+      document.addEventListener('click', async (e)=>{
         const btn = e.target.closest('button[data-action]');
         const card = e.target.closest('.gb-card');
         if(!card) return;
@@ -1062,9 +1122,29 @@
 
           if(action === 'toggle'){
             e.preventDefault(); e.stopPropagation();
-            const isOpen = card.classList.toggle('is-open');
-            btn.textContent = isOpen ? 'CLOSE' : 'OPEN';
-            updateSideFromCard(card, 'Beheer en overzicht');
+
+            const boxId = card.getAttribute('data-id');
+            const isOpen = card.classList.contains('is-open');
+            const next = isOpen ? 'close' : 'open';
+
+            if (!boxId || boxId === '-'){
+              alert('Box id ontbreekt.');
+              return;
+            }
+
+            const ok = confirm(next === 'open' ? 'Box openen?' : 'Box sluiten?');
+            if(!ok) return;
+
+            try{
+              await sendCommand(boxId, next);
+
+              card.classList.toggle('is-open', next === 'open');
+              btn.textContent = next === 'open' ? 'CLOSE' : 'OPEN';
+
+              updateSideFromCard(card, 'Beheer en overzicht');
+            } catch(err){
+              alert('Actie mislukt: ' + (err && err.message ? err.message : err));
+            }
             return;
           }
 
@@ -1098,17 +1178,53 @@
         updateSideFromCard(card, 'Beheer en overzicht');
       });
 
-      // Top buttons in detail pane
-      document.getElementById('btnOpen').addEventListener('click', ()=>{
+      document.getElementById('btnOpen').addEventListener('click', async ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
-        alert('OPEN (demo). In productie: call naar API.');
+        const boxId = currentCard.getAttribute('data-id');
+        const ok = confirm('Box openen?');
+        if(!ok) return;
+
+        try{
+          await sendCommand(boxId, 'open');
+          currentCard.classList.add('is-open');
+          const btn = currentCard.querySelector('button[data-action="toggle"]');
+          if(btn) btn.textContent = 'CLOSE';
+          updateSideFromCard(currentCard, 'Beheer en overzicht');
+        } catch(err){
+          alert('OPEN mislukt: ' + (err && err.message ? err.message : err));
+        }
       });
-      document.getElementById('btnClose').addEventListener('click', ()=>{
+
+      document.getElementById('btnClose').addEventListener('click', async ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
-        alert('CLOSE (demo). In productie: call naar API.');
+        const boxId = currentCard.getAttribute('data-id');
+        const ok = confirm('Box sluiten?');
+        if(!ok) return;
+
+        try{
+          await sendCommand(boxId, 'close');
+          currentCard.classList.remove('is-open');
+          const btn = currentCard.querySelector('button[data-action="toggle"]');
+          if(btn) btn.textContent = 'OPEN';
+          updateSideFromCard(currentCard, 'Beheer en overzicht');
+        } catch(err){
+          alert('CLOSE mislukt: ' + (err && err.message ? err.message : err));
+        }
       });
+
       document.getElementById('btnEvents').addEventListener('click', ()=> alert('EVENTS (demo)'));
       document.getElementById('btnPictures').addEventListener('click', ()=> alert('PICTURES (demo)'));
+
+      (async function init(){
+        try{
+          const boxes = await loadBoxes();
+          renderSectionsFromBoxes(boxes);
+        } catch(err){
+          console.error(err);
+          sectionsWrap.innerHTML = `<div class="muted">Kon gridboxen niet laden</div>`;
+          rebuildFilters();
+        }
+      })();
     })();
   </script>
 </body>
