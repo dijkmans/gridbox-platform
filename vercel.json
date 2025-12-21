@@ -1,5 +1,11 @@
 {
   "builds": [
     { "src": "index.html", "use": "@vercel/static" }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://gridbox-api-960191535038.europe-west1.run.app/api/$1"
+    }
   ]
 }
