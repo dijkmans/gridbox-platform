@@ -502,7 +502,7 @@
 
       <div class="side-body">
 
-        <!-- NIEUW: Toegang bovenaan -->
+        <!-- Toegang bovenaan -->
         <div class="block" id="blockAccess">
           <h4>Toegang</h4>
           <div class="access-row">
@@ -511,9 +511,54 @@
               <div class="access-sub">Beheer wie toegang heeft tot deze box.</div>
             </div>
             <div class="access-right">
-              <span id="kvSharesCount" class="badge big" title="Aantal shares (van de backend)">-</span>
+              <span id="kvSharesCount" class="badge big" title="Aantal shares (van de backend)">shares -</span>
               <button id="btnGoShares" class="btn-small" type="button">Shares beheren</button>
             </div>
+          </div>
+        </div>
+
+        <!-- Shares direct onder Toegang (hoger dan Status) -->
+        <div class="block" id="blockShares">
+          <h4>Shares</h4>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="sharePhone">Telefoon</label>
+              <input id="sharePhone" placeholder="+32..." inputmode="tel" />
+            </div>
+            <div class="field">
+              <label for="shareExpires">Vervalt op</label>
+              <input id="shareExpires" placeholder="bv 19/12/2025 22:00" />
+            </div>
+          </div>
+
+          <div class="field" style="margin-bottom:10px">
+            <label for="shareComment">Commentaar</label>
+            <input id="shareComment" placeholder="bv Afhaling..." />
+          </div>
+
+          <label class="check">
+            <input type="checkbox" id="shareAuth"/>
+            <span>Gemachtigd (niet zichtbaar in overzicht)</span>
+          </label>
+
+          <div class="right" style="margin:12px 0">
+            <button id="shareAdd" class="btn-small" type="button">Add Share</button>
+          </div>
+
+          <div style="overflow:auto">
+            <table id="sharesTable" aria-label="Shares tabel">
+              <thead>
+                <tr>
+                  <th>Tijd</th>
+                  <th>Telefoon</th>
+                  <th>Commentaar</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
           </div>
         </div>
 
@@ -625,50 +670,6 @@
           <ul id="sidePhones" class="phone-list">
             <li class="muted">Geen gegevens</li>
           </ul>
-        </div>
-
-        <div class="block" id="blockShares">
-          <h4>Shares</h4>
-
-          <div class="form-row">
-            <div class="field">
-              <label for="sharePhone">Telefoon</label>
-              <input id="sharePhone" placeholder="+32..." inputmode="tel" />
-            </div>
-            <div class="field">
-              <label for="shareExpires">Vervalt op</label>
-              <input id="shareExpires" placeholder="bv 19/12/2025 22:00" />
-            </div>
-          </div>
-
-          <div class="field" style="margin-bottom:10px">
-            <label for="shareComment">Commentaar</label>
-            <input id="shareComment" placeholder="bv Afhaling..." />
-          </div>
-
-          <label class="check">
-            <input type="checkbox" id="shareAuth"/>
-            <span>Gemachtigd (niet zichtbaar in overzicht)</span>
-          </label>
-
-          <div class="right" style="margin:12px 0">
-            <button id="shareAdd" class="btn-small" type="button">Add Share</button>
-          </div>
-
-          <div style="overflow:auto">
-            <table id="sharesTable" aria-label="Shares tabel">
-              <thead>
-                <tr>
-                  <th>Tijd</th>
-                  <th>Telefoon</th>
-                  <th>Commentaar</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
         </div>
 
         <div class="block" id="blockEvents">
