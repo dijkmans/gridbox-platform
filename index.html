@@ -381,6 +381,43 @@
     }
     .backdrop.is-open{opacity:1;pointer-events:auto}
 
+    .access-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .access-left{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+    .access-title{
+      font-weight:800;
+      font-size:14px;
+      color:#111827;
+    }
+    .access-sub{
+      color:var(--muted);
+      font-size:12px;
+    }
+    .access-right{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .badge.big{
+      font-size:12px;
+      padding:4px 10px;
+      border-radius:999px;
+      background:#fff;
+      border:1px solid var(--border);
+      color:#111827;
+    }
+
     @media (max-width: 980px){
       .app, .app.is-collapsed, .app.is-expanded{ grid-template-columns: 1fr; }
 
@@ -464,11 +501,24 @@
       </div>
 
       <div class="side-body">
+
+        <!-- NIEUW: Toegang bovenaan -->
+        <div class="block" id="blockAccess">
+          <h4>Toegang</h4>
+          <div class="access-row">
+            <div class="access-left">
+              <div class="access-title">Shares</div>
+              <div class="access-sub">Beheer wie toegang heeft tot deze box.</div>
+            </div>
+            <div class="access-right">
+              <span id="kvSharesCount" class="badge big" title="Aantal shares (van de backend)">-</span>
+              <button id="btnGoShares" class="btn-small" type="button">Shares beheren</button>
+            </div>
+          </div>
+        </div>
+
         <div class="block" id="blockStatus">
           <h4>Status</h4>
-          <div class="muted" style="font-size:12px;margin:-4px 0 10px;">
-            Druk op SHARES om toegang te beheren.
-          </div>
 
           <div class="kv">
             <div class="muted">Klant</div>
@@ -934,7 +984,8 @@
         const lastSeenNum = (lastSeen === null || lastSeen === undefined) ? NaN : Number(lastSeen);
         const s = computeOnlineStateFromMinutes(lastSeenNum);
 
-        const sharesCount = pick(box, ['sharesCount','shares_count']) ?? null;
+        const sharesCountRaw = pick(box, ['sharesCount','shares_count']) ?? null;
+        const sharesCount = (sharesCountRaw === null || sharesCountRaw === undefined) ? null : Number(sharesCountRaw);
 
         const phones = Array.isArray(box.phones) ? box.phones : [];
         const phonesAttr = buildPhonesDataAttr(phones);
@@ -983,7 +1034,13 @@
         card.setAttribute('data-source', lcSource ?? '');
         card.setAttribute('data-geo', geo ?? '');
 
+        card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
+
         const toggleLabel = card.classList.contains('is-open') ? 'CLOSE' : 'OPEN';
+
+        const sharesPill = (sharesCount === null || Number.isNaN(sharesCount))
+          ? `<span class="pill ghost" title="sharesCount">shares -</span>`
+          : `<span class="pill ghost" title="sharesCount">shares ${escapeHtml(String(sharesCount))}</span>`;
 
         card.innerHTML = `
           <div class="gb-shutter" aria-hidden="true"><div class="gb-shutter__door"></div></div>
@@ -1000,6 +1057,7 @@
               <span class="pill ghost" title="Portal.active">active ${escapeHtml(active || '-')}</span>
               <span class="pill ghost" title="box.access24h">24/7 ${escapeHtml(access24h || '-')}</span>
               <span class="pill ghost" title="box.type">${escapeHtml(bType || '-')}</span>
+              ${sharesPill}
             </div>
 
             <ul class="gb-phones">
@@ -1218,6 +1276,8 @@
       const kvSeen    = document.getElementById('kvSeen');
       const kvStatus  = document.getElementById('kvStatus');
 
+      const kvSharesCount = document.getElementById('kvSharesCount');
+
       const sidePhones = document.getElementById('sidePhones');
 
       function setStatusPill(card){
@@ -1292,7 +1352,27 @@
         if (!sharesStore[boxId]) return;
         sharesStore[boxId].splice(idx,1);
         renderShares(boxId);
+        updateSharesCountUiFromLocal(boxId);
       });
+
+      function updateSharesCountUiFromCard(card){
+        const raw = (card.getAttribute('data-shares-count') || '').trim();
+        if(!raw){
+          kvSharesCount.textContent = 'shares -';
+          return;
+        }
+        const n = Number(raw);
+        if(Number.isNaN(n)){
+          kvSharesCount.textContent = 'shares -';
+          return;
+        }
+        kvSharesCount.textContent = 'shares ' + n;
+      }
+
+      function updateSharesCountUiFromLocal(boxId){
+        const rows = (sharesStore[boxId]||[]);
+        kvSharesCount.textContent = 'shares ' + rows.length;
+      }
 
       document.getElementById('shareAdd').addEventListener('click', ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
@@ -1316,6 +1396,8 @@
         shareComment.value='';
         shareExpires.value='';
         shareAuth.checked=false;
+
+        updateSharesCountUiFromLocal(boxId);
       });
 
       function scrollSideToBlock(blockId){
@@ -1377,8 +1459,21 @@
         const boxId = card.getAttribute('data-id');
         renderShares(boxId);
 
+        updateSharesCountUiFromCard(card);
+
         openSide();
       }
+
+      document.getElementById('btnGoShares').addEventListener('click', ()=>{
+        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
+        updateSideFromCard(currentCard, 'Toegang beheren');
+
+        side.classList.add('is-wide');
+        app.classList.remove('is-collapsed');
+        app.classList.add('is-expanded');
+
+        setTimeout(()=>scrollSideToBlock('blockShares'), 0);
+      });
 
       document.addEventListener('click', async (e)=>{
         const btn = e.target.closest('button[data-action]');
