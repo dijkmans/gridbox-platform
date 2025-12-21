@@ -1,8 +1,8 @@
 // api/src/routes/boxes.js
 
 import { Router } from "express";
-import * as boxesService from "../services/boxesService.js";
 import { db } from "../firebase.js";
+import { toBoxDto } from "../dto/boxDto.js";
 
 const router = Router();
 
@@ -10,20 +10,13 @@ const router = Router();
 =====================================================
 COMMANDS (Firestore-based)
 =====================================================
-Deze routes worden gebruikt door devices (Raspberry Pi)
-en door de backend om open/close-commando’s te beheren.
-Deze blijven ongewijzigd.
 */
 
 router.get("/:boxId/commands", async (req, res) => {
   try {
     const { boxId } = req.params;
     const snap = await db.collection("boxCommands").doc(boxId).get();
-
-    if (!snap.exists) {
-      return res.json(null);
-    }
-
+    if (!snap.exists) return res.json(null);
     res.json(snap.data());
   } catch (err) {
     console.error("Command fetch error:", err);
@@ -46,37 +39,57 @@ router.post("/:boxId/commands/:commandId/ack", async (req, res) => {
 =====================================================
 BOX ROUTES (Frontend / Portal)
 =====================================================
-Deze routes zijn leidend voor de Vercel frontend.
-Firestore is de enige bron van waarheid.
-De frontend toont ALLEEN boxen die hier terugkomen.
-Velden bestaan altijd, ook als de waarde null is.
+Firestore is de bron van waarheid.
+We sturen BoxDto terug + legacy velden zodat oudere code niet breekt.
 */
+
+function computeOnlineFromLastSeen(lastSeenMinutes) {
+  const n = Number(lastSeenMinutes);
+  if (Number.isNaN(n)) return null;
+  return n <= 2;
+}
+
+function pickLegacyAgentVersion(dto) {
+  if (dto?.Agent === null || dto?.Agent === undefined) return null;
+  if (typeof dto.Agent === "string") return dto.Agent;
+  if (typeof dto.Agent === "object") return dto.Agent.version ?? dto.Agent.name ?? null;
+  return String(dto.Agent);
+}
+
+function pickLegacyHardwareProfile(dto) {
+  if (dto?.Profile === null || dto?.Profile === undefined) return dto?.box?.type ?? null;
+  if (typeof dto.Profile === "string") return dto.Profile;
+  if (typeof dto.Profile === "object") return dto.Profile.name ?? dto.Profile.code ?? null;
+  return String(dto.Profile);
+}
+
+function withLegacyFields(dto) {
+  return {
+    ...dto,
+    customer: dto?.Portal?.Customer ?? dto?.organisation?.name ?? null,
+    site: dto?.Portal?.Site ?? null,
+    boxNumber: dto?.Portal?.BoxNumber ?? null,
+    status: dto?.lifecycle?.state ?? null,
+    online: dto?.online ?? computeOnlineFromLastSeen(dto?.lastSeenMinutes),
+    agentVersion: dto?.agentVersion ?? pickLegacyAgentVersion(dto),
+    hardwareProfile: dto?.hardwareProfile ?? pickLegacyHardwareProfile(dto),
+    sharesCount: dto?.sharesCount ?? null
+  };
+}
 
 /**
  * GET /api/boxes
- * Haalt alle Gridboxen op volgens het afgesproken contract
  */
 router.get("/", async (req, res) => {
   try {
-    const rawBoxes = await boxesService.getAll();
+    const org = (req.query.org || "").toString().trim();
 
-    const boxes = rawBoxes.map(box => ({
-      id: box.id ?? null,
+    let query = db.collection("boxes");
+    if (org) query = query.where("organisationId", "==", org);
 
-      customer: box.customer ?? null,
-      site: box.site ?? null,
-      boxNumber: box.boxNumber ?? null,
+    const snap = await query.get();
 
-      status: box.status ?? null,
-      online: box.online ?? null,
-
-      agentVersion: box.agentVersion ?? null,
-      hardwareProfile: box.hardwareProfile ?? null,
-
-      lastSeenMinutes: box.lastSeenMinutes ?? null,
-      sharesCount: box.sharesCount ?? null
-    }));
-
+    const boxes = snap.docs.map(d => withLegacyFields(toBoxDto(d.id, d.data())));
     res.json(boxes);
   } catch (err) {
     console.error("GET /api/boxes error:", err);
@@ -86,32 +99,16 @@ router.get("/", async (req, res) => {
 
 /**
  * GET /api/boxes/:id
- * Haalt één Gridbox op (zelfde contract)
  */
 router.get("/:id", async (req, res) => {
   try {
-    const box = await boxesService.getById(req.params.id);
+    const id = req.params.id;
 
-    if (!box) {
-      return res.status(404).json({ error: "Box niet gevonden" });
-    }
+    const doc = await db.collection("boxes").doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Box niet gevonden" });
 
-    res.json({
-      id: box.id ?? null,
-
-      customer: box.customer ?? null,
-      site: box.site ?? null,
-      boxNumber: box.boxNumber ?? null,
-
-      status: box.status ?? null,
-      online: box.online ?? null,
-
-      agentVersion: box.agentVersion ?? null,
-      hardwareProfile: box.hardwareProfile ?? null,
-
-      lastSeenMinutes: box.lastSeenMinutes ?? null,
-      sharesCount: box.sharesCount ?? null
-    });
+    const dto = withLegacyFields(toBoxDto(doc.id, doc.data()));
+    res.json(dto);
   } catch (err) {
     console.error("GET /api/boxes/:id error:", err);
     res.status(500).json({ error: "Interne serverfout" });
@@ -122,7 +119,6 @@ router.get("/:id", async (req, res) => {
 =====================================================
 ACTIONS (open / close)
 =====================================================
-Frontend stuurt intentie, device pikt command op
 */
 
 router.post("/:id/open", async (req, res) => {
