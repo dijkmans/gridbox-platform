@@ -2,373 +2,373 @@
 <html lang="nl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Gridbox Portal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gridbox Portal v1</title>
 
   <style>
     :root{
-      --bg:#f6f7fb;
-      --card:#ffffff;
-      --text:#0f172a;
-      --muted:#64748b;
-      --border:#e5e7eb;
-      --accent:#6d28d9;
-      --accent2:#7c3aed;
-      --ok:#16a34a;
-      --warn:#f59e0b;
+      --primary:#6d28d9;
+      --ok:#22c55e;
+      --warn:#eab308;
       --bad:#ef4444;
-      --shadow:0 8px 30px rgba(2,6,23,.08);
-      --radius:18px;
+
+      --bg:#f8fafc;
+      --panel:#ffffff;
+      --ink:#0f172a;
+      --muted:#64748b;
+
+      --border:#e5e7eb;
+
+      --chip:#f4eefe;
+
+      --shadow:0 2px 10px rgba(0,0,0,.08);
+      --radius:16px;
     }
 
     *{box-sizing:border-box}
-    html,body{height:100%}
     body{
       margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
       background:var(--bg);
-      color:var(--text);
+      color:var(--ink);
+      font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,'Helvetica Neue',Arial;
     }
 
-    a{color:inherit}
-    .muted{color:var(--muted)}
-    .hint{font-size:12px;color:var(--muted);margin-left:6px}
-    .chip{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid var(--border);
-      background:#f9fafb;
-      font-size:12px;
-      color:#111827;
-      user-select:none;
-      white-space:nowrap;
+    body.lock-scroll{
+      overflow:hidden;
+      touch-action:none;
     }
-    .chip b{font-weight:600}
 
     .app{
       display:grid;
-      grid-template-columns: 420px 1fr;
-      gap:18px;
-      padding:18px;
-      height:100%;
-      max-width:1400px;
-      margin:0 auto;
+      grid-template-columns: 1fr 560px;
+      min-height:100vh;
     }
+    .app.is-collapsed{ grid-template-columns: 1fr 360px; }
+    .app.is-expanded{ grid-template-columns: 1fr 760px; }
 
-    .panel{
-      background:var(--card);
-      border:1px solid var(--border);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow);
-      overflow:hidden;
-      min-height:0;
-    }
-
-    .panel-header{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:10px;
-      padding:16px 16px 12px;
-      border-bottom:1px solid var(--border);
-      background:linear-gradient(180deg,#fff, #fbfbff);
-    }
-    .panel-header h2{
-      margin:0;
-      font-size:18px;
-      line-height:1.2;
-    }
-    .panel-header .sub{
-      margin-top:4px;
-      font-size:13px;
-      color:var(--muted);
-    }
-    .header-actions{
-      display:flex;
-      gap:8px;
-      align-items:center;
-    }
-
-    .btn{
-      border:0;
-      background:linear-gradient(180deg,var(--accent2),var(--accent));
-      color:#fff;
-      padding:10px 14px;
-      border-radius:14px;
-      font-weight:600;
-      cursor:pointer;
-      box-shadow:0 10px 18px rgba(109,40,217,.22);
-    }
-    .btn:active{transform:translateY(1px)}
-    .btn-ghost{
-      border:1px solid var(--border);
-      background:#fff;
-      color:#111827;
-      padding:10px 14px;
-      border-radius:14px;
-      font-weight:600;
-      cursor:pointer;
-    }
-    .btn-small{
-      border:1px solid var(--border);
-      background:#fff;
-      color:#111827;
-      padding:8px 12px;
-      border-radius:12px;
-      font-weight:600;
-      cursor:pointer;
-      font-size:13px;
-    }
-
-    .search-wrap{
-      padding:12px 16px;
-      border-bottom:1px solid var(--border);
-      display:flex;
-      gap:10px;
-      align-items:center;
-      background:#fff;
-    }
-    .search-wrap input{
-      flex:1;
-      border:1px solid var(--border);
-      padding:10px 12px;
-      border-radius:14px;
-      outline:none;
-      font-size:14px;
-    }
-
-    .cards{
-      padding:12px;
-      display:grid;
-      gap:10px;
+    .main{
+      padding:18px 18px 28px;
       overflow:auto;
-      height:calc(100% - 112px);
+      border-right:1px solid #f1f5f9;
     }
 
-    .gb-card{
-      position:relative;
-      display:grid;
-      grid-template-columns: 58px 1fr;
+    .toolbar{
+      display:flex;
       gap:12px;
       align-items:center;
-      padding:12px 12px 12px 10px;
-      border:1px solid var(--border);
-      border-radius:16px;
-      background:#fff;
-      cursor:pointer;
-      user-select:none;
-      transition:box-shadow .15s ease, transform .15s ease, border-color .15s ease;
-      border-left:6px solid transparent;
-    }
-    .gb-card:hover{box-shadow:0 10px 24px rgba(2,6,23,.08)}
-    .gb-card.is-selected{
-      border-color:rgba(109,40,217,.35);
-      box-shadow:0 14px 30px rgba(109,40,217,.12);
+      justify-content:space-between;
+      margin-bottom:14px;
     }
 
-    .gb-icon{
-      width:58px;height:58px;
-      border-radius:18px;
-      display:grid;
-      place-items:center;
+    .brand{
+      font-weight:800;
+      font-size:20px;
+      letter-spacing:.3px;
+      white-space:nowrap;
+    }
+
+    .toolbar__right{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    #customerFilter,#locationFilter,#search{
+      padding:10px 12px;
       border:1px solid var(--border);
-      background:linear-gradient(180deg,#fafaff,#fff);
-      position:relative;
-      overflow:hidden;
+      border-radius:12px;
+      background:#fff;
+      font:inherit;
+    }
+    #search{min-width:260px}
+
+    .gb-section{margin-bottom:20px}
+    .gb-section__title{
+      font-weight:800;
+      margin:10px 0 10px 4px;
+      font-size:18px;
+    }
+    .gb-list{display:grid;gap:12px}
+
+    .gb-card{
+      display:grid;
+      grid-template-columns:64px 1fr auto;
+      gap:12px;
+      align-items:stretch;
+      background:#fff;
+      border:1px solid #eee;
+      border-left:6px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:12px;
+      cursor:pointer;
+    }
+    .gb-card.is-selected{
+      outline:2px solid rgba(109,40,217,.18);
+      outline-offset:2px;
     }
 
     .gb-shutter{
-      width:30px;height:30px;
-      border-radius:10px;
-      border:2px solid rgba(109,40,217,.35);
       position:relative;
+      width:56px;height:56px;
+      border-radius:12px;
+      background:#f3f4f6;
+      overflow:hidden;
+      box-shadow:inset 0 0 0 1px var(--border);
+      cursor:default;
     }
     .gb-shutter__door{
       position:absolute;
-      left:0; right:0; top:0;
-      height:100%;
-      background:linear-gradient(180deg, rgba(109,40,217,.14), rgba(109,40,217,.04));
-      transform:translateY(0%);
-      transition:transform .35s ease;
-      border-bottom:1px solid rgba(109,40,217,.25);
+      inset:0;
+      background-image:url('https://gridbox.eu/images/f5b43959-ec7d-4fbe-9a38-1324a9617cf3_biss.png');
+      background-repeat:repeat-y;
+      background-size:100% auto;
+      transition:transform 0.9s cubic-bezier(.2,.7,.2,1);
+      transform:translateY(0);
     }
     .gb-card.is-open .gb-shutter__door{ transform:translateY(-100%); }
 
-    .gb-title{
-      display:flex;
+    .gb-head{
+      display:grid;
+      grid-template-columns:1fr auto auto;
+      gap:8px;
       align-items:center;
-      justify-content:space-between;
-      gap:10px;
+      margin-bottom:6px;
     }
-    .gb-title h3{
-      margin:0;
-      font-size:14px;
-      line-height:1.2;
-      font-weight:700;
-    }
+    .gb-site{font-weight:800; font-size:16px}
+    .gb-box{font-weight:800;color:#111827}
+    .gb-time{font-size:.85rem;color:var(--muted)}
+
     .gb-meta{
-      margin-top:4px;
-      font-size:12px;
-      color:var(--muted);
       display:flex;
       gap:8px;
+      align-items:center;
       flex-wrap:wrap;
+      margin:6px 0 0;
     }
 
     .pill{
       display:inline-flex;
-      align-items:center;
       gap:6px;
-      padding:6px 10px;
+      align-items:center;
+      padding:4px 10px;
       border-radius:999px;
       font-size:12px;
       border:1px solid var(--border);
-      background:#fff;
+      background:#f8fafc;
       color:#111827;
       white-space:nowrap;
     }
-    .pill .dot{width:8px;height:8px;border-radius:999px;background:var(--muted)}
+    .pill.ok{border-color:#bbf7d0;background:#f0fdf4}
+    .pill.warn{border-color:#fde68a;background:#fffbeb}
+    .pill.bad{border-color:#fecaca;background:#fef2f2}
+    .pill .dot{width:8px;height:8px;border-radius:99px;background:#94a3b8;flex:0 0 auto}
     .pill.ok .dot{background:var(--ok)}
-    .pill.bad .dot{background:var(--bad)}
     .pill.warn .dot{background:var(--warn)}
-    .pill.ghost{background:#f8fafc}
+    .pill.bad .dot{background:var(--bad)}
+    .pill.ghost{background:#fff;border-style:dashed;color:var(--muted)}
 
-    .card-actions{
-      margin-top:10px;
+    .gb-phones{
+      margin:10px 0 0;
+      padding-left:18px;
+      color:#111827;
+    }
+    .gb-phones li{line-height:1.35}
+
+    .gb-actions{
+      display:grid;
+      grid-template-rows:auto auto;
+      gap:8px;
+      min-width:240px;
+      align-items:start;
+      justify-items:stretch;
+      cursor:default;
+    }
+    .gb-actions .gb-row{
       display:flex;
       gap:8px;
+      justify-content:space-between;
       flex-wrap:wrap;
     }
 
-    .side{
-      background:var(--card);
+    .btn,.btn-ghost{
+      border-radius:12px;
+      padding:10px 12px;
       border:1px solid var(--border);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow);
-      overflow:hidden;
-      min-height:0;
-      display:flex;
-      flex-direction:column;
+      cursor:pointer;
+      font:inherit;
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
     }
+    .btn{
+      background:var(--primary);
+      color:#fff;
+      border:none;
+    }
+    .btn:active{transform:translateY(1px)}
+    .btn-ghost{
+      background:var(--chip);
+    }
+    .btn-ghost:hover{filter:brightness(.98)}
+
+    .btn-small{
+      padding:9px 12px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:var(--primary);
+      color:#fff;
+      cursor:pointer;
+      font:inherit;
+    }
+    .btn-small.btn-ghost{
+      background:var(--chip);
+      color:inherit;
+    }
+
+    .right{display:flex;justify-content:flex-end}
+    .muted{color:var(--muted)}
+
+    .badge{
+      display:inline-block;
+      padding:2px 8px;
+      border-radius:999px;
+      border:1px solid #ddd;
+      font-size:11px;
+      color:#6b7280;
+      background:#f3f4f6;
+      white-space:nowrap;
+    }
+
+    .side{
+      background:var(--panel);
+      overflow:auto;
+      box-shadow:-10px 0 30px rgba(0,0,0,.08);
+      border-left:1px solid #f1f5f9;
+    }
+
     .side-header{
-      padding:16px;
-      border-bottom:1px solid var(--border);
-      background:linear-gradient(180deg,#fff,#fbfbff);
+      position:sticky;
+      top:0;
+      z-index:5;
+      background:var(--panel);
+      border-bottom:1px solid #f1f5f9;
+      padding:14px 14px;
       display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
       gap:10px;
+      align-items:center;
+      justify-content:space-between;
     }
-    .side-header h2{
-      margin:0;
-      font-size:18px;
-      line-height:1.2;
-    }
-    .side-header .sub{
-      margin-top:4px;
-      font-size:13px;
-      color:var(--muted);
-    }
+
+    .side-title{font-weight:800;font-size:16px;margin:0}
+    .side-sub{color:var(--muted);font-size:12px;margin-top:2px}
+
     .side-actions{
       display:flex;
       gap:8px;
       align-items:center;
+      flex-wrap:wrap;
     }
 
-    .side-body{
-      padding:12px 16px 18px;
-      overflow:auto;
-      min-height:0;
-      display:grid;
-      gap:12px;
-    }
+    .side-body{padding:14px 14px 18px}
 
     .block{
       border:1px solid var(--border);
-      border-radius:16px;
+      border-radius:14px;
       padding:12px;
       background:#fff;
+      margin-bottom:12px;
     }
-    .block h4{
-      margin:0 0 10px;
-      font-size:14px;
-      letter-spacing:.2px;
+    .block h4{margin:0 0 10px;font-size:14px}
+
+    .chip{
+      display:inline-block;
+      background:#eef2ff;
+      border:1px solid #e0e7ff;
+      color:#3730a3;
+      border-radius:999px;
+      padding:2px 8px;
+      font-size:.75rem;
     }
 
     .kv{
       display:grid;
-      grid-template-columns: 160px 1fr;
-      gap:8px 12px;
-      align-items:center;
-      font-size:14px;
+      grid-template-columns:140px 1fr;
+      gap:8px;
+      font-size:13px;
     }
-    .kv .muted{font-size:13px}
+    .kv div{padding:3px 0}
 
     .status-pill{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      border:1px solid var(--border);
-      background:#fff;
+      display:inline-block;
       border-radius:999px;
-      padding:7px 12px;
-      font-weight:600;
-      font-size:13px;
-    }
-    .status-pill .dot{width:9px;height:9px;border-radius:999px;background:var(--muted)}
-    .status-pill.ok .dot{background:var(--ok)}
-    .status-pill.bad .dot{background:var(--bad)}
-    .status-pill.warn .dot{background:var(--warn)}
-
-    .table{
-      width:100%;
-      border-collapse:collapse;
-      font-size:13px;
-    }
-    .table th,.table td{
-      padding:10px 8px;
-      border-bottom:1px solid var(--border);
-      vertical-align:top;
-    }
-    .table th{
-      text-align:left;
-      color:var(--muted);
-      font-weight:700;
+      padding:4px 10px;
       font-size:12px;
+      border:1px solid var(--border);
+      background:#f8fafc;
     }
-    .table tr:last-child td{border-bottom:0}
+    .status-pill.ok{border-color:#bbf7d0;background:#f0fdf4}
+    .status-pill.warn{border-color:#fde68a;background:#fffbeb}
+    .status-pill.bad{border-color:#fecaca;background:#fef2f2}
+
+    .hint{
+      color:var(--muted);
+      font-size:12px;
+      margin-left:6px;
+      white-space:nowrap;
+    }
 
     .form-row{
       display:grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns:1fr 1fr;
       gap:10px;
       margin-bottom:10px;
     }
-    .field label{
-      font-size:12px;
-      color:var(--muted);
-      display:block;
-      margin-bottom:6px;
-    }
-    .field input{
-      width:100%;
-      border:1px solid var(--border);
-      padding:10px 12px;
-      border-radius:14px;
-      outline:none;
-      font-size:14px;
-      background:#fff;
-    }
 
-    .phone-list{
-      margin:0;
-      padding-left:18px;
-      color:#111827;
+    .field{display:flex;flex-direction:column;gap:6px}
+    .field input,.field textarea{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px;
+      background:#fff;
+      font:inherit;
+    }
+    .field label{font-weight:700;color:#111827;font-size:12px}
+    .check{display:flex;align-items:center;gap:8px;margin:8px 0 0}
+
+    table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    th{
+      font-weight:700;
+      text-align:left;
+      color:var(--muted);
+      font-size:12px;
+      padding:0 8px;
+      white-space:nowrap;
+    }
+    td{
+      background:#fff;
+      border:1px solid var(--border);
+      padding:10px 8px;
+      vertical-align:top;
       font-size:13px;
     }
+    td:first-child{
+      border-top-left-radius:12px;
+      border-bottom-left-radius:12px;
+      width:150px;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    td:last-child{
+      border-top-right-radius:12px;
+      border-bottom-right-radius:12px;
+    }
+
+    .phone-list{margin:0;padding-left:16px}
+    .phone-list li{margin:6px 0;color:#111827}
+
+    #btnCloseSide{display:none;}
 
     .backdrop{
       position:fixed;
@@ -383,22 +383,24 @@
 
     .access-row{
       display:flex;
-      gap:12px;
-      align-items:flex-start;
+      align-items:center;
       justify-content:space-between;
-      padding:10px 12px;
-      border:1px solid var(--border);
-      border-radius:16px;
-      background:#fbfbff;
+      gap:10px;
+      flex-wrap:wrap;
     }
-    .access-left{min-width:0}
+    .access-left{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
     .access-title{
       font-weight:800;
-      margin-bottom:2px;
+      font-size:14px;
+      color:#111827;
     }
     .access-sub{
-      font-size:12px;
       color:var(--muted);
+      font-size:12px;
     }
     .access-right{
       display:flex;
@@ -416,173 +418,106 @@
       color:#111827;
     }
 
-    .access-actions{
-      margin-top:10px;
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-      align-items:center;
-    }
-    .access-actions .chip{margin-left:auto}
-
-    details.details{
-      border:1px solid var(--border);
-      border-radius:16px;
-      background:#fff;
-      overflow:hidden;
-    }
-    details.details > summary{
-      list-style:none;
-      cursor:pointer;
-      user-select:none;
-      padding:12px 12px;
-      font-weight:800;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      background:linear-gradient(180deg,#fff,#fbfbff);
-      border-bottom:1px solid var(--border);
-    }
-    details.details > summary::-webkit-details-marker{display:none}
-    .summary-right{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      color:var(--muted);
-      font-weight:700;
-      font-size:12px;
-    }
-    .details-body{
-      padding:12px;
-      display:grid;
-      gap:12px;
-    }
-
-    .overview-grid{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap:10px;
-    }
-    .overview-item{
-      border:1px solid var(--border);
-      border-radius:14px;
-      padding:10px 10px;
-      background:#fff;
-      min-height:54px;
-    }
-    .overview-item .label{
-      font-size:12px;
-      color:var(--muted);
-      font-weight:800;
-      letter-spacing:.2px;
-    }
-    .overview-item .value{
-      margin-top:6px;
-      font-size:14px;
-      font-weight:800;
-      color:#111827;
-      word-break:break-word;
-    }
-
     @media (max-width: 980px){
-      .app{
-        grid-template-columns:1fr;
-        padding:12px;
-      }
+      .app, .app.is-collapsed, .app.is-expanded{ grid-template-columns: 1fr; }
+
       .side{
         position:fixed;
-        inset:10px;
+        top:0;right:0;bottom:0;
+        width:min(92vw,720px);
+        transform:translateX(110%);
+        transition:transform .24s ease;
         z-index:50;
-        transform:translateY(14px);
-        opacity:0;
-        pointer-events:none;
-        transition:opacity .2s ease, transform .2s ease;
       }
-      .side.is-open{
-        opacity:1;
-        transform:translateY(0px);
-        pointer-events:auto;
+      .side.is-open{ transform:translateX(0); }
+      .side.is-wide{ width:100vw; }
+
+      #btnCloseSide{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
       }
-      #btnCloseSide{display:inline-flex;}
-      .cards{height:auto;max-height:60vh}
+
+      .form-row{grid-template-columns:1fr}
     }
 
-    .app.is-expanded{grid-template-columns: 360px 1fr}
-    .app.is-collapsed{grid-template-columns: 1fr}
-    .side.is-wide .side-body{padding:12px 18px 18px}
+    @media (max-width: 640px){
+      .main{ padding:14px 14px 24px; }
+
+      .toolbar{flex-direction:column;align-items:flex-start;gap:10px}
+      .toolbar__right{width:100%;justify-content:flex-start}
+
+      #customerFilter,#locationFilter{width:calc(50% - 5px)}
+      #search{min-width:0;width:100%}
+
+      .gb-card{grid-template-columns:64px 1fr;grid-template-rows:auto auto}
+      .gb-actions{grid-column:1 / -1;min-width:0;grid-template-rows:auto}
+      .gb-actions .btn{width:100%}
+      .gb-actions .gb-row{width:100%;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+      .gb-actions .gb-row .btn-ghost{width:100%;padding:10px 8px}
+
+      .gb-head{grid-template-columns:1fr auto}
+      .gb-time{grid-column:1 / -1}
+
+      .gb-phones{display:none}
+      .pill{padding:4px 9px}
+    }
   </style>
 </head>
 
 <body>
-  <div class="app" id="app">
-    <section class="panel" aria-label="Gridbox overzicht">
-      <div class="panel-header">
-        <div>
-          <h2>Gridbox overzicht</h2>
-          <div class="sub">Klik een box om te beheren.</div>
-        </div>
-        <div class="header-actions">
-          <button class="btn-ghost" id="btnCollapse" type="button">Smaller</button>
-          <button class="btn-ghost" id="btnExpand" type="button">Breder</button>
+  <div id="app" class="app is-collapsed">
+    <main class="main">
+      <div class="toolbar">
+        <div class="brand">Gridbox</div>
+
+        <div class="toolbar__right">
+          <select id="customerFilter" aria-label="Klant filter">
+            <option value="all">Alle klanten</option>
+          </select>
+
+          <select id="locationFilter" aria-label="Locatie filter">
+            <option value="all">Alle locaties</option>
+          </select>
+
+          <input id="search" type="search" placeholder="Zoek op box, site of telefoon..." aria-label="Zoeken"/>
         </div>
       </div>
 
-      <div class="search-wrap">
-        <input id="q" placeholder="Zoek op site, klant, boxId..." />
-      </div>
+      <div id="sections" aria-live="polite"></div>
+    </main>
 
-      <div class="cards" id="cards"></div>
-    </section>
-
-    <aside class="side" id="side" aria-label="Beheer en overzicht">
+    <aside id="side" class="side" aria-label="Detail">
       <div class="side-header">
         <div>
-          <h2 id="sideTitle">Selecteer een box</h2>
-          <div class="sub" id="sideSub">Beheer en overzicht</div>
+          <div class="side-title" id="sideTitle">Selecteer een Gridbox</div>
+          <div class="side-sub" id="sideSub">Tik op een kaart links</div>
         </div>
         <div class="side-actions">
-          <button class="btn-ghost" id="btnCloseSide" type="button">Sluiten</button>
-          <button class="btn-ghost" id="btnToggleWide" type="button">Breed</button>
+          <button id="btnCollapse" class="btn-ghost" type="button" title="Smaller">Smaller</button>
+          <button id="btnExpand" class="btn-ghost" type="button" title="Breder">Breder</button>
+          <button id="btnCloseSide" class="btn" type="button" title="Sluiten">Sluiten</button>
         </div>
       </div>
 
-      <div class="side-body" id="sideBody">
+      <div class="side-body">
 
-        <div class="block" id="blockOverview">
-          <h4>Overzicht</h4>
-
-          <div class="overview-grid">
-            <div class="overview-item">
-              <div class="label">Online</div>
-              <div class="value" id="ovOnline">-</div>
+        <!-- Toegang bovenaan -->
+        <div class="block" id="blockAccess">
+          <h4>Toegang</h4>
+          <div class="access-row">
+            <div class="access-left">
+              <div class="access-title">Shares</div>
+              <div class="access-sub">Beheer wie toegang heeft tot deze box.</div>
             </div>
-            <div class="overview-item">
-              <div class="label">Last seen</div>
-              <div class="value" id="ovLastSeen">-</div>
+            <div class="access-right">
+              <span id="kvSharesCount" class="badge big" title="Aantal shares (van de backend)">shares -</span>
+              <button id="btnGoShares" class="btn-small" type="button">Shares beheren</button>
             </div>
-            <div class="overview-item">
-              <div class="label">Open of closed</div>
-              <div class="value" id="ovState">-</div>
-            </div>
-            <div class="overview-item">
-              <div class="label">Shares</div>
-              <div class="value" id="ovShares">-</div>
-            </div>
-            <div class="overview-item" style="grid-column: 1 / -1;">
-              <div class="label">Adres</div>
-              <div class="value" id="ovAddress">-</div>
-            </div>
-          </div>
-
-          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            <button class="btn" id="btnOpenTop" type="button">OPEN</button>
-            <button class="btn-ghost" id="btnCloseTop" type="button">CLOSE</button>
-            <button class="btn-small" id="btnGoShares" type="button">Shares beheren</button>
-            <span class="chip">Beheeractie wordt gelogd als portaal</span>
           </div>
         </div>
 
+        <!-- Shares direct onder Toegang (hoger dan Status) -->
         <div class="block" id="blockShares">
           <h4>Shares</h4>
 
@@ -602,18 +537,17 @@
             <input id="shareComment" placeholder="bv Afhaling..." />
           </div>
 
-          <label style="display:flex;gap:10px;align-items:center;margin:10px 0 14px;font-size:13px;color:#111827">
-            <input id="shareHidden" type="checkbox" />
-            Gemachtigd (niet zichtbaar in overzicht)
+          <label class="check">
+            <input type="checkbox" id="shareAuth"/>
+            <span>Gemachtigd (niet zichtbaar in overzicht)</span>
           </label>
 
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap">
-            <span id="kvSharesCount" class="badge big" title="Aantal shares (van de backend)">-</span>
-            <button class="btn" id="btnAddShare" type="button">Add Share</button>
+          <div class="right" style="margin:12px 0">
+            <button id="shareAdd" class="btn-small" type="button">Add Share</button>
           </div>
 
-          <div style="overflow:auto;border:1px solid var(--border);border-radius:14px">
-            <table class="table" id="sharesTable">
+          <div style="overflow:auto">
+            <table id="sharesTable" aria-label="Shares tabel">
               <thead>
                 <tr>
                   <th>Tijd</th>
@@ -628,6 +562,116 @@
           </div>
         </div>
 
+        <div class="block" id="blockStatus">
+          <h4>Status</h4>
+
+          <div class="kv">
+            <div class="muted">Klant</div>
+            <div title="De organisatie die deze box beheert.">
+              <span id="kvCustomer">-</span><span class="hint">(organisatie)</span>
+            </div>
+
+            <div class="muted">Locatie</div>
+            <div title="De plaats waar deze Gridbox staat.">
+              <span id="kvSite">-</span><span class="hint">(site)</span>
+            </div>
+
+            <div class="muted">Box</div>
+            <div title="Het nummer van deze Gridbox binnen de locatie.">
+              <span id="kvBox">-</span><span class="hint">(box nr)</span>
+            </div>
+
+            <div class="muted">Adres</div>
+            <div title="Adres waar de Gridbox staat.">
+              <span id="kvAddress">-</span><span class="hint">(adres)</span>
+            </div>
+
+            <div class="muted">Actief</div>
+            <div title="Portal.active uit Firestore.">
+              <span id="kvActive">-</span><span class="hint">(portal)</span>
+            </div>
+
+            <div class="muted">24/7</div>
+            <div title="box.access24h uit Firestore.">
+              <span id="kvAccess24h">-</span><span class="hint">(toegang)</span>
+            </div>
+
+            <div class="muted">Type</div>
+            <div title="box.type uit Firestore.">
+              <span id="kvType">-</span><span class="hint">(box)</span>
+            </div>
+
+            <div class="muted">Beschrijving</div>
+            <div title="box.description uit Firestore.">
+              <span id="kvDescription">-</span><span class="hint">(box)</span>
+            </div>
+
+            <div class="muted">Lifecycle</div>
+            <div title="lifecycle.state uit Firestore.">
+              <span id="kvLifecycleState">-</span><span class="hint">(open of closed)</span>
+            </div>
+
+            <div class="muted">Opened</div>
+            <div title="lifecycle.openedAt en openedBy.">
+              <span id="kvOpened">-</span><span class="hint">(tijd en nr)</span>
+            </div>
+
+            <div class="muted">Closed</div>
+            <div title="lifecycle.closedAt en closedBy.">
+              <span id="kvClosed">-</span><span class="hint">(tijd en nr)</span>
+            </div>
+
+            <div class="muted">Source</div>
+            <div title="lifecycle.source uit Firestore.">
+              <span id="kvSource">-</span><span class="hint">(bv sms)</span>
+            </div>
+
+            <div class="muted">Agent</div>
+            <div title="Versie of naam van de controller software in deze box.">
+              <span id="kvAgent">-</span><span class="hint">(software)</span>
+            </div>
+
+            <div class="muted">Profile</div>
+            <div title="Hardwareprofiel (aansluitingen).">
+              <span id="kvProfile">-</span><span class="hint">(hardware)</span>
+            </div>
+
+            <div class="muted">Last seen</div>
+            <div title="Laatste contact van de box controller.">
+              <span id="kvSeen">-</span><span class="hint">(laatst online)</span>
+            </div>
+
+            <div class="muted">Online</div>
+            <div title="Online is recent contact. Offline is langer geen contact.">
+              <span id="kvStatus" class="status-pill">-</span><span class="hint">(verbinding)</span>
+            </div>
+
+            <div class="muted">Geo</div>
+            <div title="location.geo uit Firestore.">
+              <span id="kvGeo">-</span><span class="hint">(coordinaten)</span>
+            </div>
+          </div>
+
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" id="btnOpen" type="button">OPEN</button>
+            <button class="btn-ghost" id="btnClose" type="button">CLOSE</button>
+          </div>
+
+          <div style="margin-top:10px">
+            <span class="chip">Beheeractie wordt gelogd als portaal</span>
+          </div>
+        </div>
+
+        <div class="block" id="blockPhones">
+          <h4>Telefoons</h4>
+          <div class="muted" style="font-size:12px;margin:-4px 0 10px;">
+            Overzicht gelinkte nummers.
+          </div>
+          <ul id="sidePhones" class="phone-list">
+            <li class="muted">Geen gegevens</li>
+          </ul>
+        </div>
+
         <div class="block" id="blockEvents">
           <h4>Events</h4>
           <div id="eventsList" class="muted">Nog geen events geladen</div>
@@ -636,122 +680,6 @@
             <button class="btn-ghost" id="btnPictures" type="button">Open pictures</button>
           </div>
         </div>
-
-        <details class="details" id="detailsBox">
-          <summary>
-            Details tonen
-            <span class="summary-right">minder belangrijk</span>
-          </summary>
-
-          <div class="details-body">
-            <div class="block" id="blockStatus">
-              <h4>Status</h4>
-
-              <div class="kv">
-                <div class="muted">Klant</div>
-                <div title="organisation.name uit Firestore.">
-                  <span id="kvCustomer">-</span><span class="hint">(organisatie)</span>
-                </div>
-
-                <div class="muted">Locatie</div>
-                <div title="Portal.Site uit Firestore.">
-                  <span id="kvSite">-</span><span class="hint">(site)</span>
-                </div>
-
-                <div class="muted">Box</div>
-                <div title="Portal.BoxNumber uit Firestore.">
-                  <span id="kvBox">-</span><span class="hint">(box nr)</span>
-                </div>
-
-                <div class="muted">Adres</div>
-                <div title="location.street / location.number / location.postalCode / location.city uit Firestore.">
-                  <span id="kvAddress">-</span><span class="hint">(adres)</span>
-                </div>
-
-                <div class="muted">Actief</div>
-                <div title="Portal.active uit Firestore.">
-                  <span id="kvActive">-</span><span class="hint">(portaal)</span>
-                </div>
-
-                <div class="muted">24/7</div>
-                <div title="box.access24h uit Firestore.">
-                  <span id="kvAccess24h">-</span><span class="hint">(toegang)</span>
-                </div>
-
-                <div class="muted">Type</div>
-                <div title="box.type uit Firestore.">
-                  <span id="kvType">-</span><span class="hint">(box)</span>
-                </div>
-
-                <div class="muted">Beschrijving</div>
-                <div title="box.description uit Firestore.">
-                  <span id="kvDescription">-</span><span class="hint">(box)</span>
-                </div>
-
-                <div class="muted">Lifecycle</div>
-                <div title="lifecycle.state uit Firestore.">
-                  <span id="kvLifecycleState">-</span><span class="hint">(open of closed)</span>
-                </div>
-
-                <div class="muted">Opened</div>
-                <div title="lifecycle.openedAt en openedBy.">
-                  <span id="kvOpened">-</span><span class="hint">(tijd en nr)</span>
-                </div>
-
-                <div class="muted">Closed</div>
-                <div title="lifecycle.closedAt en closedBy.">
-                  <span id="kvClosed">-</span><span class="hint">(tijd en nr)</span>
-                </div>
-
-                <div class="muted">Source</div>
-                <div title="lifecycle.source uit Firestore.">
-                  <span id="kvSource">-</span><span class="hint">(bv sms)</span>
-                </div>
-
-                <div class="muted">Agent</div>
-                <div title="Agent of agentVersion.">
-                  <span id="kvAgent">-</span><span class="hint">(software)</span>
-                </div>
-
-                <div class="muted">Profile</div>
-                <div title="Profile of hardwareProfile.">
-                  <span id="kvProfile">-</span><span class="hint">(hardware)</span>
-                </div>
-
-                <div class="muted">Last seen</div>
-                <div title="lastSeenMinutes uit Firestore.">
-                  <span id="kvLastSeen">-</span><span class="hint">(laatst online)</span>
-                </div>
-
-                <div class="muted">Online</div>
-                <div title="Online is recent contact. Offline is langer geen contact.">
-                  <span id="kvStatus" class="status-pill">-</span><span class="hint">(verbinding)</span>
-                </div>
-
-                <div class="muted">Geo</div>
-                <div title="location.geo uit Firestore.">
-                  <span id="kvGeo">-</span><span class="hint">(coordinaten)</span>
-                </div>
-              </div>
-
-              <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-                <button class="btn" id="btnOpen" type="button">OPEN</button>
-                <button class="btn-ghost" id="btnClose" type="button">CLOSE</button>
-              </div>
-            </div>
-
-            <div class="block" id="blockPhones">
-              <h4>Telefoons</h4>
-              <div class="muted" style="font-size:12px;margin:-4px 0 10px;">
-                Overzicht gelinkte nummers.
-              </div>
-              <ul id="sidePhones" class="phone-list">
-                <li class="muted">Geen gegevens</li>
-              </ul>
-            </div>
-          </div>
-        </details>
-
       </div>
     </aside>
   </div>
@@ -760,85 +688,571 @@
 
   <script>
     (function(){
-      const API_BASE = window.API_BASE || '';
-      const LASTSEEN_WARN_MIN = 10;
-      const LASTSEEN_BAD_MIN = 60;
+      const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
 
-      function escapeHtml(s){
-        return String(s || '')
-          .replaceAll('&','&amp;')
-          .replaceAll('<','&lt;')
-          .replaceAll('>','&gt;')
-          .replaceAll('"','&quot;')
-          .replaceAll("'","&#039;");
-      }
-
-      function openLink(path){
-        const url = (API_BASE || '') + path;
-        window.open(url, '_blank', 'noopener');
-      }
-
-      function pick(obj, paths){
-        for(const p of paths){
-          const parts = p.split('.');
-          let cur = obj;
-          let ok = true;
-          for(const part of parts){
-            if(cur && Object.prototype.hasOwnProperty.call(cur, part)){
-              cur = cur[part];
-            } else {
-              ok = false; break;
-            }
-          }
-          if(ok && cur !== undefined) return cur;
-        }
-        return undefined;
-      }
-
-      function formatAddress(location){
-        if(!location) return '-';
-        const street = location.street || location['street '] || '';
-        const number = location.number || location['number '] || '';
-        const postal = location.postalCode || '';
-        const city = location.city || '';
-        const a = [street, number].filter(Boolean).join(' ');
-        const b = [postal, city].filter(Boolean).join(' ');
-        if(!a && !b) return '-';
-        return [a,b].filter(Boolean).join(', ');
-      }
-
-      function formatGeo(geo){
-        if(!geo) return '-';
-        const lat = geo._latitude ?? geo.latitude ?? geo.lat;
-        const lng = geo._longitude ?? geo.longitude ?? geo.lng;
-        if(lat === undefined || lng === undefined) return '-';
-        return String(lat) + ', ' + String(lng);
-      }
-
-      function formatOpenedClosed(lifecycle, keyAt, keyBy){
-        if(!lifecycle) return '-';
-        const at = lifecycle[keyAt];
-        const by = lifecycle[keyBy];
-        const a = at ? String(at) : '';
-        const b = by ? String(by) : '';
-        if(!a && !b) return '-';
-        if(a && b) return a + ' (' + b + ')';
-        return a || b;
-      }
-
-      function niceState(v){
-        if(!v) return '-';
-        const s = String(v).toLowerCase();
-        if(s === 'open') return 'open';
-        if(s === 'closed') return 'closed';
-        return String(v);
-      }
+      const apiUrl = (path) => {
+        const base = (API_BASE || "").replace(/\/$/,"");
+        return base + path;
+      };
 
       const app = document.getElementById('app');
       const side = document.getElementById('side');
       const backdrop = document.getElementById('backdrop');
-      const cardsEl = document.getElementById('cards');
-      const q = document.getElementById('q');
+
+      const sectionsWrap = document.getElementById('sections');
+
+      function isOverlayMode(){
+        return !!(window.matchMedia && window.matchMedia('(max-width: 980px)').matches);
+      }
+
+      function openSide(){
+        side.classList.add('is-open');
+        if (isOverlayMode()){
+          backdrop.classList.add('is-open');
+          document.body.classList.add('lock-scroll');
+        }
+      }
+
+      function closeSide(){
+        side.classList.remove('is-open');
+        backdrop.classList.remove('is-open');
+        document.body.classList.remove('lock-scroll');
+
+        side.classList.remove('is-wide');
+        app.classList.remove('is-expanded');
+      }
+
+      backdrop.addEventListener('click', closeSide);
+      document.getElementById('btnCloseSide').addEventListener('click', closeSide);
+
+      document.getElementById('btnCollapse').addEventListener('click', ()=>{
+        side.classList.remove('is-wide');
+        app.classList.remove('is-expanded');
+        app.classList.add('is-collapsed');
+      });
+
+      document.getElementById('btnExpand').addEventListener('click', ()=>{
+        app.classList.remove('is-collapsed');
+        app.classList.add('is-expanded');
+      });
+
+      window.addEventListener('resize', ()=>{
+        if (!isOverlayMode()){
+          backdrop.classList.remove('is-open');
+          document.body.classList.remove('lock-scroll');
+          side.classList.remove('is-open');
+        }
+      });
+
+      document.addEventListener('keydown', (ev)=>{
+        if(ev.key === 'Escape') closeSide();
+      });
+
+      let touchStartX = null, touchStartY = null;
+      side.addEventListener('touchstart', (e)=>{
+        const t = e.touches && e.touches[0];
+        if(!t) return;
+        touchStartX = t.clientX;
+        touchStartY = t.clientY;
+      }, { passive:true });
+
+      side.addEventListener('touchend', (e)=>{
+        const t = e.changedTouches && e.changedTouches[0];
+        if(!t || touchStartX === null) return;
+        const dx = t.clientX - touchStartX;
+        const dy = t.clientY - touchStartY;
+        if (dx > 70 && Math.abs(dy) < 60) closeSide();
+        touchStartX = null; touchStartY = null;
+      }, { passive:true });
+
+      function computeOnlineStateFromMinutes(min){
+        if (min === null || Number.isNaN(min)) return { label:'Onbekend', cls:'' };
+        if (min <= 2) return { label:'Online', cls:'ok' };
+        if (min <= 10) return { label:'Opgelet', cls:'warn' };
+        return { label:'Offline', cls:'bad' };
+      }
+
+      function fmtMaybe(v){
+        if (v === null || v === undefined || v === '') return '-';
+        if (typeof v === 'object'){
+          if (v.name !== undefined) return String(v.name);
+          if (v.code !== undefined) return String(v.code);
+          if (v.number !== undefined) return String(v.number);
+          return '-';
+        }
+        return String(v);
+      }
+
+      function pick(obj, paths){
+        for (const p of paths){
+          const parts = p.split('.');
+          let cur = obj;
+          let ok = true;
+          for (const part of parts){
+            if (cur && Object.prototype.hasOwnProperty.call(cur, part)){
+              cur = cur[part];
+            } else {
+              ok = false;
+              break;
+            }
+          }
+          if (ok && cur !== undefined) return cur;
+        }
+        return undefined;
+      }
+
+      function pickCustomer(box){
+        return pick(box, [
+          'Portal.Customer',
+          'portal.customer',
+          'organisation.name',
+          'organization.name',
+          'customer'
+        ]) ?? null;
+      }
+
+      function pickSite(box){
+        return pick(box, [
+          'Portal.Site',
+          'portal.site',
+          'site.name',
+          'site.code',
+          'site'
+        ]) ?? null;
+      }
+
+      function pickBoxNumber(box){
+        return pick(box, [
+          'Portal.BoxNumber',
+          'portal.boxNumber',
+          'box.number',
+          'boxNumber'
+        ]) ?? null;
+      }
+
+      function pickActive(box){
+        const v = pick(box, ['Portal.active','portal.active','active']);
+        if (v === true) return 'ja';
+        if (v === false) return 'nee';
+        return fmtMaybe(v);
+      }
+
+      function pickAccess24h(box){
+        const v = pick(box, ['box.access24h','box.access_24h','access24h','Portal.access24h','portal.access24h']);
+        if (v === true) return 'ja';
+        if (v === false) return 'nee';
+        return fmtMaybe(v);
+      }
+
+      function pickBoxType(box){
+        return pick(box, ['box.type','Portal.type','portal.type','type','hardwareProfile','Profile','profile']) ?? null;
+      }
+
+      function pickBoxDescription(box){
+        return pick(box, ['box.description','Portal.description','portal.description','description']) ?? null;
+      }
+
+      function pickLifecycleState(box){
+        return pick(box, ['lifecycle.state','lifecycle.status','state','status']) ?? null;
+      }
+
+      function pickLifecycleOpenedAt(box){
+        return pick(box, ['lifecycle.openedAt','lifecycle.opened_at','openedAt']) ?? null;
+      }
+
+      function pickLifecycleOpenedBy(box){
+        return pick(box, ['lifecycle.openedBy','lifecycle.opened_by','openedBy']) ?? null;
+      }
+
+      function pickLifecycleClosedAt(box){
+        return pick(box, ['lifecycle.closedAt','lifecycle.closed_at','closedAt']) ?? null;
+      }
+
+      function pickLifecycleClosedBy(box){
+        return pick(box, ['lifecycle.closedBy','lifecycle.closed_by','closedBy']) ?? null;
+      }
+
+      function pickLifecycleSource(box){
+        return pick(box, ['lifecycle.source','source']) ?? null;
+      }
+
+      function pickGeo(box){
+        const v = pick(box, ['location.geo','location.geopoint','location.geoPoint','geo','geoPoint']);
+        if (!v) return null;
+        if (typeof v === 'string') return v;
+        if (typeof v === 'object'){
+          const lat = v.latitude ?? v._latitude;
+          const lng = v.longitude ?? v._longitude;
+          if (lat !== undefined && lng !== undefined) return `${lat}, ${lng}`;
+        }
+        return fmtMaybe(v);
+      }
+
+      function pickAgent(box){
+        return pick(box, [
+          'Agent',
+          'agent',
+          'agent.version',
+          'agentVersion',
+          'softwareVersion'
+        ]) ?? null;
+      }
+
+      function pickProfile(box){
+        return pick(box, [
+          'Profile',
+          'profile',
+          'hardwareProfile',
+          'box.type'
+        ]) ?? null;
+      }
+
+      function buildAddressFromBox(box){
+        const street = pick(box, ['location.street']) ?? '';
+        const number = pick(box, ['location.number']) ?? '';
+        const postCode = pick(box, ['location.postalCode','location.postCode','location.postcode']) ?? '';
+        const city = pick(box, ['location.city']) ?? '';
+
+        let line1 = `${street} ${number}`.trim();
+        let line2 = `${postCode} ${city}`.trim();
+
+        if (!line1 && !line2) return '';
+        if (line1 && line2) return `${line1}, ${line2}`;
+        return line1 || line2;
+      }
+
+      function fmtLastSeen(min){
+        if (min === null || min === undefined) return '-';
+        const n = Number(min);
+        if (Number.isNaN(n)) return '-';
+        return n + ' min geleden';
+      }
+
+      function escapeHtml(s){
+        return String(s || '')
+          .replace(/&/g,'&amp;')
+          .replace(/</g,'&lt;')
+          .replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;')
+          .replace(/'/g,'&#39;');
+      }
+
+      function setBorderByLastSeen(card){
+        const min = Number(card.getAttribute('data-lastseen-min'));
+        const s = computeOnlineStateFromMinutes(min);
+        let color = getComputedStyle(document.documentElement).getPropertyValue('--bad').trim();
+        if (s.cls === 'ok') color = getComputedStyle(document.documentElement).getPropertyValue('--ok').trim();
+        else if (s.cls === 'warn') color = getComputedStyle(document.documentElement).getPropertyValue('--warn').trim();
+        card.style.borderLeftColor = color;
+      }
+
+      function buildPhonesListHtml(phones){
+        if (!phones || !Array.isArray(phones) || !phones.length){
+          return '<li class="muted">Geen nummers</li>';
+        }
+        return phones.map(p=>{
+          const phone = escapeHtml(p.phone || '');
+          const label = escapeHtml(p.label || '');
+          if (!phone) return '';
+          return `<li><span title="${label}">${phone}</span></li>`;
+        }).join('');
+      }
+
+      function buildPhonesDataAttr(phones){
+        if (!phones || !Array.isArray(phones) || !phones.length) return '';
+        return phones
+          .map(p => `${(p.phone||'').trim()}|${(p.label||'').trim()}`)
+          .filter(Boolean)
+          .join(',');
+      }
+
+      function createCard(box){
+        if (box && box.ui && box.ui.hidden === true) return null;
+
+        const id = fmtMaybe(box.id);
+
+        const customer = pickCustomer(box);
+        const sitePicked = pickSite(box);
+        const boxNrPicked = pickBoxNumber(box);
+
+        const site = fmtMaybe(sitePicked);
+        const boxNumber = fmtMaybe(boxNrPicked);
+
+        const agent = pickAgent(box);
+        const profile = pickProfile(box);
+
+        const lastSeen = pick(box, ['lastSeenMinutes','last_seen_minutes','lastSeen']) ?? null;
+        const lastSeenNum = (lastSeen === null || lastSeen === undefined) ? NaN : Number(lastSeen);
+        const s = computeOnlineStateFromMinutes(lastSeenNum);
+
+        const sharesCountRaw = pick(box, ['sharesCount','shares_count']) ?? null;
+        const sharesCount = (sharesCountRaw === null || sharesCountRaw === undefined) ? null : Number(sharesCountRaw);
+
+        const phones = Array.isArray(box.phones) ? box.phones : [];
+        const phonesAttr = buildPhonesDataAttr(phones);
+        const phonesHtml = buildPhonesListHtml(phones);
+
+        const address = buildAddressFromBox(box);
+
+        const active = pickActive(box);
+        const access24h = pickAccess24h(box);
+        const bType = fmtMaybe(pickBoxType(box));
+        const bDesc = fmtMaybe(pickBoxDescription(box));
+        const lcState = fmtMaybe(pickLifecycleState(box));
+        const openedAt = fmtMaybe(pickLifecycleOpenedAt(box));
+        const openedBy = fmtMaybe(pickLifecycleOpenedBy(box));
+        const closedAt = fmtMaybe(pickLifecycleClosedAt(box));
+        const closedBy = fmtMaybe(pickLifecycleClosedBy(box));
+        const lcSource = fmtMaybe(pickLifecycleSource(box));
+        const geo = fmtMaybe(pickGeo(box));
+
+        const card = document.createElement('article');
+        card.className = 'gb-card';
+
+        const statusVal = String(pickLifecycleState(box) ?? pick(box, ['status','state']) ?? '').toLowerCase();
+        if (statusVal === 'open') card.classList.add('is-open');
+
+        card.setAttribute('data-id', id);
+        card.setAttribute('data-site', site === '-' ? '' : site);
+        card.setAttribute('data-box', boxNumber === '-' ? '' : boxNumber);
+        card.setAttribute('data-agent', agent ?? '');
+        card.setAttribute('data-profile', profile ?? '');
+        card.setAttribute('data-lastseen-min', (lastSeen === null || lastSeen === undefined) ? '' : String(lastSeen));
+        card.setAttribute('data-phones', phonesAttr);
+
+        card.setAttribute('data-customer', customer ?? '');
+        card.setAttribute('data-address', address ?? '');
+
+        card.setAttribute('data-active', active ?? '');
+        card.setAttribute('data-access24h', access24h ?? '');
+        card.setAttribute('data-type', bType ?? '');
+        card.setAttribute('data-desc', bDesc ?? '');
+        card.setAttribute('data-lifecycle-state', lcState ?? '');
+        card.setAttribute('data-opened-at', openedAt ?? '');
+        card.setAttribute('data-opened-by', openedBy ?? '');
+        card.setAttribute('data-closed-at', closedAt ?? '');
+        card.setAttribute('data-closed-by', closedBy ?? '');
+        card.setAttribute('data-source', lcSource ?? '');
+        card.setAttribute('data-geo', geo ?? '');
+
+        card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
+
+        const toggleLabel = card.classList.contains('is-open') ? 'CLOSE' : 'OPEN';
+
+        const sharesPill = (sharesCount === null || Number.isNaN(sharesCount))
+          ? `<span class="pill ghost" title="sharesCount">shares -</span>`
+          : `<span class="pill ghost" title="sharesCount">shares ${escapeHtml(String(sharesCount))}</span>`;
+
+        card.innerHTML = `
+          <div class="gb-shutter" aria-hidden="true"><div class="gb-shutter__door"></div></div>
+
+          <div>
+            <div class="gb-head">
+              <div class="gb-site">${escapeHtml(site)}</div>
+              <div class="gb-box"># ${escapeHtml(boxNumber)}</div>
+              <div class="gb-time">Last seen ${escapeHtml(fmtLastSeen(lastSeen))}</div>
+            </div>
+
+            <div class="gb-meta">
+              <span class="pill ${s.cls}" title="Op basis van last seen"><span class="dot"></span><span>${escapeHtml(s.label)}</span></span>
+              <span class="pill ghost" title="Portal.active">active ${escapeHtml(active || '-')}</span>
+              <span class="pill ghost" title="box.access24h">24/7 ${escapeHtml(access24h || '-')}</span>
+              <span class="pill ghost" title="box.type">${escapeHtml(bType || '-')}</span>
+              ${sharesPill}
+            </div>
+
+            <ul class="gb-phones">
+              ${phonesHtml}
+            </ul>
+          </div>
+
+          <div class="gb-actions">
+            <button class="btn" data-action="toggle" type="button">${toggleLabel}</button>
+            <div class="gb-row">
+              <button class="btn-ghost" data-action="events" type="button">EVENTS</button>
+              <button class="btn-ghost" data-action="shares" type="button">SHARES</button>
+              <button class="btn-ghost" data-action="pictures" type="button">PICTURES</button>
+            </div>
+          </div>
+        `;
+
+        setBorderByLastSeen(card);
+        return card;
+      }
+
+      function groupBoxesIntoSections(boxes){
+        const map = new Map();
+        boxes.forEach(b=>{
+          const siteVal = pickSite(b) ?? 'Onbekend';
+          const site = String(siteVal);
+          if (!map.has(site)) map.set(site, []);
+          map.get(site).push(b);
+        });
+        return map;
+      }
+
+      function renderSectionsFromBoxes(boxes){
+        sectionsWrap.innerHTML = '';
+
+        boxes = (boxes || []).filter(b => !(b && b.ui && b.ui.hidden === true));
+
+        if (!boxes || !boxes.length){
+          sectionsWrap.innerHTML = `<div class="muted">Geen gridboxen gevonden</div>`;
+          rebuildFilters();
+          return;
+        }
+
+        const grouped = groupBoxesIntoSections(boxes);
+
+        [...grouped.entries()].forEach(([site, items])=>{
+          const sec = document.createElement('section');
+          sec.className = 'gb-section';
+          sec.setAttribute('data-group', site);
+
+          const customer = (items[0] && pickCustomer(items[0])) ? String(pickCustomer(items[0])) : '';
+          sec.setAttribute('data-customer', customer);
+
+          sec.innerHTML = `
+            <h3 class="gb-section__title">${escapeHtml(site)}</h3>
+            <div class="gb-list"></div>
+          `;
+
+          const list = sec.querySelector('.gb-list');
+          items.forEach(b=>{
+            const card = createCard(b);
+            if (card) list.appendChild(card);
+          });
+
+          sectionsWrap.appendChild(sec);
+        });
+
+        rebuildFilters();
+        applyFilters();
+      }
+
+      async function loadBoxes(){
+        const res = await fetch(apiUrl('/api/boxes'), { method:'GET' });
+        if (!res.ok){
+          const t = await res.text().catch(()=> '');
+          throw new Error('API fout: ' + res.status + ' ' + t);
+        }
+        const data = await res.json().catch(()=> []);
+        return Array.isArray(data) ? data : [];
+      }
+
+      async function sendCommand(boxId, type){
+        const url = apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/${type}`);
+        const res = await fetch(url, { method:'POST' });
+        const payload = await res.json().catch(()=> ({}));
+        if (!res.ok || !payload || payload.ok !== true){
+          throw new Error(payload.error || 'Interne serverfout');
+        }
+        return payload;
+      }
+
+      function openLink(path){
+        const url = apiUrl(path);
+        window.open(url, '_blank', 'noopener');
+      }
+
+      const customerFilter = document.getElementById('customerFilter');
+      const locationFilter = document.getElementById('locationFilter');
+      const search = document.getElementById('search');
+
+      function getSections(){
+        return [...document.querySelectorAll('.gb-section')];
+      }
+      function getCustomerOfSection(sec){ return (sec.getAttribute('data-customer') || '').trim(); }
+      function getLocationOfSection(sec){ return (sec.getAttribute('data-group') || '').trim(); }
+
+      function rebuildCustomerDropdown(){
+        const sections = getSections();
+        const customers = [...new Set(sections.map(getCustomerOfSection))].filter(Boolean).sort();
+        const current = customerFilter.value;
+
+        customerFilter.innerHTML = '<option value="all">Alle klanten</option>';
+        customers.forEach(c=>{
+          const o=document.createElement('option');
+          o.value=c; o.textContent=c;
+          customerFilter.appendChild(o);
+        });
+
+        const stillExists = [...customerFilter.options].some(opt => opt.value === current);
+        customerFilter.value = stillExists ? current : 'all';
+      }
+
+      function rebuildLocationDropdown(){
+        const sections = getSections();
+        const selectedCustomer = customerFilter.value;
+
+        const locations = sections
+          .filter(sec => selectedCustomer === 'all' || getCustomerOfSection(sec) === selectedCustomer)
+          .map(getLocationOfSection).filter(Boolean);
+
+        const uniq = [...new Set(locations)].sort();
+
+        const current = locationFilter.value;
+        locationFilter.innerHTML = '<option value="all">Alle locaties</option>';
+        uniq.forEach(loc=>{
+          const o=document.createElement('option');
+          o.value=loc; o.textContent=loc;
+          locationFilter.appendChild(o);
+        });
+
+        const stillExists = [...locationFilter.options].some(opt => opt.value === current);
+        locationFilter.value = stillExists ? current : 'all';
+      }
+
+      function matchesSearch(card, term){
+        if(!term) return true;
+        term = term.toLowerCase();
+        const site = (card.getAttribute('data-site')||'').toLowerCase();
+        const box  = (card.getAttribute('data-box')||'').toLowerCase();
+        const addr = (card.getAttribute('data-address')||'').toLowerCase();
+        const text = card.innerText.toLowerCase();
+        return site.includes(term) || box.includes(term) || addr.includes(term) || text.includes(term);
+      }
+
+      function applyFilters(){
+        const c = customerFilter.value;
+        const loc = locationFilter.value;
+        const term = search.value.trim();
+
+        const sections = getSections();
+        const cards = [...document.querySelectorAll('.gb-card')];
+
+        cards.forEach(card=>{
+          const sec = card.closest('.gb-section');
+          const secCustomer = getCustomerOfSection(sec);
+          const secLocation = getLocationOfSection(sec);
+
+          const show =
+            (c === 'all' || secCustomer === c) &&
+            (loc === 'all' || secLocation === loc) &&
+            matchesSearch(card, term);
+
+          card.style.display = show ? '' : 'none';
+        });
+
+        sections.forEach(sec=>{
+          const visible = [...sec.querySelectorAll('.gb-card')].some(x => x.style.display !== 'none');
+          sec.style.display = visible ? '' : 'none';
+        });
+      }
+
+      function rebuildFilters(){
+        rebuildCustomerDropdown();
+        rebuildLocationDropdown();
+      }
+
+      customerFilter.addEventListener('change', ()=>{
+        rebuildLocationDropdown();
+        applyFilters();
+      });
+      locationFilter.addEventListener('change', applyFilters);
+      search.addEventListener('input', applyFilters);
+
+      let currentCard = null;
 
       const sideTitle = document.getElementById('sideTitle');
       const sideSub   = document.getElementById('sideSub');
@@ -856,120 +1270,95 @@
       const kvOpened  = document.getElementById('kvOpened');
       const kvClosed  = document.getElementById('kvClosed');
       const kvSource  = document.getElementById('kvSource');
+      const kvGeo     = document.getElementById('kvGeo');
 
       const kvAgent   = document.getElementById('kvAgent');
       const kvProfile = document.getElementById('kvProfile');
-
-      const kvLastSeen= document.getElementById('kvLastSeen');
+      const kvSeen    = document.getElementById('kvSeen');
       const kvStatus  = document.getElementById('kvStatus');
-      const kvGeo     = document.getElementById('kvGeo');
 
       const kvSharesCount = document.getElementById('kvSharesCount');
+
       const sidePhones = document.getElementById('sidePhones');
 
-      const ovOnline = document.getElementById('ovOnline');
-      const ovLastSeen = document.getElementById('ovLastSeen');
-      const ovState = document.getElementById('ovState');
-      const ovShares = document.getElementById('ovShares');
-      const ovAddress = document.getElementById('ovAddress');
+      function setStatusPill(card){
+        const min = Number(card.getAttribute('data-lastseen-min'));
+        const s = computeOnlineStateFromMinutes(min);
+        kvStatus.className = 'status-pill ' + (s.cls || '');
+        kvStatus.textContent = s.label;
+        kvSeen.textContent = (Number.isNaN(min) ? '-' : (min + ' min geleden'));
+      }
+
+      function renderPhones(card){
+        const raw = (card.getAttribute('data-phones') || '').trim();
+        if(!raw){
+          sidePhones.innerHTML = '<li class="muted">Geen gegevens</li>';
+          return;
+        }
+        const items = raw.split(',').map(x=>x.trim()).filter(Boolean).map(pair=>{
+          const parts = pair.split('|');
+          return { phone:(parts[0]||'').trim(), label:(parts[1]||'').trim() };
+        });
+        if(!items.length){
+          sidePhones.innerHTML = '<li class="muted">Geen gegevens</li>';
+          return;
+        }
+        sidePhones.innerHTML = '';
+        items.forEach(it=>{
+          const li = document.createElement('li');
+          li.textContent = it.label ? (it.phone + ' (' + it.label + ')') : it.phone;
+          sidePhones.appendChild(li);
+        });
+      }
+
+      function selectCard(card){
+        document.querySelectorAll('.gb-card.is-selected').forEach(x=>x.classList.remove('is-selected'));
+        card.classList.add('is-selected');
+      }
 
       const sharesStore = {};
       const sharesBody = document.querySelector('#sharesTable tbody');
-      const sharePhone = document.getElementById('sharePhone');
+      const sharePhone   = document.getElementById('sharePhone');
       const shareExpires = document.getElementById('shareExpires');
       const shareComment = document.getElementById('shareComment');
-      const shareHidden = document.getElementById('shareHidden');
+      const shareAuth    = document.getElementById('shareAuth');
 
-      const eventsList = document.getElementById('eventsList');
-
-      let boxes = [];
-      let currentCard = null;
-
-      function isOverlayMode(){
-        return !!(window.matchMedia && window.matchMedia('(max-width: 980px)').matches);
-      }
-
-      function openSide(){
-        side.classList.add('is-open');
-        if(isOverlayMode()){
-          backdrop.classList.add('is-open');
-        }
-      }
-
-      function closeSide(){
-        side.classList.remove('is-open');
-        backdrop.classList.remove('is-open');
-      }
-
-      function scrollSideToBlock(id){
-        const el = document.getElementById(id);
-        if(!el) return;
-        el.scrollIntoView({ behavior:'smooth', block:'start' });
-      }
-
-      function setStatusPill(card){
-        const online = card.getAttribute('data-online');
-        const lastMin = Number(card.getAttribute('data-lastseen-min'));
-        const state = card.getAttribute('data-state');
-
-        const pill = card.querySelector('.pill-status');
-        if(!pill) return;
-
-        let cls = 'pill';
-        let txt = 'Onbekend';
-        if(online === 'true'){
-          cls += ' ok';
-          txt = 'Online';
-        } else if(online === 'false'){
-          cls += ' bad';
-          txt = 'Offline';
-        } else {
-          cls += ' warn';
-          txt = 'Onbekend';
-        }
-
-        if(Number.isFinite(lastMin)){
-          if(lastMin >= LASTSEEN_BAD_MIN){
-            cls = 'pill bad';
-          } else if(lastMin >= LASTSEEN_WARN_MIN){
-            cls = 'pill warn';
-          }
-        }
-
-        const dot = `<span class="dot"></span>`;
-        pill.className = cls + ' pill-status';
-        pill.innerHTML = dot + escapeHtml(txt) + (state ? ` <span class="muted" style="margin-left:6px">${escapeHtml(state)}</span>` : '');
-      }
-
-      function setBorderByLastSeen(card){
-        const min = Number(card.getAttribute('data-lastseen-min'));
-        if(!Number.isFinite(min)){
-          card.style.borderLeftColor = 'transparent';
+      function renderShares(boxId){
+        const rows = (sharesStore[boxId]||[]);
+        sharesBody.innerHTML = '';
+        if(!rows.length){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td colspan="5" class="muted" style="border-radius:12px;">Geen shares</td>`;
+          sharesBody.appendChild(tr);
           return;
         }
-        let color = '#e5e7eb';
-        if(min >= LASTSEEN_BAD_MIN) color = getComputedStyle(document.documentElement).getPropertyValue('--bad');
-        else if(min >= LASTSEEN_WARN_MIN) color = getComputedStyle(document.documentElement).getPropertyValue('--warn');
-        else color = getComputedStyle(document.documentElement).getPropertyValue('--ok');
-        card.style.borderLeftColor = color.trim() || color;
+        rows.forEach((r,i)=>{
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${r.ts}</td>
+            <td>${r.phone}</td>
+            <td>${(r.comment||'').replace(/</g,'&lt;')}</td>
+            <td>${r.auth ? '<span class="badge">Gemachtigd</span>' : (r.expires ? '<span class="badge">Tijdelijk</span>' : '<span class="badge">Actief</span>')}</td>
+            <td class="right"><button class="btn-small btn-ghost" data-del="${i}" type="button">Delete</button></td>
+          `;
+          sharesBody.appendChild(tr);
+        });
       }
 
-      function buildPhonesListHtml(phones){
-        const items = Array.isArray(phones) ? phones : [];
-        if(!items.length) return '<li class="muted">Geen gegevens</li>';
-        return items.map(it=>{
-          if(!it) return '';
-          const phone = it.phone || it.number || it.msisdn || it;
-          const label = it.label || it.type || '';
-          const t = label ? `${escapeHtml(phone)} (${escapeHtml(label)})` : escapeHtml(phone);
-          return '<li>' + t + '</li>';
-        }).join('');
-      }
+      sharesBody.addEventListener('click',(e)=>{
+        const del = e.target.closest('button[data-del]');
+        if(!del || !currentCard) return;
+        const boxId = currentCard.getAttribute('data-id');
+        const idx = Number(del.getAttribute('data-del'));
+        if (!sharesStore[boxId]) return;
+        sharesStore[boxId].splice(idx,1);
+        renderShares(boxId);
+        updateSharesCountUiFromLocal(boxId);
+      });
 
       function updateSharesCountUiFromCard(card){
-        if(!kvSharesCount) return;
-        const raw = card.getAttribute('data-shares-count');
-        if(raw === '' || raw === null || raw === undefined){
+        const raw = (card.getAttribute('data-shares-count') || '').trim();
+        if(!raw){
           kvSharesCount.textContent = 'shares -';
           return;
         }
@@ -981,370 +1370,109 @@
         kvSharesCount.textContent = 'shares ' + n;
       }
 
-      function setSideStatusPill(online, lastSeenMinutes){
-        const dot = '<span class="dot"></span>';
-        let cls = 'status-pill';
-        let txt = '-';
-
-        if(online === true){
-          cls += ' ok';
-          txt = 'Online';
-        } else if(online === false){
-          cls += ' bad';
-          txt = 'Offline';
-        } else {
-          cls += ' warn';
-          txt = 'Onbekend';
-        }
-
-        if(Number.isFinite(lastSeenMinutes)){
-          if(lastSeenMinutes >= LASTSEEN_BAD_MIN){
-            cls = 'status-pill bad';
-          } else if(lastSeenMinutes >= LASTSEEN_WARN_MIN){
-            cls = 'status-pill warn';
-          }
-        }
-
-        kvStatus.className = cls;
-        kvStatus.innerHTML = dot + escapeHtml(txt);
-      }
-
-      function renderPhones(card){
-        const phonesJson = card.getAttribute('data-phones-json');
-        let phones = [];
-        try{ phones = phonesJson ? JSON.parse(phonesJson) : []; }catch(e){}
-        sidePhones.innerHTML = buildPhonesListHtml(phones);
-      }
-
-      function renderShares(boxId){
-        sharesBody.innerHTML = '';
-        const rows = sharesStore[boxId] || [];
-        if(!rows.length){
-          const tr = document.createElement('tr');
-          tr.innerHTML = '<td class="muted" colspan="5">Geen shares</td>';
-          sharesBody.appendChild(tr);
-          kvSharesCount.textContent = 'shares -';
-          return;
-        }
-        rows.forEach(row=>{
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td>${escapeHtml(row.createdAt || '-')}</td>
-            <td>${escapeHtml(row.phone || '-')}</td>
-            <td>${escapeHtml(row.comment || '-')}</td>
-            <td>${escapeHtml(row.status || '-')}</td>
-            <td style="text-align:right">
-              <button class="btn-small" data-share-del="${escapeHtml(row.id || '')}">Del</button>
-            </td>
-          `;
-          sharesBody.appendChild(tr);
-        });
+      function updateSharesCountUiFromLocal(boxId){
+        const rows = (sharesStore[boxId]||[]);
         kvSharesCount.textContent = 'shares ' + rows.length;
       }
 
-      async function loadShares(boxId){
-        try{
-          const res = await fetch((API_BASE||'') + `/api/shares/${encodeURIComponent(boxId)}`);
-          const data = await res.json().catch(()=>null);
-          sharesStore[boxId] = Array.isArray(data) ? data : [];
-        }catch(e){
-          sharesStore[boxId] = [];
-        }
+      document.getElementById('shareAdd').addEventListener('click', ()=>{
+        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
+        const boxId = currentCard.getAttribute('data-id');
+
+        const phone = sharePhone.value.trim();
+        const comment = shareComment.value.trim();
+        const expires = shareExpires.value.trim();
+        const auth = !!shareAuth.checked;
+        if(!phone) return alert('Vul telefoon in.');
+
+        const now = new Date();
+        const pad=n=>String(n).padStart(2,'0');
+        const ts = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+        sharesStore[boxId] = sharesStore[boxId] || [];
+        sharesStore[boxId].unshift({ts, phone, comment, expires, auth});
+        renderShares(boxId);
+
+        sharePhone.value='';
+        shareComment.value='';
+        shareExpires.value='';
+        shareAuth.checked=false;
+
+        updateSharesCountUiFromLocal(boxId);
+      });
+
+      function scrollSideToBlock(blockId){
+        const el = document.getElementById(blockId);
+        if(!el) return;
+        const top = side.scrollTop + el.getBoundingClientRect().top - side.getBoundingClientRect().top - 10;
+        side.scrollTo({ top, behavior:'smooth' });
       }
 
-      async function loadEvents(boxId){
-        try{
-          const res = await fetch((API_BASE||'') + `/api/boxes/${encodeURIComponent(boxId)}/events`);
-          const data = await res.json().catch(()=>null);
-          if(!Array.isArray(data) || !data.length){
-            eventsList.textContent = 'Nog geen events geladen';
-            return;
-          }
-          eventsList.innerHTML = data.slice(0,10).map(ev=>{
-            const t = escapeHtml(ev.time || ev.createdAt || '');
-            const type = escapeHtml(ev.type || ev.event || '');
-            const msg = escapeHtml(ev.message || ev.info || '');
-            return `<div style="padding:6px 0;border-bottom:1px solid var(--border)"><b>${type}</b><div class="muted" style="font-size:12px">${t}</div><div>${msg}</div></div>`;
-          }).join('');
-        }catch(e){
-          eventsList.textContent = 'Nog geen events geladen';
-        }
+      function fmtLifecycleLine(at, by){
+        const a = (at && at !== '-') ? at : '';
+        const b = (by && by !== '-') ? by : '';
+        if (!a && !b) return '-';
+        if (a && b) return a + ' (' + b + ')';
+        return a || b;
       }
 
-      function updateOverviewFromCard(card){
-        const onlineRaw = card.getAttribute('data-online');
-        const lastSeen = card.getAttribute('data-lastseen-min');
-        const state = card.getAttribute('data-state');
-        const address = card.getAttribute('data-address');
-        const sharesRaw = card.getAttribute('data-shares-count');
-
-        let onlineTxt = '-';
-        if(onlineRaw === 'true') onlineTxt = 'Online';
-        else if(onlineRaw === 'false') onlineTxt = 'Offline';
-        else onlineTxt = 'Onbekend';
-
-        let lastTxt = '-';
-        if(lastSeen !== '' && lastSeen !== null && lastSeen !== undefined){
-          lastTxt = String(lastSeen) + ' min geleden';
-        }
-
-        let sharesTxt = '-';
-        if(sharesRaw !== '' && sharesRaw !== null && sharesRaw !== undefined){
-          const n = Number(sharesRaw);
-          sharesTxt = Number.isNaN(n) ? '-' : (String(n));
-        }
-
-        ovOnline.textContent = onlineTxt;
-        ovLastSeen.textContent = lastTxt;
-        ovState.textContent = niceState(state);
-        ovShares.textContent = sharesTxt;
-        ovAddress.textContent = address || '-';
-      }
-
-      function updateSideFromCard(card, subtitle){
+      function updateSideFromCard(card, contextLabel){
         currentCard = card;
+        selectCard(card);
 
-        const site = card.getAttribute('data-site') || '-';
-        const boxNumber = card.getAttribute('data-boxnumber') || '-';
+        const sec = card.closest('.gb-section');
+        const customer = (sec ? sec.getAttribute('data-customer') : '-') || '-';
 
-        sideTitle.textContent = site + ' #' + boxNumber;
-        sideSub.textContent = subtitle || 'Beheer en overzicht';
+        const siteName = card.getAttribute('data-site') || '-';
+        const boxNr = card.getAttribute('data-box') || '-';
+        const address = card.getAttribute('data-address') || '-';
 
-        kvCustomer.textContent = card.getAttribute('data-customer') || '-';
-        kvSite.textContent = site;
-        kvBox.textContent = '# ' + boxNumber;
+        sideTitle.textContent = `${siteName} #${boxNr}`;
+        sideSub.textContent = contextLabel || 'Beheer en overzicht';
 
-        kvAddress.textContent = card.getAttribute('data-address') || '-';
+        kvCustomer.textContent = customer;
+        kvSite.textContent = siteName || '-';
+        kvBox.textContent = '# ' + (boxNr || '-');
+        kvAddress.textContent = address || '-';
 
         kvActive.textContent = card.getAttribute('data-active') || '-';
         kvAccess24h.textContent = card.getAttribute('data-access24h') || '-';
         kvType.textContent = card.getAttribute('data-type') || '-';
-        kvDescription.textContent = card.getAttribute('data-description') || '-';
+        kvDescription.textContent = card.getAttribute('data-desc') || '-';
+        kvLifecycleState.textContent = card.getAttribute('data-lifecycle-state') || '-';
 
-        kvLifecycleState.textContent = card.getAttribute('data-state') || '-';
-        kvOpened.textContent = card.getAttribute('data-opened') || '-';
-        kvClosed.textContent = card.getAttribute('data-closed') || '-';
+        const openedAt = card.getAttribute('data-opened-at') || '-';
+        const openedBy = card.getAttribute('data-opened-by') || '-';
+        const closedAt = card.getAttribute('data-closed-at') || '-';
+        const closedBy = card.getAttribute('data-closed-by') || '-';
+
+        kvOpened.textContent = fmtLifecycleLine(openedAt, openedBy);
+        kvClosed.textContent = fmtLifecycleLine(closedAt, closedBy);
         kvSource.textContent = card.getAttribute('data-source') || '-';
-
-        kvAgent.textContent = card.getAttribute('data-agent') || '-';
-        kvProfile.textContent = card.getAttribute('data-profile') || '-';
-
-        const lastSeen = card.getAttribute('data-lastseen-min');
-        kvLastSeen.textContent = (lastSeen === '' || lastSeen === null) ? '-' : (String(lastSeen) + ' min geleden');
-
-        const onlineRaw = card.getAttribute('data-online');
-        const online = (onlineRaw === 'true') ? true : ((onlineRaw === 'false') ? false : null);
-        const lastSeenMin = Number(lastSeen);
-        setSideStatusPill(online, Number.isFinite(lastSeenMin) ? lastSeenMin : null);
-
         kvGeo.textContent = card.getAttribute('data-geo') || '-';
+
+        kvAgent.textContent = (card.getAttribute('data-agent') ? ('v ' + card.getAttribute('data-agent')) : '-');
+        kvProfile.textContent = (card.getAttribute('data-profile') || '-');
 
         setStatusPill(card);
         renderPhones(card);
 
-        const bId = card.getAttribute('data-id');
-        renderShares(bId);
+        const boxId = card.getAttribute('data-id');
+        renderShares(boxId);
 
         updateSharesCountUiFromCard(card);
-        updateOverviewFromCard(card);
 
         openSide();
       }
 
-      function selectCard(card){
-        document.querySelectorAll('.gb-card.is-selected').forEach(x=>x.classList.remove('is-selected'));
-        card.classList.add('is-selected');
-      }
-
-      function renderBoxes(){
-        const term = (q.value || '').trim().toLowerCase();
-        cardsEl.innerHTML = '';
-        const filtered = !term ? boxes : boxes.filter(b=>{
-          const s = JSON.stringify(b).toLowerCase();
-          return s.includes(term);
-        });
-
-        filtered.forEach(box=>{
-          const card = document.createElement('article');
-          card.className = 'gb-card';
-
-          const id = box.id ?? '-';
-
-          const customer = pick(box, ['organisation.name','Portal.Customer','customer','Customer']) ?? '-';
-          const site = pick(box, ['Portal.Site','site','portal.site']) ?? '-';
-          const boxNumber = pick(box, ['Portal.BoxNumber','boxNumber','portal.boxNumber','box.number']) ?? '-';
-
-          const active = pick(box, ['Portal.active','Portal.Active','active']) ?? null;
-          const access24h = pick(box, ['box.access24h','box.access24H','access24h']) ?? null;
-          const type = pick(box, ['box.type','type','box.type ']) ?? null;
-          const description = pick(box, ['box.description','description']) ?? null;
-
-          const lifecycleState = pick(box, ['lifecycle.state','status','state']) ?? null;
-          const openedAt = pick(box, ['lifecycle.openedAt','openedAt']) ?? null;
-          const openedBy = pick(box, ['lifecycle.openedBy','openedBy']) ?? null;
-          const closedAt = pick(box, ['lifecycle.closedAt','closedAt']) ?? null;
-          const closedBy = pick(box, ['lifecycle.closedBy','closedBy']) ?? null;
-          const source = pick(box, ['lifecycle.source','source']) ?? null;
-
-          const online = pick(box, ['online']) ?? null;
-          const lastSeenMinutes = pick(box, ['lastSeenMinutes','lastSeenMin']) ?? null;
-
-          const agentVersion = pick(box, ['agentVersion','Agent','agent']) ?? null;
-          const hardwareProfile = pick(box, ['hardwareProfile','Profile','profile']) ?? null;
-
-          const location = box.location ?? {};
-          const address = formatAddress(location);
-          const geo = formatGeo(location.geo);
-
-          const sharesCountRaw = pick(box, ['sharesCount','shares_count']) ?? null;
-          const sharesCount = (sharesCountRaw === null || sharesCountRaw === undefined) ? null : Number(sharesCountRaw);
-
-          card.setAttribute('data-id', id);
-          card.setAttribute('data-customer', customer || '-');
-          card.setAttribute('data-site', site || '-');
-          card.setAttribute('data-boxnumber', boxNumber === null ? '-' : String(boxNumber));
-
-          card.setAttribute('data-address', address || '-');
-          card.setAttribute('data-geo', geo || '-');
-
-          card.setAttribute('data-active', (active === null || active === undefined) ? '-' : (active ? 'ja' : 'nee'));
-          card.setAttribute('data-access24h', (access24h === null || access24h === undefined) ? '-' : (access24h ? 'ja' : 'nee'));
-          card.setAttribute('data-type', type ? String(type).trim() : '-');
-          card.setAttribute('data-description', description ? String(description) : '-');
-
-          card.setAttribute('data-state', lifecycleState ? String(lifecycleState) : '-');
-          card.setAttribute('data-opened', formatOpenedClosed({ openedAt, openedBy }, 'openedAt','openedBy'));
-          card.setAttribute('data-closed', formatOpenedClosed({ closedAt, closedBy }, 'closedAt','closedBy'));
-          card.setAttribute('data-source', source ? String(source) : '-');
-
-          card.setAttribute('data-online', (online === true) ? 'true' : ((online === false) ? 'false' : ''));
-          card.setAttribute('data-lastseen-min', (lastSeenMinutes === null || lastSeenMinutes === undefined) ? '' : String(lastSeenMinutes));
-
-          card.setAttribute('data-agent', agentVersion ? String(agentVersion) : '-');
-          card.setAttribute('data-profile', hardwareProfile ? String(hardwareProfile) : '-');
-
-          const phones = pick(box, ['phones','Portal.phones','portal.phones']) ?? [];
-          card.setAttribute('data-phones-json', JSON.stringify(phones || []));
-
-          card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
-
-          const stateTxt = lifecycleState ? String(lifecycleState) : '';
-          if(stateTxt.toLowerCase() === 'open') card.classList.add('is-open');
-
-          const sharesPill = (sharesCount === null || Number.isNaN(sharesCount))
-            ? `<span class="pill ghost" title="sharesCount">shares -</span>`
-            : `<span class="pill ghost" title="sharesCount">shares ${escapeHtml(String(sharesCount))}</span>`;
-
-          card.innerHTML = `
-            <div class="gb-icon" aria-hidden="true">
-              <div class="gb-shutter"><div class="gb-shutter__door"></div></div>
-            </div>
-            <div>
-              <div class="gb-title">
-                <h3>${escapeHtml(site)} #${escapeHtml(String(boxNumber))}</h3>
-                <span class="pill pill-status"><span class="dot"></span> -</span>
-              </div>
-              <div class="gb-meta">
-                <span class="pill ghost" title="boxId">${escapeHtml(id)}</span>
-                <span class="pill ghost" title="klant">${escapeHtml(customer)}</span>
-                ${sharesPill}
-              </div>
-              <div class="card-actions">
-                <button class="btn-small" data-action="manage">Beheer</button>
-                <button class="btn-small" data-action="shares">Shares</button>
-                <button class="btn-small" data-action="events">Events</button>
-                <button class="btn-small" data-action="pictures">Pictures</button>
-              </div>
-            </div>
-          `;
-
-          setStatusPill(card);
-          setBorderByLastSeen(card);
-
-          card.addEventListener('click', ()=>{
-            selectCard(card);
-            updateSideFromCard(card, 'Beheer en overzicht');
-          });
-
-          cardsEl.appendChild(card);
-        });
-
-        if(currentCard){
-          const id = currentCard.getAttribute('data-id');
-          const still = document.querySelector(`.gb-card[data-id="${CSS.escape(id)}"]`);
-          if(still){
-            currentCard = still;
-            selectCard(still);
-          }
-        }
-      }
-
-      async function fetchBoxes(){
-        const res = await fetch((API_BASE || '') + '/api/boxes');
-        if(!res.ok) throw new Error('API /api/boxes faalde');
-        return res.json();
-      }
-
-      async function sendCommand(boxId, cmd){
-        const res = await fetch((API_BASE || '') + `/api/boxes/${encodeURIComponent(boxId)}/${cmd}`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({})
-        });
-        if(!res.ok){
-          const t = await res.text().catch(()=> '');
-          throw new Error('Command faalde: ' + res.status + ' ' + t);
-        }
-        return res.json().catch(()=> ({}));
-      }
-
-      async function addShare(boxId, payload){
-        const res = await fetch((API_BASE || '') + `/api/shares/${encodeURIComponent(boxId)}`,{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify(payload || {})
-        });
-        if(!res.ok){
-          const t = await res.text().catch(()=> '');
-          throw new Error('Add share faalde: ' + res.status + ' ' + t);
-        }
-        return res.json().catch(()=> ({}));
-      }
-
-      async function deleteShare(boxId, shareId){
-        const res = await fetch((API_BASE || '') + `/api/shares/${encodeURIComponent(boxId)}/${encodeURIComponent(shareId)}`,{
-          method:'DELETE'
-        });
-        if(!res.ok){
-          const t = await res.text().catch(()=> '');
-          throw new Error('Delete share faalde: ' + res.status + ' ' + t);
-        }
-        return res.json().catch(()=> ({}));
-      }
-
-      document.getElementById('btnCloseSide').addEventListener('click', closeSide);
-      backdrop.addEventListener('click', closeSide);
-
-      document.getElementById('btnCollapse').addEventListener('click', ()=>{
-        side.classList.remove('is-wide');
-        app.classList.remove('is-expanded');
-        app.classList.add('is-collapsed');
-      });
-
-      document.getElementById('btnExpand').addEventListener('click', ()=>{
-        app.classList.remove('is-collapsed');
-        app.classList.add('is-expanded');
-      });
-
-      document.getElementById('btnToggleWide').addEventListener('click', ()=>{
-        side.classList.toggle('is-wide');
-      });
-
-      q.addEventListener('input', renderBoxes);
-
       document.getElementById('btnGoShares').addEventListener('click', ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
         updateSideFromCard(currentCard, 'Toegang beheren');
+
+        side.classList.add('is-wide');
+        app.classList.remove('is-collapsed');
+        app.classList.add('is-expanded');
+
         setTimeout(()=>scrollSideToBlock('blockShares'), 0);
       });
 
@@ -1356,28 +1484,52 @@
         if(btn){
           const action = btn.getAttribute('data-action');
 
-          if(action === 'manage'){
+          if(action === 'toggle'){
             e.preventDefault(); e.stopPropagation();
-            selectCard(card);
-            updateSideFromCard(card, 'Beheer en overzicht');
+
+            const boxId = card.getAttribute('data-id');
+            const isOpen = card.classList.contains('is-open');
+            const next = isOpen ? 'close' : 'open';
+
+            if (!boxId || boxId === '-'){
+              alert('Box id ontbreekt.');
+              return;
+            }
+
+            const ok = confirm(next === 'open' ? 'Box openen?' : 'Box sluiten?');
+            if(!ok) return;
+
+            try{
+              await sendCommand(boxId, next);
+
+              card.classList.toggle('is-open', next === 'open');
+              btn.textContent = next === 'open' ? 'CLOSE' : 'OPEN';
+
+              updateSideFromCard(card, 'Beheer en overzicht');
+            } catch(err){
+              alert('Actie mislukt: ' + (err && err.message ? err.message : err));
+            }
             return;
           }
 
           if(action === 'shares'){
             e.preventDefault(); e.stopPropagation();
-            selectCard(card);
             updateSideFromCard(card, 'Toegang beheren');
+
+            side.classList.add('is-wide');
+            app.classList.remove('is-collapsed');
+            app.classList.add('is-expanded');
+
             setTimeout(()=>scrollSideToBlock('blockShares'), 0);
             return;
           }
 
           if(action === 'events'){
             e.preventDefault(); e.stopPropagation();
-            selectCard(card);
-            updateSideFromCard(card, 'Events');
-            setTimeout(()=>scrollSideToBlock('blockEvents'), 0);
+            updateSideFromCard(card, 'Beheer en overzicht');
             const boxId = card.getAttribute('data-id');
-            if(boxId && boxId !== '-') loadEvents(boxId);
+            if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/events`);
+            setTimeout(()=>scrollSideToBlock('blockEvents'), 0);
             return;
           }
 
@@ -1402,6 +1554,8 @@
         try{
           await sendCommand(boxId, 'open');
           currentCard.classList.add('is-open');
+          const btn = currentCard.querySelector('button[data-action="toggle"]');
+          if(btn) btn.textContent = 'CLOSE';
           updateSideFromCard(currentCard, 'Beheer en overzicht');
         } catch(err){
           alert('OPEN mislukt: ' + (err && err.message ? err.message : err));
@@ -1417,26 +1571,13 @@
         try{
           await sendCommand(boxId, 'close');
           currentCard.classList.remove('is-open');
+          const btn = currentCard.querySelector('button[data-action="toggle"]');
+          if(btn) btn.textContent = 'OPEN';
           updateSideFromCard(currentCard, 'Beheer en overzicht');
         } catch(err){
           alert('CLOSE mislukt: ' + (err && err.message ? err.message : err));
         }
       });
-
-      const btnOpenTop = document.getElementById('btnOpenTop');
-      const btnCloseTop = document.getElementById('btnCloseTop');
-      if(btnOpenTop){
-        btnOpenTop.addEventListener('click', ()=>{
-          const b = document.getElementById('btnOpen');
-          if(b) b.click();
-        });
-      }
-      if(btnCloseTop){
-        btnCloseTop.addEventListener('click', ()=>{
-          const b = document.getElementById('btnClose');
-          if(b) b.click();
-        });
-      }
 
       document.getElementById('btnEvents').addEventListener('click', ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
@@ -1450,91 +1591,16 @@
         if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/pictures`);
       });
 
-      document.getElementById('btnAddShare').addEventListener('click', async ()=>{
-        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
-        const boxId = currentCard.getAttribute('data-id');
-
-        const phone = (sharePhone.value || '').trim();
-        const expiresAt = (shareExpires.value || '').trim();
-        const comment = (shareComment.value || '').trim();
-        const hidden = !!shareHidden.checked;
-
-        if(!phone) return alert('Telefoon is verplicht.');
-
+      (async function init(){
         try{
-          await addShare(boxId, { phone, expiresAt, comment, hidden });
-          await loadShares(boxId);
-          renderShares(boxId);
-
-          const n = (sharesStore[boxId] || []).length;
-          if(currentCard) currentCard.setAttribute('data-shares-count', String(n));
-          updateSharesCountUiFromCard(currentCard);
-          updateOverviewFromCard(currentCard);
-
-          sharePhone.value = '';
-          shareExpires.value = '';
-          shareComment.value = '';
-          shareHidden.checked = false;
-        }catch(err){
-          alert('Add share mislukt: ' + (err && err.message ? err.message : err));
+          const boxes = await loadBoxes();
+          renderSectionsFromBoxes(boxes);
+        } catch(err){
+          console.error(err);
+          sectionsWrap.innerHTML = `<div class="muted">Kon gridboxen niet laden</div>`;
+          rebuildFilters();
         }
-      });
-
-      sharesBody.addEventListener('click', async (e)=>{
-        const btn = e.target.closest('button[data-share-del]');
-        if(!btn) return;
-        if(!currentCard) return;
-        const shareId = btn.getAttribute('data-share-del');
-        if(!shareId) return;
-
-        const ok = confirm('Share verwijderen?');
-        if(!ok) return;
-
-        try{
-          const boxId = currentCard.getAttribute('data-id');
-          await deleteShare(boxId, shareId);
-          await loadShares(boxId);
-          renderShares(boxId);
-
-          const n = (sharesStore[boxId] || []).length;
-          currentCard.setAttribute('data-shares-count', String(n));
-          updateSharesCountUiFromCard(currentCard);
-          updateOverviewFromCard(currentCard);
-        }catch(err){
-          alert('Delete share mislukt: ' + (err && err.message ? err.message : err));
-        }
-      });
-
-      async function boot(){
-        try{
-          boxes = await fetchBoxes();
-
-          for(const b of boxes){
-            const id = b.id;
-            if(!id) continue;
-            await loadShares(id);
-            const n = (sharesStore[id] || []).length;
-
-            try{
-              b.sharesCount = n;
-            }catch(e){}
-          }
-
-          renderBoxes();
-
-          if(boxes && boxes.length){
-            const first = document.querySelector('.gb-card');
-            if(first){
-              selectCard(first);
-              updateSideFromCard(first, 'Beheer en overzicht');
-            }
-          }
-        }catch(err){
-          cardsEl.innerHTML = `<div class="muted" style="padding:16px">Kon boxen niet laden: ${escapeHtml(err && err.message ? err.message : err)}</div>`;
-        }
-      }
-
-      boot();
+      })();
     })();
   </script>
 </body>
