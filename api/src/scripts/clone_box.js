@@ -1,14 +1,15 @@
 // api/src/scripts/clone_box.js
 import { Firestore } from "@google-cloud/firestore";
 
-const [,, sourceBoxId, targetBoxId] = process.argv;
+const args = process.argv;
+const sourceBoxId = args[2];
+const targetBoxId = args[3];
 
 if (!sourceBoxId || !targetBoxId) {
   console.error("Gebruik: node clone_box.js <bronBoxId> <doelBoxId>");
   process.exit(1);
 }
 
-// Firestore init (werkt in Cloud Shell + lokaal + CI)
 const db = new Firestore({
   projectId: process.env.GOOGLE_CLOUD_PROJECT || "gridbox-platform"
 });
@@ -20,16 +21,24 @@ async function cloneBox() {
   const sourceSnap = await sourceRef.get();
 
   if (!sourceSnap.exists) {
-    throw new Error(`Bron box ${sourceBoxId} bestaat niet`);
+    throw new Error("Bron box bestaat niet: " + sourceBoxId);
   }
 
   const sourceData = sourceSnap.data();
 
-  // Veilig: geen portal-specifieke runtime data kopiëren
-  const cleanedData = {
-    ...sourceData
-  };
+  await targetRef.set(sourceData);
 
-  await targetRef.set(cleanedData);
+  console.log(
+    "OK: " +
+    targetBoxId +
+    " is een kopie van " +
+    sourceBoxId
+  );
+}
 
-  console.log(`OK: ${targetBoxId} is een kopie van ${sourceBoxId
+cloneBox()
+  .then(() => process.exit(0))
+  .catch(err => {
+    console.error("FAILED:", err.message);
+    process.exit(1);
+  });
