@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gridbox Portal v1</title>
+
+  <style>
+    :root{
+      --primary:#6d28d9;
+      --ok:#22c55e;
+      --warn:#eab308;
+      --bad:#ef4444;
+
+      --bg:#f8fafc;
+      --panel:#ffffff;
+      --ink:#0f172a;
+      --muted:#64748b;
+
+      --border:#e5e7eb;
+      --chip:#f4eefe;
+
+      --shadow:0 2px 10px rgba(0,0,0,.08);
+      --radius:16px;
+    }
+
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--ink);
+      font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,'Helvetica Neue',Arial;
+    }
+
+    body.lock-scroll{
+      overflow:hidden;
+      touch-action:none;
+    }
+
+    .app{
+      display:grid;
+      grid-template-columns: 1fr 560px;
+      min-height:100vh;
+    }
+    .app.is-collapsed{ grid-template-columns: 1fr 360px; }
+    .app.is-expanded{ grid-template-columns: 1fr 760px; }
+
+    .main{
+      padding:18px 18px 28px;
+      overflow:auto;
+      border-right:1px solid #f1f5f9;
+    }
+
+    .toolbar{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:14px;
+    }
+
+    .brand{
+      font-weight:800;
+      font-size:20px;
+      letter-spacing:.3px;
+      white-space:nowrap;
+    }
+
+    .toolbar__right{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    #customerFilter,#locationFilter,#search{
+      padding:10px 12px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:#fff;
+      font:inherit;
+    }
+    #search{min-width:260px}
+
+    .gb-section{margin-bottom:20px}
+    .gb-section__title{
+      font-weight:800;
+      margin:10px 0 10px 4px;
+      font-size:18px;
+    }
+    .gb-list{display:grid;gap:12px}
+
+    .gb-card{
+      display:grid;
+      grid-template-columns:64px 1fr auto;
+      gap:12px;
+      align-items:stretch;
+      background:#fff;
+      border:1px solid #eee;
+      border-left:6px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:12px;
+      cursor:pointer;
+    }
+    .gb-card.is-selected{
+      outline:2px solid rgba(109,40,217,.18);
+      outline-offset:2px;
+    }
+
+    .gb-shutter{
+      position:relative;
+      width:56px;height:56px;
+      border-radius:12px;
+      background:#f3f4f6;
+      overflow:hidden;
+      box-shadow:inset 0 0 0 1px var(--border);
+      cursor:default;
+    }
+    .gb-shutter__door{
+      position:absolute;
+      inset:0;
+      background-image:url('https://gridbox.eu/images/f5b43959-ec7d-4fbe-9a38-1324a9617cf3_biss.png');
+      background-repeat:repeat-y;
+      background-size:100% auto;
+      transition:transform 0.9s cubic-bezier(.2,.7,.2,1);
+      transform:translateY(0);
+    }
+    .gb-card.is-open .gb-shutter__door{ transform:translateY(-100%); }
+
+    .gb-head{
+      display:grid;
+      grid-template-columns:1fr auto auto;
+      gap:8px;
+      align-items:center;
+      margin-bottom:6px;
+    }
+    .gb-site{font-weight:800; font-size:16px}
+    .gb-box{font-weight:800;color:#111827}
+    .gb-time{font-size:.85rem;color:var(--muted)}
+
+    .gb-meta{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+      margin:6px 0 0;
+    }
+
+    .pill{
+      display:inline-flex;
+      gap:6px;
+      align-items:center;
+      padding:4px 10px;
+      border-radius:999px;
+      font-size:12px;
+      border:1px solid var(--border);
+      background:#f8fafc;
+      color:#111827;
+      white-space:nowrap;
+    }
+    .pill.ok{border-color:#bbf7d0;background:#f0fdf4}
+    .pill.warn{border-color:#fde68a;background:#fffbeb}
+    .pill.bad{border-color:#fecaca;background:#fef2f2}
+    .pill .dot{width:8px;height:8px;border-radius:99px;background:#94a3b8;flex:0 0 auto}
+    .pill.ok .dot{background:var(--ok)}
+    .pill.warn .dot{background:var(--warn)}
+    .pill.bad .dot{background:var(--bad)}
+    .pill.ghost{background:#fff;border-style:dashed;color:var(--muted)}
+
+    .gb-phones{
+      margin:10px 0 0;
+      padding-left:18px;
+      color:#111827;
+    }
+    .gb-phones li{line-height:1.35}
+
+    .gb-actions{
+      display:grid;
+      grid-template-rows:auto auto;
+      gap:8px;
+      min-width:240px;
+      align-items:start;
+      justify-items:stretch;
+      cursor:default;
+    }
+    .gb-actions .gb-row{
+      display:flex;
+      gap:8px;
+      justify-content:space-between;
+      flex-wrap:wrap;
+    }
+
+    .btn,.btn-ghost{
+      border-radius:12px;
+      padding:10px 12px;
+      border:1px solid var(--border);
+      cursor:pointer;
+      font:inherit;
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn{
+      background:var(--primary);
+      color:#fff;
+      border:none;
+    }
+    .btn:active{transform:translateY(1px)}
+    .btn-ghost{
+      background:var(--chip);
+    }
+    .btn-ghost:hover{filter:brightness(.98)}
+
+    .btn-small{
+      padding:9px 12px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:var(--primary);
+      color:#fff;
+      cursor:pointer;
+      font:inherit;
+    }
+    .btn-small.btn-ghost{
+      background:var(--chip);
+      color:inherit;
+    }
+
+    .right{display:flex;justify-content:flex-end}
+    .muted{color:var(--muted)}
+
+    .badge{
+      display:inline-block;
+      padding:2px 8px;
+      border-radius:999px;
+      border:1px solid #ddd;
+      font-size:11px;
+      color:#6b7280;
+      background:#f3f4f6;
+      white-space:nowrap;
+    }
+
+    /* Rechter detailpaneel */
+    .side{
+      background:var(--panel);
+      overflow:auto;
+      box-shadow:-10px 0 30px rgba(0,0,0,.08);
+      border-left:1px solid #f1f5f9;
+    }
+
+    .side-header{
+      position:sticky;
+      top:0;
+      z-index:5;
+      background:var(--panel);
+      border-bottom:1px solid #f1f5f9;
+      padding:14px 14px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+    }
+
+    .side-title{font-weight:800;font-size:16px;margin:0}
+    .side-sub{color:var(--muted);font-size:12px;margin-top:2px}
+
+    .side-actions{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+
+    .side-body{padding:14px 14px 18px}
+
+    .block{
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px;
+      background:#fff;
+      margin-bottom:12px;
+    }
+    .block h4{margin:0 0 10px;font-size:14px}
+
+    .chip{
+      display:inline-block;
+      background:#eef2ff;
+      border:1px solid #e0e7ff;
+      color:#3730a3;
+      border-radius:999px;
+      padding:2px 8px;
+      font-size:.75rem;
+    }
+
+    .kv{
+      display:grid;
+      grid-template-columns:140px 1fr;
+      gap:8px;
+      font-size:13px;
+    }
+    .kv div{padding:3px 0}
+
+    .status-pill{
+      display:inline-block;
+      border-radius:999px;
+      padding:4px 10px;
+      font-size:12px;
+      border:1px solid var(--border);
+      background:#f8fafc;
+    }
+    .status-pill.ok{border-color:#bbf7d0;background:#f0fdf4}
+    .status-pill.warn{border-color:#fde68a;background:#fffbeb}
+    .status-pill.bad{border-color:#fecaca;background:#fef2f2}
+
+    .hint{
+      color:var(--muted);
+      font-size:12px;
+      margin-left:6px;
+      white-space:nowrap;
+    }
+
+    .form-row{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+      margin-bottom:10px;
+    }
+
+    .field{display:flex;flex-direction:column;gap:6px}
+    .field input,.field textarea{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px;
+      background:#fff;
+      font:inherit;
+    }
+    .field label{font-weight:700;color:#111827;font-size:12px}
+    .check{display:flex;align-items:center;gap:8px;margin:8px 0 0}
+
+    table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    th{
+      font-weight:700;
+      text-align:left;
+      color:var(--muted);
+      font-size:12px;
+      padding:0 8px;
+      white-space:nowrap;
+    }
+    td{
+      background:#fff;
+      border:1px solid var(--border);
+      padding:10px 8px;
+      vertical-align:top;
+      font-size:13px;
+    }
+    td:first-child{
+      border-top-left-radius:12px;
+      border-bottom-left-radius:12px;
+      width:150px;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    td:last-child{
+      border-top-right-radius:12px;
+      border-bottom-right-radius:12px;
+    }
+
+    .phone-list{margin:0;padding-left:16px}
+    .phone-list li{margin:6px 0;color:#111827}
+
+    #btnCloseSide{display:none;}
+
+    /* Backdrop voor mobile overlay */
+    .backdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(15,23,42,.35);
+      opacity:0;
+      pointer-events:none;
+      transition:opacity .2s ease;
+      z-index:40;
+    }
+    .backdrop.is-open{opacity:1;pointer-events:auto}
+
+    /* Mobile: detailpaneel schuift in */
+    @media (max-width: 980px){
+      .app, .app.is-collapsed, .app.is-expanded{ grid-template-columns: 1fr; }
+
+      .side{
+        position:fixed;
+        top:0;right:0;bottom:0;
+        width:min(92vw,720px);
+        transform:translateX(110%);
+        transition:transform .24s ease;
+        z-index:50;
+      }
+      .side.is-open{ transform:translateX(0); }
+      .side.is-wide{ width:100vw; }
+
+      #btnCloseSide{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+      }
+
+      .form-row{grid-template-columns:1fr}
+    }
+
+    @media (max-width: 640px){
+      .main{ padding:14px 14px 24px; }
+
+      .toolbar{flex-direction:column;align-items:flex-start;gap:10px}
+      .toolbar__right{width:100%;justify-content:flex-start}
+
+      #customerFilter,#locationFilter{width:calc(50% - 5px)}
+      #search{min-width:0;width:100%}
+
+      .gb-card{grid-template-columns:64px 1fr;grid-template-rows:auto auto}
+      .gb-actions{grid-column:1 / -1;min-width:0;grid-template-rows:auto}
+      .gb-actions .btn{width:100%}
+      .gb-actions .gb-row{width:100%;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+      .gb-actions .gb-row .btn-ghost{width:100%;padding:10px 8px}
+
+      .gb-head{grid-template-columns:1fr auto}
+      .gb-time{grid-column:1 / -1}
+
+      .gb-phones{display:none}
+      .pill{padding:4px 9px}
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app" class="app is-collapsed">
+    <main class="main">
+      <div class="toolbar">
+        <div class="brand">Gridbox</div>
+
+        <div class="toolbar__right">
+          <select id="customerFilter" aria-label="Klant filter">
+            <option value="all">Alle klanten</option>
+          </select>
+
+          <select id="locationFilter" aria-label="Locatie filter">
+            <option value="all">Alle locaties</option>
+          </select>
+
+          <input id="search" type="search" placeholder="Zoek op box, site of telefoon..." aria-label="Zoeken"/>
+        </div>
+      </div>
+
+      <div id="sections" aria-live="polite">
+        <section class="gb-section" data-customer="Powergrid" data-group="Heist">
+          <h3 class="gb-section__title">Heist</h3>
+          <div class="gb-list">
+            <article class="gb-card"
+              data-site="Heist"
+              data-box="2"
+              data-hours="2880"
+              data-agent="1.0.2"
+              data-profile="HP01"
+              data-lastseen-min="2880"
+              data-phones="+32474414557|DEMA TECH,+32471095207|Andy Coomans,+32474749853|Andreas Ketels,+32473809198|Robin Sprinterbus,+32486746112|Cédric">
+              <div class="gb-shutter" aria-hidden="true"><div class="gb-shutter__door"></div></div>
+
+              <div>
+                <div class="gb-head">
+                  <div class="gb-site">Heist</div>
+                  <div class="gb-box"># 2</div>
+                  <div class="gb-time">Last opened 4 months ago</div>
+                </div>
+
+                <div class="gb-meta">
+                  <span class="pill bad" title="Op basis van last seen"><span class="dot"></span><span>Offline</span></span>
+                  <span class="pill ghost" title="Controller software versie">v 1.0.2</span>
+                  <span class="pill ghost" title="Hardware profiel">HP01</span>
+                  <span class="pill ghost" title="Aantal actieve shares">shares 5</span>
+                </div>
+
+                <ul class="gb-phones">
+                  <li><span title="DEMA TECH">+32474414557</span></li>
+                  <li><span title="Andy Coomans">+32471095207</span></li>
+                  <li><span title="Andreas Ketels">+32474749853</span></li>
+                  <li><span title="Robin Sprinterbus">+32473809198</span></li>
+                  <li><span title="Cédric">+32486746112</span></li>
+                </ul>
+              </div>
+
+              <div class="gb-actions">
+                <button class="btn" data-action="toggle" type="button">OPEN</button>
+                <div class="gb-row">
+                  <button class="btn-ghost" data-action="events" type="button">EVENTS</button>
+                  <button class="btn-ghost" data-action="shares" type="button">SHARES</button>
+                  <button class="btn-ghost" data-action="pictures" type="button">PICTURES</button>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="gb-section" data-customer="Powergrid" data-group="Winkel Bocholt">
+          <h3 class="gb-section__title">Winkel Bocholt</h3>
+          <div class="gb-list">
+            <article class="gb-card"
+              data-site="Winkel Bocholt"
+              data-box="3"
+              data-hours="10"
+              data-agent="1.0.3"
+              data-profile="HP01"
+              data-lastseen-min="1"
+              data-phones="+32476384775|Afhaling vervangfiets,+32486463136|DAAN CHAUFFEUR">
+              <div class="gb-shutter" aria-hidden="true"><div class="gb-shutter__door"></div></div>
+
+              <div>
+                <div class="gb-head">
+                  <div class="gb-site">Winkel Bocholt</div>
+                  <div class="gb-box"># 3</div>
+                  <div class="gb-time">Last opened 10 hours ago</div>
+                </div>
+
+                <div class="gb-meta">
+                  <span class="pill ok" title="Op basis van last seen"><span class="dot"></span><span>Online</span></span>
+                  <span class="pill ghost" title="Controller software versie">v 1.0.3</span>
+                  <span class="pill ghost" title="Hardware profiel">HP01</span>
+                  <span class="pill ghost" title="Aantal actieve shares">shares 2</span>
+                </div>
+
+                <ul class="gb-phones">
+                  <li><span title="Afhaling vervangfiets">+32476384775</span></li>
+                  <li><span title="DAAN CHAUFFEUR">+32486463136</span></li>
+                </ul>
+              </div>
+
+              <div class="gb-actions">
+                <button class="btn" data-action="toggle" type="button">OPEN</button>
+                <div class="gb-row">
+                  <button class="btn-ghost" data-action="events" type="button">EVENTS</button>
+                  <button class="btn-ghost" data-action="shares" type="button">SHARES</button>
+                  <button class="btn-ghost" data-action="pictures" type="button">PICTURES</button>
+                </div>
+              </div>
+            </article>
+
+            <article class="gb-card"
+              data-site="Winkel Bocholt"
+              data-box="4"
+              data-hours="9"
+              data-agent="1.0.3"
+              data-profile="HP02"
+              data-lastseen-min="7"
+              data-phones="+32479346704|Afhaling fiets,+32470125080|Binnenbrengen">
+              <div class="gb-shutter" aria-hidden="true"><div class="gb-shutter__door"></div></div>
+
+              <div>
+                <div class="gb-head">
+                  <div class="gb-site">Winkel Bocholt</div>
+                  <div class="gb-box"># 4</div>
+                  <div class="gb-time">Last opened 9 hours ago</div>
+                </div>
+
+                <div class="gb-meta">
+                  <span class="pill warn" title="Op basis van last seen"><span class="dot"></span><span>Opgelet</span></span>
+                  <span class="pill ghost" title="Controller software versie">v 1.0.3</span>
+                  <span class="pill ghost" title="Hardware profiel">HP02</span>
+                  <span class="pill ghost" title="Aantal actieve shares">shares 2</span>
+                </div>
+
+                <ul class="gb-phones">
+                  <li><span title="Afhaling fiets">+32479346704</span></li>
+                  <li><span title="Binnenbrengen">+32470125080</span></li>
+                </ul>
+              </div>
+
+              <div class="gb-actions">
+                <button class="btn" data-action="toggle" type="button">OPEN</button>
+                <div class="gb-row">
+                  <button class="btn-ghost" data-action="events" type="button">EVENTS</button>
+                  <button class="btn-ghost" data-action="shares" type="button">SHARES</button>
+                  <button class="btn-ghost" data-action="pictures" type="button">PICTURES</button>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <aside id="side" class="side" aria-label="Detail">
+      <div class="side-header">
+        <div>
+          <div class="side-title" id="sideTitle">Selecteer een Gridbox</div>
+          <div class="side-sub" id="sideSub">Tik op een kaart links</div>
+        </div>
+        <div class="side-actions">
+          <button id="btnCollapse" class="btn-ghost" type="button" title="Smaller">Smaller</button>
+          <button id="btnExpand" class="btn-ghost" type="button" title="Breder">Breder</button>
+          <button id="btnCloseSide" class="btn" type="button" title="Sluiten">Sluiten</button>
+        </div>
+      </div>
+
+      <div class="side-body">
+        <div class="block" id="blockStatus">
+          <h4>Status</h4>
+          <div class="muted" style="font-size:12px;margin:-4px 0 10px;">
+            Druk op SHARES om toegang te beheren.
+          </div>
+
+          <div class="kv">
+            <div class="muted">Klant</div>
+            <div title="De organisatie die deze box beheert.">
+              <span id="kvCustomer">-</span><span class="hint">(organisatie)</span>
+            </div>
+
+            <div class="muted">Locatie</div>
+            <div title="De plaats waar deze Gridbox staat.">
+              <span id="kvSite">-</span><span class="hint">(site)</span>
+            </div>
+
+            <div class="muted">Box</div>
+            <div title="Het nummer van deze Gridbox binnen de locatie.">
+              <span id="kvBox">-</span><span class="hint">(box nr)</span>
+            </div>
+
+            <div class="muted">Agent</div>
+            <div title="Versie van de controller software in deze box.">
+              <span id="kvAgent">-</span><span class="hint">(software)</span>
+            </div>
+
+            <div class="muted">Profile</div>
+            <div title="Hardwareprofiel (aansluitingen).">
+              <span id="kvProfile">-</span><span class="hint">(hardware)</span>
+            </div>
+
+            <div class="muted">Last seen</div>
+            <div title="Laatste contact van de box controller.">
+              <span id="kvSeen">-</span><span class="hint">(laatst online)</span>
+            </div>
+
+            <div class="muted">Online</div>
+            <div title="Online is recent contact. Offline is langer geen contact.">
+              <span id="kvStatus" class="status-pill">-</span><span class="hint">(verbinding)</span>
+            </div>
+          </div>
+
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" id="btnOpen" type="button">OPEN</button>
+            <button class="btn-ghost" id="btnClose" type="button">CLOSE</button>
+          </div>
+
+          <div style="margin-top:10px">
+            <span class="chip">Beheeractie wordt gelogd als portaal</span>
+          </div>
+        </div>
+
+        <div class="block" id="blockPhones">
+          <h4>Telefoons</h4>
+          <div class="muted" style="font-size:12px;margin:-4px 0 10px;">
+            Overzicht gelinkte nummers.
+          </div>
+          <ul id="sidePhones" class="phone-list">
+            <li class="muted">Geen gegevens</li>
+          </ul>
+        </div>
+
+        <div class="block" id="blockShares">
+          <h4>Shares</h4>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="sharePhone">Telefoon</label>
+              <input id="sharePhone" placeholder="+32..." inputmode="tel" />
+            </div>
+            <div class="field">
+              <label for="shareExpires">Vervalt op</label>
+              <input id="shareExpires" placeholder="bv 19/12/2025 22:00" />
+            </div>
+          </div>
+
+          <div class="field" style="margin-bottom:10px">
+            <label for="shareComment">Commentaar</label>
+            <input id="shareComment" placeholder="bv Afhaling..." />
+          </div>
+
+          <label class="check">
+            <input type="checkbox" id="shareAuth"/>
+            <span>Gemachtigd (niet zichtbaar in overzicht)</span>
+          </label>
+
+          <div class="right" style="margin:12px 0">
+            <button id="shareAdd" class="btn-small" type="button">Add Share</button>
+          </div>
+
+          <div style="overflow:auto">
+            <table id="sharesTable" aria-label="Shares tabel">
+              <thead>
+                <tr>
+                  <th>Tijd</th>
+                  <th>Telefoon</th>
+                  <th>Commentaar</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="block" id="blockEvents">
+          <h4>Events</h4>
+          <div id="eventsList" class="muted">Nog geen events geladen</div>
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn-ghost" id="btnEvents" type="button">Open events</button>
+            <button class="btn-ghost" id="btnPictures" type="button">Open pictures</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div id="backdrop" class="backdrop" aria-hidden="true"></div>
+
+  <script>
+    (function(){
+      const app = document.getElementById('app');
+      const side = document.getElementById('side');
+      const backdrop = document.getElementById('backdrop');
+
+      function isOverlayMode(){
+        return !!(window.matchMedia && window.matchMedia('(max-width: 980px)').matches);
+      }
+
+      function openSide(){
+        side.classList.add('is-open');
+        if (isOverlayMode()){
+          backdrop.classList.add('is-open');
+          document.body.classList.add('lock-scroll');
+        }
+      }
+
+      function closeSide(){
+        side.classList.remove('is-open');
+        backdrop.classList.remove('is-open');
+        document.body.classList.remove('lock-scroll');
+
+        side.classList.remove('is-wide');
+        app.classList.remove('is-expanded');
+      }
+
+      backdrop.addEventListener('click', closeSide);
+      document.getElementById('btnCloseSide').addEventListener('click', closeSide);
+
+      document.getElementById('btnCollapse').addEventListener('click', ()=>{
+        side.classList.remove('is-wide');
+        app.classList.remove('is-expanded');
+        app.classList.add('is-collapsed');
+      });
+
+      document.getElementById('btnExpand').addEventListener('click', ()=>{
+        app.classList.remove('is-collapsed');
+        app.classList.add('is-expanded');
+      });
+
+      window.addEventListener('resize', ()=>{
+        if (!isOverlayMode()){
+          backdrop.classList.remove('is-open');
+          document.body.classList.remove('lock-scroll');
+          side.classList.remove('is-open');  // desktop: geen overlay
+        }
+      });
+
+      document.addEventListener('keydown', (ev)=>{
+        if(ev.key === 'Escape') closeSide();
+      });
+
+      // Swipe to close op mobiel
+      let touchStartX = null, touchStartY = null;
+      side.addEventListener('touchstart', (e)=>{
+        const t = e.touches && e.touches[0];
+        if(!t) return;
+        touchStartX = t.clientX;
+        touchStartY = t.clientY;
+      }, { passive:true });
+
+      side.addEventListener('touchend', (e)=>{
+        const t = e.changedTouches && e.changedTouches[0];
+        if(!t || touchStartX === null) return;
+        const dx = t.clientX - touchStartX;
+        const dy = t.clientY - touchStartY;
+        if (dx > 70 && Math.abs(dy) < 60) closeSide();
+        touchStartX = null; touchStartY = null;
+      }, { passive:true });
+
+      // Border kleur per hours
+      function setBorderByHours(card){
+        const h = Number(card.getAttribute('data-hours')||9999);
+        let color = getComputedStyle(document.documentElement).getPropertyValue('--bad').trim();
+        if (h <= 6) color = getComputedStyle(document.documentElement).getPropertyValue('--ok').trim();
+        else if (h <= 24) color = getComputedStyle(document.documentElement).getPropertyValue('--warn').trim();
+        card.style.borderLeftColor = color;
+      }
+      document.querySelectorAll('.gb-card').forEach(setBorderByHours);
+
+      // Filters
+      const customerFilter = document.getElementById('customerFilter');
+      const locationFilter = document.getElementById('locationFilter');
+      const search = document.getElementById('search');
+      const sections = [...document.querySelectorAll('.gb-section')];
+
+      function getCustomerOfSection(sec){ return (sec.getAttribute('data-customer') || '').trim(); }
+      function getLocationOfSection(sec){ return (sec.getAttribute('data-group') || '').trim(); }
+
+      const customers = [...new Set(sections.map(getCustomerOfSection))].filter(Boolean).sort();
+      customers.forEach(c=>{
+        const o=document.createElement('option');
+        o.value=c; o.textContent=c;
+        customerFilter.appendChild(o);
+      });
+
+      function rebuildLocationDropdown(){
+        const selectedCustomer = customerFilter.value;
+        const locations = sections
+          .filter(sec => selectedCustomer === 'all' || getCustomerOfSection(sec) === selectedCustomer)
+          .map(getLocationOfSection).filter(Boolean);
+        const uniq = [...new Set(locations)].sort();
+
+        const current = locationFilter.value;
+        locationFilter.innerHTML = '<option value="all">Alle locaties</option>';
+        uniq.forEach(loc=>{
+          const o=document.createElement('option');
+          o.value=loc; o.textContent=loc;
+          locationFilter.appendChild(o);
+        });
+
+        const stillExists = [...locationFilter.options].some(opt => opt.value === current);
+        locationFilter.value = stillExists ? current : 'all';
+      }
+
+      function matchesSearch(card, term){
+        if(!term) return true;
+        term = term.toLowerCase();
+        const site = (card.getAttribute('data-site')||'').toLowerCase();
+        const box  = (card.getAttribute('data-box')||'').toLowerCase();
+        const text = card.innerText.toLowerCase();
+        return site.includes(term) || box.includes(term) || text.includes(term);
+      }
+
+      function applyFilters(){
+        const c = customerFilter.value;
+        const loc = locationFilter.value;
+        const term = search.value.trim();
+
+        const cards = [...document.querySelectorAll('.gb-card')];
+        cards.forEach(card=>{
+          const sec = card.closest('.gb-section');
+          const secCustomer = getCustomerOfSection(sec);
+          const secLocation = getLocationOfSection(sec);
+
+          const show =
+            (c === 'all' || secCustomer === c) &&
+            (loc === 'all' || secLocation === loc) &&
+            matchesSearch(card, term);
+
+          card.style.display = show ? '' : 'none';
+        });
+
+        sections.forEach(sec=>{
+          const visible = [...sec.querySelectorAll('.gb-card')].some(x => x.style.display !== 'none');
+          sec.style.display = visible ? '' : 'none';
+        });
+      }
+
+      customerFilter.addEventListener('change', ()=>{
+        rebuildLocationDropdown();
+        applyFilters();
+      });
+      locationFilter.addEventListener('change', applyFilters);
+      search.addEventListener('input', applyFilters);
+      rebuildLocationDropdown();
+      applyFilters();
+
+      // Detail pane data refs
+      let currentCard = null;
+
+      const sideTitle = document.getElementById('sideTitle');
+      const sideSub   = document.getElementById('sideSub');
+
+      const kvCustomer= document.getElementById('kvCustomer');
+      const kvSite    = document.getElementById('kvSite');
+      const kvBox     = document.getElementById('kvBox');
+      const kvAgent   = document.getElementById('kvAgent');
+      const kvProfile = document.getElementById('kvProfile');
+      const kvSeen    = document.getElementById('kvSeen');
+      const kvStatus  = document.getElementById('kvStatus');
+
+      const sidePhones = document.getElementById('sidePhones');
+
+      function computeOnlineStateFromMinutes(min){
+        if (min === null || Number.isNaN(min)) return { label:'Onbekend', cls:'' };
+        if (min <= 2) return { label:'Online', cls:'ok' };
+        if (min <= 10) return { label:'Opgelet', cls:'warn' };
+        return { label:'Offline', cls:'bad' };
+      }
+
+      function setStatusPill(card){
+        const min = Number(card.getAttribute('data-lastseen-min'));
+        const s = computeOnlineStateFromMinutes(min);
+        kvStatus.className = 'status-pill ' + (s.cls || '');
+        kvStatus.textContent = s.label;
+        kvSeen.textContent = (Number.isNaN(min) ? '-' : (min + ' min geleden'));
+      }
+
+      function renderPhones(card){
+        const raw = (card.getAttribute('data-phones') || '').trim();
+        if(!raw){
+          sidePhones.innerHTML = '<li class="muted">Geen gegevens</li>';
+          return;
+        }
+        const items = raw.split(',').map(x=>x.trim()).filter(Boolean).map(pair=>{
+          const parts = pair.split('|');
+          return { phone:(parts[0]||'').trim(), label:(parts[1]||'').trim() };
+        });
+        if(!items.length){
+          sidePhones.innerHTML = '<li class="muted">Geen gegevens</li>';
+          return;
+        }
+        sidePhones.innerHTML = '';
+        items.forEach(it=>{
+          const li = document.createElement('li');
+          li.textContent = it.label ? (it.phone + ' (' + it.label + ')') : it.phone;
+          sidePhones.appendChild(li);
+        });
+      }
+
+      function selectCard(card){
+        document.querySelectorAll('.gb-card.is-selected').forEach(x=>x.classList.remove('is-selected'));
+        card.classList.add('is-selected');
+      }
+
+      const sharesStore = {
+        "3": [
+          { ts:"22/08/2025 13:04", phone:"+32476384775", comment:"Afhaling vervangfiets", expires:"", auth:false },
+          { ts:"14/08/2025 11:07", phone:"+32486463136", comment:"DAAN CHAUFFEUR", expires:"", auth:true }
+        ],
+        "4": [
+          { ts:"19/12/2025 20:11", phone:"+32479346704", comment:"Afhaling fiets", expires:"19/12/2025 22:00", auth:false },
+          { ts:"19/12/2025 18:02", phone:"+32470125080", comment:"Binnenbrengen", expires:"", auth:false }
+        ]
+      };
+
+      const sharesBody = document.querySelector('#sharesTable tbody');
+      const sharePhone   = document.getElementById('sharePhone');
+      const shareExpires = document.getElementById('shareExpires');
+      const shareComment = document.getElementById('shareComment');
+      const shareAuth    = document.getElementById('shareAuth');
+
+      function renderShares(boxId){
+        const rows = (sharesStore[boxId]||[]);
+        sharesBody.innerHTML = '';
+        if(!rows.length){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td colspan="5" class="muted" style="border-radius:12px;">Geen shares</td>`;
+          sharesBody.appendChild(tr);
+          return;
+        }
+        rows.forEach((r,i)=>{
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${r.ts}</td>
+            <td>${r.phone}</td>
+            <td>${(r.comment||'').replace(/</g,'&lt;')}</td>
+            <td>${r.auth ? '<span class="badge">Gemachtigd</span>' : (r.expires ? '<span class="badge">Tijdelijk</span>' : '<span class="badge">Actief</span>')}</td>
+            <td class="right"><button class="btn-small btn-ghost" data-del="${i}" type="button">Delete</button></td>
+          `;
+          sharesBody.appendChild(tr);
+        });
+      }
+
+      sharesBody.addEventListener('click',(e)=>{
+        const del = e.target.closest('button[data-del]');
+        if(!del || !currentCard) return;
+        const boxId = currentCard.getAttribute('data-box');
+        const idx = Number(del.getAttribute('data-del'));
+        sharesStore[boxId].splice(idx,1);
+        renderShares(boxId);
+      });
+
+      document.getElementById('shareAdd').addEventListener('click', ()=>{
+        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
+        const boxId = currentCard.getAttribute('data-box');
+        const phone = sharePhone.value.trim();
+        const comment = shareComment.value.trim();
+        const expires = shareExpires.value.trim();
+        const auth = !!shareAuth.checked;
+        if(!phone) return alert('Vul telefoon in.');
+
+        const now = new Date();
+        const pad=n=>String(n).padStart(2,'0');
+        const ts = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+        sharesStore[boxId] = sharesStore[boxId] || [];
+        sharesStore[boxId].unshift({ts, phone, comment, expires, auth});
+        renderShares(boxId);
+
+        sharePhone.value='';
+        shareComment.value='';
+        shareExpires.value='';
+        shareAuth.checked=false;
+      });
+
+      function scrollSideToBlock(blockId){
+        const el = document.getElementById(blockId);
+        if(!el) return;
+        const top = side.scrollTop + el.getBoundingClientRect().top - side.getBoundingClientRect().top - 10;
+        side.scrollTo({ top, behavior:'smooth' });
+      }
+
+      function updateSideFromCard(card, contextLabel){
+        currentCard = card;
+        selectCard(card);
+
+        const sec = card.closest('.gb-section');
+        const customer = (sec ? sec.getAttribute('data-customer') : '-') || '-';
+
+        sideTitle.textContent = `${card.getAttribute('data-site')} #${card.getAttribute('data-box')}`;
+        sideSub.textContent = contextLabel || 'Beheer en overzicht';
+
+        kvCustomer.textContent = customer;
+        kvSite.textContent = card.getAttribute('data-site') || '-';
+        kvBox.textContent = '# ' + (card.getAttribute('data-box') || '-');
+        kvAgent.textContent = 'v ' + (card.getAttribute('data-agent') || '-');
+        kvProfile.textContent = (card.getAttribute('data-profile') || '-');
+
+        setStatusPill(card);
+        renderPhones(card);
+        renderShares(card.getAttribute('data-box'));
+
+        openSide();
+      }
+
+      function initOnlineBadges(){
+        document.querySelectorAll('.gb-card').forEach(card=>{
+          const min = Number(card.getAttribute('data-lastseen-min'));
+          const pill = card.querySelector('.gb-meta .pill');
+          if(!pill) return;
+          const s = computeOnlineStateFromMinutes(min);
+          pill.classList.remove('ok','warn','bad');
+          if(s.cls) pill.classList.add(s.cls);
+          pill.innerHTML = `<span class="dot"></span><span>${s.label}</span>`;
+        });
+      }
+      initOnlineBadges();
+
+      // 1 klik handler (geen pointerup, geen dubbele events)
+      document.addEventListener('click', (e)=>{
+        const btn = e.target.closest('button[data-action]');
+        const card = e.target.closest('.gb-card');
+        if(!card) return;
+
+        if(btn){
+          const action = btn.getAttribute('data-action');
+
+          if(action === 'toggle'){
+            e.preventDefault(); e.stopPropagation();
+            const isOpen = card.classList.toggle('is-open');
+            btn.textContent = isOpen ? 'CLOSE' : 'OPEN';
+            updateSideFromCard(card, 'Beheer en overzicht');
+            return;
+          }
+
+          if(action === 'shares'){
+            e.preventDefault(); e.stopPropagation();
+            updateSideFromCard(card, 'Toegang beheren');
+
+            side.classList.add('is-wide');
+            app.classList.remove('is-collapsed');
+            app.classList.add('is-expanded');
+
+            setTimeout(()=>scrollSideToBlock('blockShares'), 0);
+            return;
+          }
+
+          if(action === 'events'){
+            e.preventDefault(); e.stopPropagation();
+            updateSideFromCard(card, 'Beheer en overzicht');
+            setTimeout(()=>scrollSideToBlock('blockEvents'), 0);
+            return;
+          }
+
+          if(action === 'pictures'){
+            e.preventDefault(); e.stopPropagation();
+            updateSideFromCard(card, 'Beheer en overzicht');
+            alert('PICTURES (demo)');
+            return;
+          }
+        }
+
+        updateSideFromCard(card, 'Beheer en overzicht');
+      });
+
+      // Top buttons in detail pane
+      document.getElementById('btnOpen').addEventListener('click', ()=>{
+        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
+        alert('OPEN (demo). In productie: call naar API.');
+      });
+      document.getElementById('btnClose').addEventListener('click', ()=>{
+        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
+        alert('CLOSE (demo). In productie: call naar API.');
+      });
+      document.getElementById('btnEvents').addEventListener('click', ()=> alert('EVENTS (demo)'));
+      document.getElementById('btnPictures').addEventListener('click', ()=> alert('PICTURES (demo)'));
+    })();
+  </script>
+</body>
+</html>
