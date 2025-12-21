@@ -11,52 +11,100 @@ function get(obj, path) {
   return cur;
 }
 
+function isUsable(v) {
+  if (v === undefined || v === null) return false;
+  if (typeof v === "string" && v.trim() === "") return false;
+  return true;
+}
+
 function pickFirst(data, paths) {
   for (const p of paths) {
     const v = get(data, p);
-    if (v !== undefined && v !== null) return v;
+    if (isUsable(v)) return v;
   }
   return undefined;
 }
 
-function missingRequired(id, data) {
+function missingRequired(data) {
   const missing = [];
 
   const site = pickFirst(data, ["Portal.Site", "portal.site", "site.name", "site"]);
   const boxNr = pickFirst(data, ["Portal.BoxNumber", "portal.boxNumber", "box.number", "boxNumber"]);
 
-  if (site === undefined || site === "") missing.push("Portal.Site");
-  if (boxNr === undefined || boxNr === "") missing.push("Portal.BoxNumber");
+  if (!isUsable(site)) missing.push("Portal.Site");
+  if (!isUsable(boxNr)) missing.push("Portal.BoxNumber");
+
+  return missing;
+}
+
+function warnImportant(data) {
+  const missing = [];
+
+  const customer = pickFirst(data, [
+    "Portal.Customer",
+    "portal.customer",
+    "organisation.name",
+    "organization.name",
+    "customer"
+  ]);
+
+  if (!isUsable(customer)) missing.push("Portal.Customer");
 
   return missing;
 }
 
 function logMissingIfNeeded(id, data) {
-  const missing = missingRequired(id, data);
-  if (!missing.length) return;
+  const required = missingRequired(data);
+  const important = warnImportant(data);
 
-  // Zet dit op "1" als je het wil forceren, anders logt hij ook zonder dat (maar je kan dat aanpassen)
-  const force = process.env.LOG_DTO_WARN === "1";
+  if (!required.length && !important.length) return;
 
-  if (force || true) {
-    const topKeys = Object.keys(data || {}).slice(0, 30);
+  const topKeys = Object.keys(data || {}).slice(0, 30);
+
+  if (required.length) {
     console.warn(
-      `[toBoxDto] Missing required fields for box ${id}: ${missing.join(", ")}. Top-level keys: ${topKeys.join(", ")}`
+      `[toBoxDto] Missing REQUIRED fields for box ${id}: ${required.join(", ")}. Top-level keys: ${topKeys.join(", ")}`
     );
   }
+
+  if (important.length) {
+    console.warn(
+      `[toBoxDto] Missing IMPORTANT fields for box ${id}: ${important.join(", ")}. Top-level keys: ${topKeys.join(", ")}`
+    );
+  }
+}
+
+function normalizePortalCustomer(data) {
+  const portal = data?.Portal ?? data?.portal ?? {};
+  const existing = portal?.Customer ?? portal?.customer;
+
+  if (isUsable(existing)) return String(existing);
+
+  const orgName = data?.organisation?.name ?? data?.organization?.name;
+  if (isUsable(orgName)) return String(orgName);
+
+  const customer = data?.customer;
+  if (isUsable(customer)) return String(customer);
+
+  return null;
 }
 
 export function toBoxDto(id, data) {
   logMissingIfNeeded(id, data);
 
-  // Contract: frontend kijkt alleen naar deze structuur
-  // Firestore mag intern veranderen, hier vangen we dat op
-  const dto = {
+  const portalRaw = data?.Portal ?? data?.portal ?? {};
+
+  const Portal = {
+    ...portalRaw,
+    Customer: normalizePortalCustomer(data)
+  };
+
+  return {
     id,
 
     organisationId: data?.organisationId ?? data?.organizationId ?? null,
 
-    Portal: data?.Portal ?? data?.portal ?? {},
+    Portal,
     box: data?.box ?? {},
     location: data?.location ?? {},
     lifecycle: data?.lifecycle ?? {},
@@ -71,6 +119,4 @@ export function toBoxDto(id, data) {
       data?.lastSeen ??
       null
   };
-
-  return dto;
 }
