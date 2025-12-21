@@ -502,7 +502,6 @@
 
       <div class="side-body">
 
-        <!-- Toegang bovenaan -->
         <div class="block" id="blockAccess">
           <h4>Toegang</h4>
           <div class="access-row">
@@ -517,7 +516,6 @@
           </div>
         </div>
 
-        <!-- Shares direct onder Toegang (hoger dan Status) -->
         <div class="block" id="blockShares">
           <h4>Shares</h4>
 
@@ -1109,7 +1107,8 @@
           sec.className = 'gb-section';
           sec.setAttribute('data-group', site);
 
-          const customer = (items[0] && pickCustomer(items[0])) ? String(pickCustomer(items[0])) : '';
+          const custSet = new Set(items.map(x => String(pickCustomer(x) || '')).filter(Boolean));
+          const customer = (custSet.size === 1) ? [...custSet][0] : '';
           sec.setAttribute('data-customer', customer);
 
           sec.innerHTML = `
@@ -1162,18 +1161,31 @@
       function getSections(){
         return [...document.querySelectorAll('.gb-section')];
       }
-      function getCustomerOfSection(sec){ return (sec.getAttribute('data-customer') || '').trim(); }
-      function getLocationOfSection(sec){ return (sec.getAttribute('data-group') || '').trim(); }
+
+      function getCards(){
+        return [...document.querySelectorAll('.gb-card')];
+      }
+
+      function getCustomerOfCard(card){
+        return (card.getAttribute('data-customer') || '').trim();
+      }
+
+      function getSiteOfCard(card){
+        return (card.getAttribute('data-site') || '').trim();
+      }
 
       function rebuildCustomerDropdown(){
-        const sections = getSections();
-        const customers = [...new Set(sections.map(getCustomerOfSection))].filter(Boolean).sort();
+        const customers = [...new Set(getCards().map(getCustomerOfCard))]
+          .filter(Boolean)
+          .sort();
+
         const current = customerFilter.value;
 
         customerFilter.innerHTML = '<option value="all">Alle klanten</option>';
         customers.forEach(c=>{
-          const o=document.createElement('option');
-          o.value=c; o.textContent=c;
+          const o = document.createElement('option');
+          o.value = c;
+          o.textContent = c;
           customerFilter.appendChild(o);
         });
 
@@ -1182,20 +1194,22 @@
       }
 
       function rebuildLocationDropdown(){
-        const sections = getSections();
         const selectedCustomer = customerFilter.value;
 
-        const locations = sections
-          .filter(sec => selectedCustomer === 'all' || getCustomerOfSection(sec) === selectedCustomer)
-          .map(getLocationOfSection).filter(Boolean);
+        const sites = getCards()
+          .filter(card => selectedCustomer === 'all' || getCustomerOfCard(card) === selectedCustomer)
+          .map(getSiteOfCard)
+          .filter(Boolean);
 
-        const uniq = [...new Set(locations)].sort();
+        const uniq = [...new Set(sites)].sort();
 
         const current = locationFilter.value;
+
         locationFilter.innerHTML = '<option value="all">Alle locaties</option>';
         uniq.forEach(loc=>{
-          const o=document.createElement('option');
-          o.value=loc; o.textContent=loc;
+          const o = document.createElement('option');
+          o.value = loc;
+          o.textContent = loc;
           locationFilter.appendChild(o);
         });
 
@@ -1219,16 +1233,15 @@
         const term = search.value.trim();
 
         const sections = getSections();
-        const cards = [...document.querySelectorAll('.gb-card')];
+        const cards = getCards();
 
         cards.forEach(card=>{
-          const sec = card.closest('.gb-section');
-          const secCustomer = getCustomerOfSection(sec);
-          const secLocation = getLocationOfSection(sec);
+          const cardCustomer = getCustomerOfCard(card);
+          const cardSite = getSiteOfCard(card);
 
           const show =
-            (c === 'all' || secCustomer === c) &&
-            (loc === 'all' || secLocation === loc) &&
+            (c === 'all' || cardCustomer === c) &&
+            (loc === 'all' || cardSite === loc) &&
             matchesSearch(card, term);
 
           card.style.display = show ? '' : 'none';
@@ -1420,8 +1433,7 @@
         currentCard = card;
         selectCard(card);
 
-        const sec = card.closest('.gb-section');
-        const customer = (sec ? sec.getAttribute('data-customer') : '-') || '-';
+        const customer = card.getAttribute('data-customer') || '-';
 
         const siteName = card.getAttribute('data-site') || '-';
         const boxNr = card.getAttribute('data-box') || '-';
