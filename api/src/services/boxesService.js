@@ -54,10 +54,37 @@ function normalizePhones(raw) {
   return [];
 }
 
+function toMs(v) {
+  if (!v) return null;
+
+  // Firestore Timestamp (admin SDK)
+  if (typeof v === "object" && typeof v.toDate === "function") {
+    return v.toDate().getTime();
+  }
+
+  // milliseconden
+  if (typeof v === "number") return v;
+
+  // ISO string
+  if (typeof v === "string") {
+    const t = Date.parse(v);
+    return Number.isNaN(t) ? null : t;
+  }
+
+  return null;
+}
+
+function minutesSince(ms) {
+  if (!ms) return null;
+  const diff = Date.now() - ms;
+  if (diff <= 0) return 0;
+  return Math.floor(diff / 60000);
+}
+
 function normalizeBox(id, data) {
   const d = data || {};
 
-  // Deze platte velden gebruiken we voor de portal
+  // Platte velden voor de portal
   const customer = pick(d, ["customer", "Portal.Customer", "portal.customer"]);
   const site = pick(d, ["site", "Portal.Site", "portal.site"]);
   const boxNumber = pick(d, ["boxNumber", "Portal.BoxNumber", "portal.boxNumber"]);
@@ -74,16 +101,43 @@ function normalizeBox(id, data) {
   const hardwareProfile =
     pick(d, ["hardwareProfile", "Portal.Profile", "portal.profile", "profile"]) ?? null;
 
-  const lastSeenMinutes =
+  // lastSeenMinutes: eerst nemen wat er bestaat, anders berekenen uit timestamps
+  let lastSeenMinutes =
     pick(d, ["lastSeenMinutes", "status.lastSeenMinutes"]) ?? null;
 
-  const sharesCount =
+  if (lastSeenMinutes === null) {
+    const ts =
+      pick(d, [
+        "status.timestamp",
+        "state.since",
+        "lifecycle.openedAt",
+        "lifecycle.closedAt",
+        "status.updatedAt",
+        "status.changedAt"
+      ]) ?? null;
+
+    const ms = toMs(ts);
+    lastSeenMinutes = minutesSince(ms);
+  }
+
+  // sharesCount: eerst nemen wat er bestaat, anders afleiden uit arrays als die bestaan
+  let sharesCount =
     pick(d, ["sharesCount", "Portal.sharesCount", "portal.sharesCount"]) ?? null;
+
+  if (sharesCount === null) {
+    const sharesArr = pick(d, ["shares", "Portal.shares", "portal.shares"]);
+    if (Array.isArray(sharesArr)) sharesCount = sharesArr.length;
+  }
 
   const phonesRaw =
     pick(d, ["phones", "Portal.phones", "portal.phones", "phoneNumbers"]) ?? null;
 
   const phones = normalizePhones(phonesRaw);
+
+  // Als sharesCount nog altijd null is, maar we hebben wel phones, dan is dit een nuttige fallback
+  if (sharesCount === null && Array.isArray(phones) && phones.length > 0) {
+    sharesCount = phones.length;
+  }
 
   // We laten de originele data bestaan, maar voegen ook platte velden toe
   return {
