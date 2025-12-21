@@ -11,93 +11,54 @@ function get(obj, path) {
   return cur;
 }
 
-function isUsable(v) {
-  if (v === undefined || v === null) return false;
-  if (typeof v === "string" && v.trim() === "") return false;
-  return true;
-}
-
 function pickFirst(data, paths) {
   for (const p of paths) {
     const v = get(data, p);
-    if (isUsable(v)) return v;
+    if (v !== undefined && v !== null && v !== "") return v;
   }
   return undefined;
 }
 
-function missingRequired(data) {
+// Normaliseer keys: "street " -> "street"
+function normalizeKeys(obj) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
+  const out = {};
+  for (const k of Object.keys(obj)) {
+    out[String(k).trim()] = obj[k];
+  }
+  return out;
+}
+
+function requiredMissing(data) {
   const missing = [];
 
-  const site = pickFirst(data, ["Portal.Site", "portal.site", "site.name", "site"]);
-  const boxNr = pickFirst(data, ["Portal.BoxNumber", "portal.boxNumber", "box.number", "boxNumber"]);
+  const site = pickFirst(data, ["Portal.Site", "Portal.Site ", "portal.site", "site.name", "site"]);
+  const boxNr = pickFirst(data, ["Portal.BoxNumber", "Portal.BoxNumber ", "portal.boxNumber", "box.number", "boxNumber"]);
 
-  if (!isUsable(site)) missing.push("Portal.Site");
-  if (!isUsable(boxNr)) missing.push("Portal.BoxNumber");
+  if (site === undefined || site === "") missing.push("Portal.Site");
+  if (boxNr === undefined || boxNr === "") missing.push("Portal.BoxNumber");
 
   return missing;
 }
 
-function warnImportant(data) {
-  const missing = [];
-
-  const customer = pickFirst(data, [
-    "Portal.Customer",
-    "portal.customer",
-    "organisation.name",
-    "organization.name",
-    "customer"
-  ]);
-
-  if (!isUsable(customer)) missing.push("Portal.Customer");
-
-  return missing;
-}
-
-function logMissingIfNeeded(id, data) {
-  const required = missingRequired(data);
-  const important = warnImportant(data);
-
-  if (!required.length && !important.length) return;
+function warnIfMissing(id, data) {
+  const missing = requiredMissing(data);
+  if (!missing.length) return;
 
   const topKeys = Object.keys(data || {}).slice(0, 30);
-
-  if (required.length) {
-    console.warn(
-      `[toBoxDto] Missing REQUIRED fields for box ${id}: ${required.join(", ")}. Top-level keys: ${topKeys.join(", ")}`
-    );
-  }
-
-  if (important.length) {
-    console.warn(
-      `[toBoxDto] Missing IMPORTANT fields for box ${id}: ${important.join(", ")}. Top-level keys: ${topKeys.join(", ")}`
-    );
-  }
-}
-
-function normalizePortalCustomer(data) {
-  const portal = data?.Portal ?? data?.portal ?? {};
-  const existing = portal?.Customer ?? portal?.customer;
-
-  if (isUsable(existing)) return String(existing);
-
-  const orgName = data?.organisation?.name ?? data?.organization?.name;
-  if (isUsable(orgName)) return String(orgName);
-
-  const customer = data?.customer;
-  if (isUsable(customer)) return String(customer);
-
-  return null;
+  console.warn(
+    `[toBoxDto] Missing required fields for box ${id}: ${missing.join(", ")}. Top-level keys: ${topKeys.join(", ")}`
+  );
 }
 
 export function toBoxDto(id, data) {
-  logMissingIfNeeded(id, data);
+  warnIfMissing(id, data);
 
-  const portalRaw = data?.Portal ?? data?.portal ?? {};
-
-  const Portal = {
-    ...portalRaw,
-    Customer: normalizePortalCustomer(data)
-  };
+  const Portal = normalizeKeys(data?.Portal ?? data?.portal ?? {});
+  const box = normalizeKeys(data?.box ?? {});
+  const location = normalizeKeys(data?.location ?? {});
+  const lifecycle = normalizeKeys(data?.lifecycle ?? {});
+  const organisation = normalizeKeys(data?.organisation ?? data?.organization ?? {});
 
   return {
     id,
@@ -105,10 +66,10 @@ export function toBoxDto(id, data) {
     organisationId: data?.organisationId ?? data?.organizationId ?? null,
 
     Portal,
-    box: data?.box ?? {},
-    location: data?.location ?? {},
-    lifecycle: data?.lifecycle ?? {},
-    organisation: data?.organisation ?? data?.organization ?? {},
+    box,
+    location,
+    lifecycle,
+    organisation,
 
     Agent: data?.Agent ?? data?.agent ?? null,
     Profile: data?.Profile ?? data?.profile ?? null,
