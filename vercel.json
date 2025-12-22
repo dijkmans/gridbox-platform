@@ -1,6 +1,6 @@
-{
+﻿{
   "builds": [
-    { "src": "index.html", "use": "@vercel/static" }
+    { "src": "apps/portal-web/public/index.html", "use": "@vercel/static" }
   ],
   "rewrites": [
     {
