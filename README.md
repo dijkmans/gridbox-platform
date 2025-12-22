@@ -1,3 +1,9 @@
+﻿## Repo structuur
+
+apps/portal-web  = front-end website
+apps/api         = backend API
+apps/pi-agent    = Raspberry Pi agent
+apps/simulator   = simulator
 Ik hou hierbij expliciet rekening met het Gridbox Master Document v1.2.1 (en opvolgende versies) als vaste referentie en leidend kader. Dit document is officieel en bindend. Afwijkingen alleen na expliciete beslissing en versie-update.
 
 # GRIDBOX MASTER DOCUMENT v1.2.1
@@ -5,7 +11,7 @@ Ik hou hierbij expliciet rekening met het Gridbox Master Document v1.2.1 (en opv
 Laatste update: 2025-12-17
 Status: officieel en bindend kader voor ontwikkeling
 
-Dit document is de officiële en bindende basis voor alles wat met de ontwikkeling van het Gridbox-platform te maken heeft. Bij elke ontwikkelingstaak moet dit document automatisch gevolgd worden.
+Dit document is de officiÃ«le en bindende basis voor alles wat met de ontwikkeling van het Gridbox-platform te maken heeft. Bij elke ontwikkelingstaak moet dit document automatisch gevolgd worden.
 
 Afwijkingen zijn enkel toegestaan na expliciete beslissing en versie-update.
 
@@ -60,7 +66,7 @@ Kan:
 ## 3. Kernbegrippen
 
 * Organisatie: klantbedrijf met eigen afbakening (orgId)
-* Locatie (site): groep boxen op één plaats
+* Locatie (site): groep boxen op Ã©Ã©n plaats
 * Box: fysieke Gridbox unit
 * Share: toegang gekoppeld aan telefoonnummer
 * Gemachtigd: vaste toegang voor personeel, zonder invloed op bezetting of reservatie
@@ -82,7 +88,7 @@ Kan:
 
   * Raspberry Pi agent (productie)
   * Simulator agent (ontwikkeling)
-* Media storage (bv. Cloud Storage) voor foto’s en video
+* Media storage (bv. Cloud Storage) voor fotoâ€™s en video
 
 ### 4.2 Hoofdflow
 
@@ -129,7 +135,7 @@ Toont alle locaties met boxkaarten.
 
 Per boxkaart:
 
-* boxnaam en box-id (uniek en duidelijk, bv. “Winkel Bocholt box 1”)
+* boxnaam en box-id (uniek en duidelijk, bv. â€œWinkel Bocholt box 1â€)
 * shutterState: Gesloten, Bezig met openen, Open, Bezig met sluiten, Fout
 * online status: Online of Offline (op basis van lastSeenAt, zie 6.4.2)
 * lastOpenedAt
@@ -137,9 +143,9 @@ Per boxkaart:
 
   * tijdelijke shares zichtbaar met telefoonnummer (standaard gemaskeerd)
   * comment zichtbaar
-  * vervaldatum of “vervalt binnen X” indien van toepassing
+  * vervaldatum of â€œvervalt binnen Xâ€ indien van toepassing
   * badge per share: Actief, Vervallen
-  * gemachtigden niet uitschrijven als bezetting, wel teller “Gemachtigd: X”
+  * gemachtigden niet uitschrijven als bezetting, wel teller â€œGemachtigd: Xâ€
 * knoppen: Open of Close, Events, Shares, Pictures
 
 Bovenaan:
@@ -152,7 +158,7 @@ Bovenaan:
 
 Formulier:
 
-* phone (E.164, bv. +32…)
+* phone (E.164, bv. +32â€¦)
 * comment
 * type:
 
@@ -171,8 +177,8 @@ Lijst:
 
 Regels:
 
-* Tijdelijke share kan reservatie of bezetting beïnvloeden volgens business rules
-* Gemachtigd mag nooit bezetting of reservatie beïnvloeden, dit is een harde regel
+* Tijdelijke share kan reservatie of bezetting beÃ¯nvloeden volgens business rules
+* Gemachtigd mag nooit bezetting of reservatie beÃ¯nvloeden, dit is een harde regel
 
 #### 6.2.3 Events (per box)
 
@@ -204,7 +210,7 @@ Toont sessies:
 
 Optie:
 
-* foto’s standaard
+* fotoâ€™s standaard
 * video optioneel per klant
 
 ### 6.3 Rolluik statusmodel
@@ -219,8 +225,8 @@ shutterState:
 
 UI regels:
 
-* Tijdens OPENING en CLOSING is de knop disabled en toont UI “bezig”
-* Bij ERROR: korte foutmelding + “Probeer opnieuw” (als rechten dit toelaten)
+* Tijdens OPENING en CLOSING is de knop disabled en toont UI â€œbezigâ€
+* Bij ERROR: korte foutmelding + â€œProbeer opnieuwâ€ (als rechten dit toelaten)
 
 Timing:
 
@@ -251,7 +257,7 @@ Dit moet per organisatie of per box instelbaar zijn (later via config).
 Wanneer shutterState naar OPEN gaat:
 
 * start een sessie
-* neem foto’s elke intervalSeconds (instelbaar per organisatie, bv. 5 of 10)
+* neem fotoâ€™s elke intervalSeconds (instelbaar per organisatie, bv. 5 of 10)
 * blijf opnemen zolang OPEN
 
 Bij sluiten:
@@ -284,7 +290,7 @@ Telefoonnummers zijn gevoelige data.
 
 Afspraken:
 
-* opslag altijd in E.164 formaat (+32…)
+* opslag altijd in E.164 formaat (+32â€¦)
 * UI toont standaard gemaskeerd, behalve voor Admin
 * zoeken op telefoonnummer alleen voor Admin
 * events mogen telefoonnummer bevatten, maar debug logs maskeren standaard
@@ -363,7 +369,7 @@ Eindgebruikers krijgen toegang zonder app.
 
 * tijdelijke shares kunnen vervallen
 * gemachtigd blijft geldig tot ingetrokken
-* reminders (bv. “vervalt binnen 1 uur”) zijn systeem events + SMS, optioneel per klant
+* reminders (bv. â€œvervalt binnen 1 uurâ€) zijn systeem events + SMS, optioneel per klant
 
 ### 8.4 SMS adapter interface
 
@@ -499,7 +505,7 @@ media:
 
 ### 10.2 Belangrijke afspraak
 
-We loggen niet standaard een event per foto. Foto’s en video’s zijn media records. Alleen sessie start en stop zijn events.
+We loggen niet standaard een event per foto. Fotoâ€™s en videoâ€™s zijn media records. Alleen sessie start en stop zijn events.
 
 Uitzondering:
 
@@ -581,7 +587,7 @@ We bouwen per feature volledig af:
 
 ### 16.2 Definition of done
 
-Een feature is pas “klaar” als:
+Een feature is pas â€œklaarâ€ als:
 
 * UI duidelijk werkt
 * data correct is
@@ -597,12 +603,12 @@ Deze punten zijn beslist en gelden als standaard tot een versie-update.
 
 * Firestore structuur is organisatie-gebaseerd: data onder `organizations/{orgId}/...`.
 * Device command ophalen: default polling 5 seconden. Sneller mag tijdelijk tijdens een actieve actie. Long polling is toegestaan.
-* Events blijven licht: geen standaard event per foto. Alleen sessie start en stop als events. Foto’s en video’s zijn media records.
+* Events blijven licht: geen standaard event per foto. Alleen sessie start en stop als events. Fotoâ€™s en videoâ€™s zijn media records.
 * Media bewaartermijn default 14 dagen. Cleanup job is verplicht.
 * Telefoonnummers: opslaan in E.164, UI standaard maskeren, zoeken op telefoonnummer alleen voor Admin.
 * Gemachtigd (authorized) heeft nooit impact op bezetting of reservatie. Dit is een harde regel.
 * Offline definitie: offline als `now - lastSeenAt > 180s` (3 minuten) tenzij later per klant of box anders ingesteld.
-* Portal camera standaard foto’s. Video is optioneel per klant.
+* Portal camera standaard fotoâ€™s. Video is optioneel per klant.
 * Nieuwe API features alleen in de nieuwe route-structuur. Legacy alleen bugfix of read-only en wordt afgebouwd.
 
 #### 16.3.2 Open punten (nog te beslissen)
@@ -611,7 +617,7 @@ Deze punten mogen gebouwd worden als optie, maar niet hard vastzetten zonder bes
 
 * Bezetting logica: wanneer is een box bezet, door welke flow, en hoe resetten we dat betrouwbaar.
 * Notificaties: welke kanalen (SMS, mail) en welke triggers (alarm, share vervalt, device offline).
-* Video mode: wanneer gebruiken we video in plaats van foto’s, en impact op kosten en opslag.
+* Video mode: wanneer gebruiken we video in plaats van fotoâ€™s, en impact op kosten en opslag.
 * Exports: CSV export voor events, shares en sessies, en voor welke rollen.
 * Auth aanpak portal: email wachtwoord, magic link, SSO, 2FA.
 * Config schermen: waar zetten we per org en per box instellingen (intervalSeconds, extraAfterCloseSeconds, offlineThresholdSeconds, bewaartermijn).
@@ -651,7 +657,7 @@ v1.2.1 (2025-12-17)
 * camera events afgeslankt: sessie start en stop als events, geen standaard event per foto
 * media bewaartermijn: default 14 dagen en cleanup verplicht
 * privacy regels voor telefoonnummers toegevoegd (E.164, maskeren, zoeken enkel Admin)
-* “Gemachtigd” regel verankerd: nooit impact op bezetting of reservatie
+* â€œGemachtigdâ€ regel verankerd: nooit impact op bezetting of reservatie
 * offline definitie vastgelegd via lastSeenAt en threshold (default 3 minuten)
 * legacy routes afbouwregels toegevoegd
 * sectie 16.3 ingevuld met beslissingen en open punten
@@ -662,3 +668,4 @@ v1.2 (2025-12-17)
 * statusmodel rolluik vastgelegd
 * sessie en media regels vastgelegd
 * basis event types vastgelegd
+
