@@ -381,6 +381,43 @@
     }
     .backdrop.is-open{opacity:1;pointer-events:auto}
 
+    .access-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .access-left{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+    .access-title{
+      font-weight:800;
+      font-size:14px;
+      color:#111827;
+    }
+    .access-sub{
+      color:var(--muted);
+      font-size:12px;
+    }
+    .access-right{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .badge.big{
+      font-size:12px;
+      padding:4px 10px;
+      border-radius:999px;
+      background:#fff;
+      border:1px solid var(--border);
+      color:#111827;
+    }
+
     @media (max-width: 980px){
       .app, .app.is-collapsed, .app.is-expanded{ grid-template-columns: 1fr; }
 
@@ -464,11 +501,67 @@
       </div>
 
       <div class="side-body">
+
+        <div class="block" id="blockAccess">
+          <h4>Toegang</h4>
+          <div class="access-row">
+            <div class="access-left">
+              <div class="access-title">Shares</div>
+              <div class="access-sub">Beheer wie toegang heeft tot deze box.</div>
+            </div>
+            <div class="access-right">
+              <span id="kvSharesCount" class="badge big" title="Aantal shares (van de backend)">shares -</span>
+              <button id="btnGoShares" class="btn-small" type="button">Shares beheren</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="block" id="blockShares">
+          <h4>Shares</h4>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="sharePhone">Telefoon</label>
+              <input id="sharePhone" placeholder="+32..." inputmode="tel" />
+            </div>
+            <div class="field">
+              <label for="shareExpires">Vervalt op</label>
+              <input id="shareExpires" placeholder="bv 19/12/2025 22:00" />
+            </div>
+          </div>
+
+          <div class="field" style="margin-bottom:10px">
+            <label for="shareComment">Commentaar</label>
+            <input id="shareComment" placeholder="bv Afhaling..." />
+          </div>
+
+          <label class="check">
+            <input type="checkbox" id="shareAuth"/>
+            <span>Gemachtigd (niet zichtbaar in overzicht)</span>
+          </label>
+
+          <div class="right" style="margin:12px 0">
+            <button id="shareAdd" class="btn-small" type="button">Add Share</button>
+          </div>
+
+          <div style="overflow:auto">
+            <table id="sharesTable" aria-label="Shares tabel">
+              <thead>
+                <tr>
+                  <th>Tijd</th>
+                  <th>Telefoon</th>
+                  <th>Commentaar</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="block" id="blockStatus">
           <h4>Status</h4>
-          <div class="muted" style="font-size:12px;margin:-4px 0 10px;">
-            Druk op SHARES om toegang te beheren.
-          </div>
 
           <div class="kv">
             <div class="muted">Klant</div>
@@ -575,50 +668,6 @@
           <ul id="sidePhones" class="phone-list">
             <li class="muted">Geen gegevens</li>
           </ul>
-        </div>
-
-        <div class="block" id="blockShares">
-          <h4>Shares</h4>
-
-          <div class="form-row">
-            <div class="field">
-              <label for="sharePhone">Telefoon</label>
-              <input id="sharePhone" placeholder="+32..." inputmode="tel" />
-            </div>
-            <div class="field">
-              <label for="shareExpires">Vervalt op</label>
-              <input id="shareExpires" placeholder="bv 19/12/2025 22:00" />
-            </div>
-          </div>
-
-          <div class="field" style="margin-bottom:10px">
-            <label for="shareComment">Commentaar</label>
-            <input id="shareComment" placeholder="bv Afhaling..." />
-          </div>
-
-          <label class="check">
-            <input type="checkbox" id="shareAuth"/>
-            <span>Gemachtigd (niet zichtbaar in overzicht)</span>
-          </label>
-
-          <div class="right" style="margin:12px 0">
-            <button id="shareAdd" class="btn-small" type="button">Add Share</button>
-          </div>
-
-          <div style="overflow:auto">
-            <table id="sharesTable" aria-label="Shares tabel">
-              <thead>
-                <tr>
-                  <th>Tijd</th>
-                  <th>Telefoon</th>
-                  <th>Commentaar</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
         </div>
 
         <div class="block" id="blockEvents">
@@ -934,7 +983,8 @@
         const lastSeenNum = (lastSeen === null || lastSeen === undefined) ? NaN : Number(lastSeen);
         const s = computeOnlineStateFromMinutes(lastSeenNum);
 
-        const sharesCount = pick(box, ['sharesCount','shares_count']) ?? null;
+        const sharesCountRaw = pick(box, ['sharesCount','shares_count']) ?? null;
+        const sharesCount = (sharesCountRaw === null || sharesCountRaw === undefined) ? null : Number(sharesCountRaw);
 
         const phones = Array.isArray(box.phones) ? box.phones : [];
         const phonesAttr = buildPhonesDataAttr(phones);
@@ -983,7 +1033,13 @@
         card.setAttribute('data-source', lcSource ?? '');
         card.setAttribute('data-geo', geo ?? '');
 
+        card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
+
         const toggleLabel = card.classList.contains('is-open') ? 'CLOSE' : 'OPEN';
+
+        const sharesPill = (sharesCount === null || Number.isNaN(sharesCount))
+          ? `<span class="pill ghost" title="sharesCount">shares -</span>`
+          : `<span class="pill ghost" title="sharesCount">shares ${escapeHtml(String(sharesCount))}</span>`;
 
         card.innerHTML = `
           <div class="gb-shutter" aria-hidden="true"><div class="gb-shutter__door"></div></div>
@@ -1000,6 +1056,7 @@
               <span class="pill ghost" title="Portal.active">active ${escapeHtml(active || '-')}</span>
               <span class="pill ghost" title="box.access24h">24/7 ${escapeHtml(access24h || '-')}</span>
               <span class="pill ghost" title="box.type">${escapeHtml(bType || '-')}</span>
+              ${sharesPill}
             </div>
 
             <ul class="gb-phones">
@@ -1050,7 +1107,8 @@
           sec.className = 'gb-section';
           sec.setAttribute('data-group', site);
 
-          const customer = (items[0] && pickCustomer(items[0])) ? String(pickCustomer(items[0])) : '';
+          const custSet = new Set(items.map(x => String(pickCustomer(x) || '')).filter(Boolean));
+          const customer = (custSet.size === 1) ? [...custSet][0] : '';
           sec.setAttribute('data-customer', customer);
 
           sec.innerHTML = `
@@ -1103,18 +1161,31 @@
       function getSections(){
         return [...document.querySelectorAll('.gb-section')];
       }
-      function getCustomerOfSection(sec){ return (sec.getAttribute('data-customer') || '').trim(); }
-      function getLocationOfSection(sec){ return (sec.getAttribute('data-group') || '').trim(); }
+
+      function getCards(){
+        return [...document.querySelectorAll('.gb-card')];
+      }
+
+      function getCustomerOfCard(card){
+        return (card.getAttribute('data-customer') || '').trim();
+      }
+
+      function getSiteOfCard(card){
+        return (card.getAttribute('data-site') || '').trim();
+      }
 
       function rebuildCustomerDropdown(){
-        const sections = getSections();
-        const customers = [...new Set(sections.map(getCustomerOfSection))].filter(Boolean).sort();
+        const customers = [...new Set(getCards().map(getCustomerOfCard))]
+          .filter(Boolean)
+          .sort();
+
         const current = customerFilter.value;
 
         customerFilter.innerHTML = '<option value="all">Alle klanten</option>';
         customers.forEach(c=>{
-          const o=document.createElement('option');
-          o.value=c; o.textContent=c;
+          const o = document.createElement('option');
+          o.value = c;
+          o.textContent = c;
           customerFilter.appendChild(o);
         });
 
@@ -1123,20 +1194,22 @@
       }
 
       function rebuildLocationDropdown(){
-        const sections = getSections();
         const selectedCustomer = customerFilter.value;
 
-        const locations = sections
-          .filter(sec => selectedCustomer === 'all' || getCustomerOfSection(sec) === selectedCustomer)
-          .map(getLocationOfSection).filter(Boolean);
+        const sites = getCards()
+          .filter(card => selectedCustomer === 'all' || getCustomerOfCard(card) === selectedCustomer)
+          .map(getSiteOfCard)
+          .filter(Boolean);
 
-        const uniq = [...new Set(locations)].sort();
+        const uniq = [...new Set(sites)].sort();
 
         const current = locationFilter.value;
+
         locationFilter.innerHTML = '<option value="all">Alle locaties</option>';
         uniq.forEach(loc=>{
-          const o=document.createElement('option');
-          o.value=loc; o.textContent=loc;
+          const o = document.createElement('option');
+          o.value = loc;
+          o.textContent = loc;
           locationFilter.appendChild(o);
         });
 
@@ -1160,16 +1233,15 @@
         const term = search.value.trim();
 
         const sections = getSections();
-        const cards = [...document.querySelectorAll('.gb-card')];
+        const cards = getCards();
 
         cards.forEach(card=>{
-          const sec = card.closest('.gb-section');
-          const secCustomer = getCustomerOfSection(sec);
-          const secLocation = getLocationOfSection(sec);
+          const cardCustomer = getCustomerOfCard(card);
+          const cardSite = getSiteOfCard(card);
 
           const show =
-            (c === 'all' || secCustomer === c) &&
-            (loc === 'all' || secLocation === loc) &&
+            (c === 'all' || cardCustomer === c) &&
+            (loc === 'all' || cardSite === loc) &&
             matchesSearch(card, term);
 
           card.style.display = show ? '' : 'none';
@@ -1217,6 +1289,8 @@
       const kvProfile = document.getElementById('kvProfile');
       const kvSeen    = document.getElementById('kvSeen');
       const kvStatus  = document.getElementById('kvStatus');
+
+      const kvSharesCount = document.getElementById('kvSharesCount');
 
       const sidePhones = document.getElementById('sidePhones');
 
@@ -1292,7 +1366,27 @@
         if (!sharesStore[boxId]) return;
         sharesStore[boxId].splice(idx,1);
         renderShares(boxId);
+        updateSharesCountUiFromLocal(boxId);
       });
+
+      function updateSharesCountUiFromCard(card){
+        const raw = (card.getAttribute('data-shares-count') || '').trim();
+        if(!raw){
+          kvSharesCount.textContent = 'shares -';
+          return;
+        }
+        const n = Number(raw);
+        if(Number.isNaN(n)){
+          kvSharesCount.textContent = 'shares -';
+          return;
+        }
+        kvSharesCount.textContent = 'shares ' + n;
+      }
+
+      function updateSharesCountUiFromLocal(boxId){
+        const rows = (sharesStore[boxId]||[]);
+        kvSharesCount.textContent = 'shares ' + rows.length;
+      }
 
       document.getElementById('shareAdd').addEventListener('click', ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
@@ -1316,6 +1410,8 @@
         shareComment.value='';
         shareExpires.value='';
         shareAuth.checked=false;
+
+        updateSharesCountUiFromLocal(boxId);
       });
 
       function scrollSideToBlock(blockId){
@@ -1337,8 +1433,7 @@
         currentCard = card;
         selectCard(card);
 
-        const sec = card.closest('.gb-section');
-        const customer = (sec ? sec.getAttribute('data-customer') : '-') || '-';
+        const customer = card.getAttribute('data-customer') || '-';
 
         const siteName = card.getAttribute('data-site') || '-';
         const boxNr = card.getAttribute('data-box') || '-';
@@ -1377,8 +1472,21 @@
         const boxId = card.getAttribute('data-id');
         renderShares(boxId);
 
+        updateSharesCountUiFromCard(card);
+
         openSide();
       }
+
+      document.getElementById('btnGoShares').addEventListener('click', ()=>{
+        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
+        updateSideFromCard(currentCard, 'Toegang beheren');
+
+        side.classList.add('is-wide');
+        app.classList.remove('is-collapsed');
+        app.classList.add('is-expanded');
+
+        setTimeout(()=>scrollSideToBlock('blockShares'), 0);
+      });
 
       document.addEventListener('click', async (e)=>{
         const btn = e.target.closest('button[data-action]');
