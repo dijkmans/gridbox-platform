@@ -1,4 +1,10 @@
 <!DOCTYPE html>
+<!--
+  Deze versie is dezelfde functionaliteit als je origineel,
+  maar beter gegroepeerd met duidelijke blokken en secties.
+  Bronbestand: index (19).html
+  Datum: 2025-12-22
+-->
 <html lang="nl">
 <head>
   <meta charset="utf-8" />
@@ -6,7 +12,21 @@
   <title>Gridbox Portal v1</title>
 
   <style>
-    :root{
+    
+    /* =========================================================
+       CSS OVERZICHT
+       1) Design tokens
+       2) Base
+       3) Layout
+       4) Toolbar
+       5) Cards + pills
+       6) Side panel
+       7) Tabellen en formulieren
+       8) Responsive
+       ========================================================= */
+    /* 1) Design tokens */
+
+:root{
       --primary:#6d28d9;
       --ok:#22c55e;
       --warn:#eab308;
@@ -25,6 +45,8 @@
       --radius:16px;
     }
 
+    /* 2) Base */
+
     *{box-sizing:border-box}
     body{
       margin:0;
@@ -37,6 +59,8 @@
       overflow:hidden;
       touch-action:none;
     }
+
+    /* 3) Layout */
 
     .app{
       display:grid;
@@ -51,6 +75,8 @@
       overflow:auto;
       border-right:1px solid #f1f5f9;
     }
+
+    /* 4) Toolbar */
 
     .toolbar{
       display:flex;
@@ -83,6 +109,8 @@
       font:inherit;
     }
     #search{min-width:260px}
+
+    /* 5) Cards + pills */
 
     .gb-section{margin-bottom:20px}
     .gb-section__title{
@@ -248,6 +276,8 @@
       border-left:1px solid #f1f5f9;
     }
 
+    /* 6) Side panel */
+
     .side-header{
       position:sticky;
       top:0;
@@ -337,6 +367,8 @@
     .field label{font-weight:700;color:#111827;font-size:12px}
     .check{display:flex;align-items:center;gap:8px;margin:8px 0 0}
 
+    /* 7) Tabellen en formulieren */
+
     table{width:100%;border-collapse:separate;border-spacing:0 8px}
     th{
       font-weight:700;
@@ -418,6 +450,8 @@
       color:#111827;
     }
 
+    /* 8) Responsive */
+
     @media (max-width: 980px){
       .app, .app.is-collapsed, .app.is-expanded{ grid-template-columns: 1fr; }
 
@@ -466,7 +500,12 @@
 </head>
 
 <body>
-  <div id="app" class="app is-collapsed">
+    <!-- =========================================================
+  APP
+  Left: overzicht
+  Right: detail (side panel)
+  ========================================================= -->
+<div id="app" class="app is-collapsed">
     <main class="main">
       <div class="toolbar">
         <div class="brand">Gridbox</div>
@@ -687,7 +726,25 @@
   <div id="backdrop" class="backdrop" aria-hidden="true"></div>
 
   <script>
-    (function(){
+    
+    /* =========================================================
+       JS OVERZICHT
+       1) Config en helpers
+       2) DOM refs en state
+       3) Side panel open/sluit (desktop en mobiel)
+       4) Rendering cards en sections
+       5) API calls
+       6) Filters
+       7) Side panel details
+       8) Shares UI
+       9) Card acties (open, close, events, pictures)
+       10) Init
+       ========================================================= */
+(function(){
+
+      // =========================================================
+      // 1) Config en helpers
+      // =========================================================
       const API_BASE = "https://gridbox-api-960191535038.europe-west1.run.app";
 
       const apiUrl = (path) => {
@@ -695,11 +752,19 @@
         return base + path;
       };
 
+      // =========================================================
+      // 2) DOM refs en state
+      // =========================================================
+
       const app = document.getElementById('app');
       const side = document.getElementById('side');
       const backdrop = document.getElementById('backdrop');
 
       const sectionsWrap = document.getElementById('sections');
+
+      // =========================================================
+      // 3) Side panel open/sluit
+      // =========================================================
 
       function isOverlayMode(){
         return !!(window.matchMedia && window.matchMedia('(max-width: 980px)').matches);
@@ -966,6 +1031,10 @@
           .join(',');
       }
 
+      // =========================================================
+      // 4) Rendering cards en sections
+      // =========================================================
+
       function createCard(box){
         if (box && box.ui && box.ui.hidden === true) return null;
 
@@ -1130,6 +1199,10 @@
         applyFilters();
       }
 
+      // =========================================================
+      // 5) API calls
+      // =========================================================
+
       async function loadBoxes(){
         const res = await fetch(apiUrl('/api/boxes'), { method:'GET' });
         if (!res.ok){
@@ -1164,6 +1237,10 @@
       }
       function getCustomerOfSection(sec){ return (sec.getAttribute('data-customer') || '').trim(); }
       function getLocationOfSection(sec){ return (sec.getAttribute('data-group') || '').trim(); }
+
+      // =========================================================
+      // 6) Filters
+      // =========================================================
 
       function rebuildCustomerDropdown(){
         const sections = getSections();
@@ -1323,6 +1400,10 @@
       const shareComment = document.getElementById('shareComment');
       const shareAuth    = document.getElementById('shareAuth');
 
+      // =========================================================
+      // 8) Shares UI
+      // =========================================================
+
       function renderShares(boxId){
         const rows = (sharesStore[boxId]||[]);
         sharesBody.innerHTML = '';
@@ -1416,6 +1497,10 @@
         return a || b;
       }
 
+      // =========================================================
+      // 7) Side panel details
+      // =========================================================
+
       function updateSideFromCard(card, contextLabel){
         currentCard = card;
         selectCard(card);
@@ -1475,6 +1560,10 @@
 
         setTimeout(()=>scrollSideToBlock('blockShares'), 0);
       });
+
+      // =========================================================
+      // 9) Card acties
+      // =========================================================
 
       document.addEventListener('click', async (e)=>{
         const btn = e.target.closest('button[data-action]');
@@ -1590,6 +1679,10 @@
         const boxId = currentCard.getAttribute('data-id');
         if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/pictures`);
       });
+
+      // =========================================================
+      // 10) Init
+      // =========================================================
 
       (async function init(){
         try{
