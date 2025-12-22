@@ -1,4 +1,4 @@
-﻿{
+{
   "builds": [
     { "src": "apps/portal-web/public/index.html", "use": "@vercel/static" }
   ],
