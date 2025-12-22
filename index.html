@@ -991,93 +991,6 @@
         const n = Number(min);
         if (Number.isNaN(n)) return '-';
         return n + ' min geleden';
-
-      function toMillis(v){
-        if (v === null || v === undefined) return null;
-
-        if (typeof v === 'number'){
-          // ms or seconds
-          if (v > 1000000000000) return v;
-          if (v > 1000000000) return v * 1000;
-          return null;
-        }
-
-        if (typeof v === 'string'){
-          const ms = Date.parse(v);
-          return Number.isNaN(ms) ? null : ms;
-        }
-
-        if (typeof v === 'object'){
-          // Firestore Timestamp (client) often has toDate()
-          if (typeof v.toDate === 'function'){
-            const d = v.toDate();
-            return d ? d.getTime() : null;
-          }
-
-          // Firestore Timestamp (serialized)
-          const sec = v.seconds ?? v._seconds;
-          const ns  = v.nanoseconds ?? v._nanoseconds;
-          if (sec !== undefined){
-            const ms = Number(sec) * 1000 + (Number(ns || 0) / 1000000);
-            return Number.isNaN(ms) ? null : ms;
-          }
-        }
-
-        return null;
-      }
-
-      function getLastSeenMinutes(box){
-        // 1) Direct "minutes ago" fields
-        const direct = pick(box, [
-          'lastSeenMinutes',
-          'last_seen_minutes',
-          'lastSeenMin',
-          'lastSeenMins',
-          'lastSeenMinutesAgo',
-          'telemetry.lastSeenMinutes',
-          'telemetry.last_seen_minutes',
-          'telemetry.lastSeenMin',
-          'agent.lastSeenMinutes',
-          'agent.lastSeenMin',
-          'Agent.lastSeenMinutes',
-          'portal.lastSeenMinutes',
-          'Portal.lastSeenMinutes',
-          'status.lastSeenMinutes'
-        ]);
-
-        if (direct !== undefined && direct !== null && direct !== ''){
-          const n = Number(direct);
-          if (!Number.isNaN(n)) return n;
-        }
-
-        // 2) Timestamp fields, convert to minutes ago
-        const ts = pick(box, [
-          'lastSeenAt',
-          'last_seen_at',
-          'lastSeenTimestamp',
-          'telemetry.lastSeenAt',
-          'telemetry.last_seen_at',
-          'telemetry.lastHeartbeatAt',
-          'agent.lastSeenAt',
-          'agent.heartbeatAt',
-          'agent.lastHeartbeatAt',
-          'Agent.lastSeenAt',
-          'Agent.heartbeatAt',
-          'heartbeatAt',
-          'lastHeartbeatAt',
-          'seenAt',
-          'lastContactAt'
-        ]);
-
-        const ms = toMillis(ts);
-        if (ms !== null){
-          const diffMin = Math.max(0, Math.round((Date.now() - ms) / 60000));
-          return diffMin;
-        }
-
-        return null;
-      }
-
       }
 
       function escapeHtml(s){
@@ -1137,7 +1050,7 @@
         const agent = pickAgent(box);
         const profile = pickProfile(box);
 
-        const lastSeen = getLastSeenMinutes(box);
+        const lastSeen = pick(box, ['lastSeenMinutes','last_seen_minutes','lastSeen']) ?? null;
         const lastSeenNum = (lastSeen === null || lastSeen === undefined) ? NaN : Number(lastSeen);
         const s = computeOnlineStateFromMinutes(lastSeenNum);
 
