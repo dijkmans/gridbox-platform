@@ -45,7 +45,7 @@ WAT ALTIJD MOET BLIJVEN WERKEN
 CONTROLE NA WIJZIGING
 Na elke wijziging controleren:
 - Werkt alles nog zoals voorheen?
-- Zijn id’s of classes gewijzigd?
+- Zijn er id’s of classes gewijzigd?
 - Kan bestaande logica hierdoor breken?
 
 BIJ TWIJFEL
@@ -310,6 +310,8 @@ EINDE WERKAFSPRAKEN
       background:var(--chip);
       color:inherit;
     }
+    .btn, .btn-ghost, .btn-small{ touch-action: manipulation; }
+
 
     .right{display:flex;justify-content:flex-end}
     .muted{color:var(--muted)}
@@ -1266,10 +1268,12 @@ function mainButtonLabel(desiredState, doorState, motionState, fallbackIsOpen){
         card.setAttribute('data-desired', desiredState);
 
 // Visuele toestand:
-        // - opening: direct omhoog
-        // - closing: direct omlaag
-        // - anders: volg de deurstatus
-        if (motionState === 'opening') {
+        // Prioriteit: desired (override) -> motion -> door
+        if (desiredState === 'open') {
+          card.classList.add('is-open');
+        } else if (desiredState === 'closed') {
+          card.classList.remove('is-open');
+        } else if (motionState === 'opening') {
           card.classList.add('is-open');
         } else if (motionState === 'closing') {
           card.classList.remove('is-open');
@@ -1280,7 +1284,7 @@ function mainButtonLabel(desiredState, doorState, motionState, fallbackIsOpen){
         }
 
         // Voor de rest van de UI houden we beide bij
-        card.setAttribute('data-motion-state', motionState);
+        , motionState);
         card.setAttribute('data-door-state', doorState);
 
         // data-shutter-state blijft bestaan voor compatibiliteit (we gebruiken vooral doorState)
@@ -1455,9 +1459,8 @@ card.setAttribute('data-id', id);
         try{
           const boxes = await loadBoxes();
           renderSectionsFromBoxes(boxes);
+          startAutoRefresh();
 
-          // automatische refresh zodat UI Firestore blijft volgen
-          setInterval(()=>{ refreshBoxesPreserveUI(); }, 15000);
           if (selectedId){
             const newCard = [...document.querySelectorAll('.gb-card')].find(c => c.getAttribute('data-id') === selectedId) || null;
 
@@ -1496,6 +1499,13 @@ card.setAttribute('data-id', id);
             setTimeout(()=>{ refreshBoxesPreserveUI(); }, 150);
           }
         }
+      }
+
+
+      let autoRefreshTimer = null;
+      function startAutoRefresh(){
+        if (autoRefreshTimer) return;
+        autoRefreshTimer = setInterval(()=>{ refreshBoxesPreserveUI(); }, 15000);
       }
 
       function followBoxAfterCommand(boxId){
@@ -1869,6 +1879,16 @@ card.setAttribute('data-id', id);
           if(action === 'toggle'){
             e.preventDefault(); e.stopPropagation();
 
+            // anti dubbel-klik / multi-tap en lock tijdens API call
+            const nowTap = Date.now();
+            const lastTap = Number(card.getAttribute('data-last-tap') || '0');
+            if (nowTap - lastTap < 450) return;
+            card.setAttribute('data-last-tap', String(nowTap));
+
+            if (card.getAttribute('data-busy') === '1') return;
+            card.setAttribute('data-busy', '1');
+            btn.disabled = true;
+
             const boxId = card.getAttribute('data-id');
 
             const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
@@ -1926,6 +1946,9 @@ card.setAttribute('data-id', id);
               if(side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
               await sendCommand(boxId, next);
               followBoxAfterCommand(boxId);
+
+              card.setAttribute('data-busy','0');
+              btn.disabled = false;
             } catch(err){
               if(prevIsOpen) card.classList.add('is-open'); else card.classList.remove('is-open');
               card.setAttribute('data-door-state', prevDoor);
@@ -1935,6 +1958,9 @@ card.setAttribute('data-id', id);
               card.setAttribute('data-desired', prevDesired);
               btn.textContent = mainButtonLabel(prevDesired, prevDoor, prevMotion, prevIsOpen);
               if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
+
+              card.setAttribute('data-busy','0');
+              btn.disabled = false;
 
               alert('Actie mislukt: ' + (err && err.message ? err.message : err));
             }
@@ -1977,11 +2003,17 @@ card.setAttribute('data-id', id);
       document.getElementById('btnOpen').addEventListener('click', async ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
         const boxId = currentCard.getAttribute('data-id');
+        if(currentCard.getAttribute('data-busy') === '1') return;
+        currentCard.setAttribute('data-busy','1');
+        document.getElementById('btnOpen').disabled = true;
+        document.getElementById('btnClose').disabled = true;
         const prevIsOpen = currentCard.classList.contains('is-open');
         const prevDoor = currentCard.getAttribute('data-door-state') || '';
         const prevMotion = currentCard.getAttribute('data-motion-state') || '';
         const prevLifecycle = currentCard.getAttribute('data-lifecycle-state') || '';
         const prevShutter = currentCard.getAttribute('data-shutter-state') || '';
+        const prevDesired = currentCard.getAttribute('data-desired') || '';
+
         const prevDesired = currentCard.getAttribute('data-desired') || '';
 
 
@@ -1998,8 +2030,12 @@ card.setAttribute('data-id', id);
           await sendCommand(boxId, 'open');
           followBoxAfterCommand(boxId);
           updateSideFromCard(currentCard, 'Beheer en overzicht');
+          currentCard.setAttribute('data-busy','0');
+          document.getElementById('btnOpen').disabled = false;
+          document.getElementById('btnClose').disabled = false;
         } catch(err){
           if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
+          currentCard.setAttribute('data-desired','closed');
           currentCard.setAttribute('data-door-state', prevDoor);
           currentCard.setAttribute('data-motion-state', prevMotion);
           currentCard.setAttribute('data-lifecycle-state', prevLifecycle);
@@ -2009,6 +2045,10 @@ card.setAttribute('data-id', id);
           if(b0) b0.textContent = mainButtonLabel(prevDesired, prevDoor, prevMotion, prevIsOpen);
           updateSideFromCard(currentCard, 'Beheer en overzicht');
 
+          currentCard.setAttribute('data-busy','0');
+          document.getElementById('btnOpen').disabled = false;
+          document.getElementById('btnClose').disabled = false;
+
           alert('OPEN mislukt: ' + (err && err.message ? err.message : err));
         }
       });
@@ -2016,6 +2056,10 @@ card.setAttribute('data-id', id);
       document.getElementById('btnClose').addEventListener('click', async ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
         const boxId = currentCard.getAttribute('data-id');
+        if(currentCard.getAttribute('data-busy') === '1') return;
+        currentCard.setAttribute('data-busy','1');
+        document.getElementById('btnOpen').disabled = true;
+        document.getElementById('btnClose').disabled = true;
         const prevIsOpen = currentCard.classList.contains('is-open');
         const prevDoor = currentCard.getAttribute('data-door-state') || '';
         const prevMotion = currentCard.getAttribute('data-motion-state') || '';
@@ -2023,11 +2067,9 @@ card.setAttribute('data-id', id);
         const prevShutter = currentCard.getAttribute('data-shutter-state') || '';
         const prevDesired = currentCard.getAttribute('data-desired') || '';
 
-
         try{
 
           currentCard.classList.remove('is-open');
-          currentCard.setAttribute('data-desired','closed');
           currentCard.setAttribute('data-motion-state','closing');
           currentCard.setAttribute('data-lifecycle-state','closing');
           currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'closing');
@@ -2037,6 +2079,9 @@ card.setAttribute('data-id', id);
           await sendCommand(boxId, 'close');
           followBoxAfterCommand(boxId);
           updateSideFromCard(currentCard, 'Beheer en overzicht');
+          currentCard.setAttribute('data-busy','0');
+          document.getElementById('btnOpen').disabled = false;
+          document.getElementById('btnClose').disabled = false;
         } catch(err){
           if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
           currentCard.setAttribute('data-door-state', prevDoor);
@@ -2047,6 +2092,10 @@ card.setAttribute('data-id', id);
           const b0 = currentCard.querySelector('button[data-action=\"toggle\"]');
           if(b0) b0.textContent = mainButtonLabel(prevDesired, prevDoor, prevMotion, prevIsOpen);
           updateSideFromCard(currentCard, 'Beheer en overzicht');
+
+          currentCard.setAttribute('data-busy','0');
+          document.getElementById('btnOpen').disabled = false;
+          document.getElementById('btnClose').disabled = false;
 
           alert('CLOSE mislukt: ' + (err && err.message ? err.message : err));
         }
@@ -2072,6 +2121,7 @@ card.setAttribute('data-id', id);
         try{
           const boxes = await loadBoxes();
           renderSectionsFromBoxes(boxes);
+          startAutoRefresh();
         } catch(err){
           console.error(err);
           sectionsWrap.innerHTML = `<div class="muted">Kon gridboxen niet laden</div>`;
