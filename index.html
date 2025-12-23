@@ -45,7 +45,7 @@ WAT ALTIJD MOET BLIJVEN WERKEN
 CONTROLE NA WIJZIGING
 Na elke wijziging controleren:
 - Werkt alles nog zoals voorheen?
-- Zijn er id’s of classes gewijzigd?
+- Zijn id’s of classes gewijzigd?
 - Kan bestaande logica hierdoor breken?
 
 BIJ TWIJFEL
@@ -988,9 +988,14 @@ EINDE WERKAFSPRAKEN
         return Math.abs(Date.now() - ms) <= maxMs;
       }
 
-function mainButtonLabel(doorState, motionState, fallbackIsOpen){
-        // Toon altijd de VOLGENDE actie, en switch direct bij een klik.
-        // Als we in beweging zijn, is de volgende actie het omgekeerde.
+function mainButtonLabel(desiredState, doorState, motionState, fallbackIsOpen){
+        // Knop moet de intent volgen (override-veilig).
+        // Als desired gekend is, is dat altijd leidend.
+        const desired = normalizeShutterStateDetailed(desiredState);
+        if (desired === 'open') return 'CLOSE';
+        if (desired === 'closed') return 'OPEN';
+
+        // Fallback (oude logica) als desired ontbreekt
         const m = normalizeShutterStateDetailed(motionState);
         if (m === 'opening') return 'CLOSE';
         if (m === 'closing') return 'OPEN';
@@ -1251,6 +1256,15 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         // Voorkom 'stale' opening/closing die dagen blijft hangen: enkel gebruiken als recent
         const motionState = (motionStateAll && isRecent(motionSince, 20000)) ? motionStateAll : '';
         const doorState = normalizeShutterStateDetailed(rawDoorState);
+        const desiredRaw = pick(box, [
+          'status.desired',
+          'intent.desired',
+          'desired'
+        ]) ?? null;
+
+        const desiredState = normalizeShutterStateDetailed(desiredRaw);
+        card.setAttribute('data-desired', desiredState);
+
 // Visuele toestand:
         // - opening: direct omhoog
         // - closing: direct omlaag
@@ -1296,7 +1310,7 @@ card.setAttribute('data-id', id);
 
         card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
 
-        const toggleLabel = mainButtonLabel(doorState, motionState, card.classList.contains('is-open'));
+        const toggleLabel = mainButtonLabel(desiredState, doorState, motionState, card.classList.contains('is-open'));
 
         const sharesPill = (sharesCount === null || Number.isNaN(sharesCount))
           ? `<span class="pill ghost" title="sharesCount">shares -</span>`
@@ -1859,8 +1873,15 @@ card.setAttribute('data-id', id);
 
             const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
             const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || card.getAttribute('data-shutter-state') || '');
-            const isOpen = (door === 'open') ? true : (door === 'closed') ? false : card.classList.contains('is-open');
-            const next = isOpen ? 'close' : 'open';
+            const desired = normalizeShutterStateDetailed(card.getAttribute('data-desired') || '');
+            let next = null;
+
+            if (desired === 'open') next = 'close';
+            else if (desired === 'closed') next = 'open';
+            else {
+              const isOpen = (door === 'open') ? true : (door === 'closed') ? false : card.classList.contains('is-open');
+              next = isOpen ? 'close' : 'open';
+            }
 
             if (!boxId || boxId === '-'){
               alert('Box id ontbreekt.');
@@ -1872,6 +1893,8 @@ card.setAttribute('data-id', id);
             const prevMotion = card.getAttribute('data-motion-state') || '';
             const prevLifecycle = card.getAttribute('data-lifecycle-state') || '';
             const prevShutter = card.getAttribute('data-shutter-state') || '';
+            const prevDesired = card.getAttribute('data-desired') || '';
+
 
 
             try{
@@ -1894,10 +1917,12 @@ card.setAttribute('data-id', id);
                 card.setAttribute('data-lifecycle-state', 'closing');
               }
 
+              card.setAttribute('data-desired', (next === 'open') ? 'open' : 'closed');
+
               // compat
               card.setAttribute('data-shutter-state', card.getAttribute('data-door-state') || card.getAttribute('data-motion-state') || '');
 
-              btn.textContent = mainButtonLabel(card.getAttribute('data-door-state'), card.getAttribute('data-motion-state'), card.classList.contains('is-open'));
+              btn.textContent = mainButtonLabel(card.getAttribute('data-desired'), card.getAttribute('data-door-state'), card.getAttribute('data-motion-state'), card.classList.contains('is-open'));
               if(side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
               await sendCommand(boxId, next);
               followBoxAfterCommand(boxId);
@@ -1907,7 +1932,8 @@ card.setAttribute('data-id', id);
               card.setAttribute('data-motion-state', prevMotion);
               card.setAttribute('data-lifecycle-state', prevLifecycle);
               card.setAttribute('data-shutter-state', prevShutter);
-              btn.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
+              card.setAttribute('data-desired', prevDesired);
+              btn.textContent = mainButtonLabel(prevDesired, prevDoor, prevMotion, prevIsOpen);
               if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
 
               alert('Actie mislukt: ' + (err && err.message ? err.message : err));
@@ -1956,16 +1982,19 @@ card.setAttribute('data-id', id);
         const prevMotion = currentCard.getAttribute('data-motion-state') || '';
         const prevLifecycle = currentCard.getAttribute('data-lifecycle-state') || '';
         const prevShutter = currentCard.getAttribute('data-shutter-state') || '';
+        const prevDesired = currentCard.getAttribute('data-desired') || '';
+
 
         try{
 
           currentCard.classList.add('is-open');
+          currentCard.setAttribute('data-desired','open');
           currentCard.setAttribute('data-motion-state','opening');
           currentCard.setAttribute('data-lifecycle-state','opening');
           currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'opening');
 
           const btn = currentCard.querySelector('button[data-action="toggle"]');
-          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), true);
+          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-desired'), currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), true);
           await sendCommand(boxId, 'open');
           followBoxAfterCommand(boxId);
           updateSideFromCard(currentCard, 'Beheer en overzicht');
@@ -1975,8 +2004,9 @@ card.setAttribute('data-id', id);
           currentCard.setAttribute('data-motion-state', prevMotion);
           currentCard.setAttribute('data-lifecycle-state', prevLifecycle);
           currentCard.setAttribute('data-shutter-state', prevShutter);
+          currentCard.setAttribute('data-desired', prevDesired);
           const b0 = currentCard.querySelector('button[data-action=\"toggle\"]');
-          if(b0) b0.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
+          if(b0) b0.textContent = mainButtonLabel(prevDesired, prevDoor, prevMotion, prevIsOpen);
           updateSideFromCard(currentCard, 'Beheer en overzicht');
 
           alert('OPEN mislukt: ' + (err && err.message ? err.message : err));
@@ -1991,16 +2021,19 @@ card.setAttribute('data-id', id);
         const prevMotion = currentCard.getAttribute('data-motion-state') || '';
         const prevLifecycle = currentCard.getAttribute('data-lifecycle-state') || '';
         const prevShutter = currentCard.getAttribute('data-shutter-state') || '';
+        const prevDesired = currentCard.getAttribute('data-desired') || '';
+
 
         try{
 
           currentCard.classList.remove('is-open');
+          currentCard.setAttribute('data-desired','closed');
           currentCard.setAttribute('data-motion-state','closing');
           currentCard.setAttribute('data-lifecycle-state','closing');
           currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'closing');
 
           const btn = currentCard.querySelector('button[data-action="toggle"]');
-          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), false);
+          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-desired'), currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), false);
           await sendCommand(boxId, 'close');
           followBoxAfterCommand(boxId);
           updateSideFromCard(currentCard, 'Beheer en overzicht');
@@ -2010,8 +2043,9 @@ card.setAttribute('data-id', id);
           currentCard.setAttribute('data-motion-state', prevMotion);
           currentCard.setAttribute('data-lifecycle-state', prevLifecycle);
           currentCard.setAttribute('data-shutter-state', prevShutter);
+          currentCard.setAttribute('data-desired', prevDesired);
           const b0 = currentCard.querySelector('button[data-action=\"toggle\"]');
-          if(b0) b0.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
+          if(b0) b0.textContent = mainButtonLabel(prevDesired, prevDoor, prevMotion, prevIsOpen);
           updateSideFromCard(currentCard, 'Beheer en overzicht');
 
           alert('CLOSE mislukt: ' + (err && err.message ? err.message : err));
