@@ -815,6 +815,31 @@ EINDE WERKAFSPRAKEN
       };
 
       // =========================================================
+      // UI-cache voor desired (om flipflop door trage of onvolledige API responses te vermijden)
+      // =========================================================
+      const LAST_DESIRED_TTL_MS = 5 * 60 * 1000; // 5 min
+      const lastDesiredById = new Map();
+
+      function cacheDesired(boxId, desired){
+        if(!boxId || boxId === '-') return;
+        if(desired !== 'open' && desired !== 'closed') return;
+        lastDesiredById.set(String(boxId), { v: desired, at: Date.now() });
+      }
+
+      function getCachedDesired(boxId){
+        if(!boxId || boxId === '-') return null;
+        const key = String(boxId);
+        const it = lastDesiredById.get(key);
+        if(!it) return null;
+        if(Date.now() - it.at > LAST_DESIRED_TTL_MS){
+          lastDesiredById.delete(key);
+          return null;
+        }
+        return it.v;
+      }
+
+
+      // =========================================================
       // 2) DOM refs en state
       // =========================================================
 
@@ -1268,7 +1293,17 @@ function mainButtonLabel(desiredState, doorState, motionState, fallbackIsOpen){
           'desired'
         ]) ?? null;
 
-        const desiredState = normalizeShutterStateDetailed(desiredRaw);
+        const desiredStateFromApi = normalizeShutterStateDetailed(desiredRaw);
+        let desiredState = desiredStateFromApi;
+
+        // Als de API soms geen desired meestuurt, houden we de laatste bekende desired even vast
+        const cachedDesired = getCachedDesired(id);
+        if (desiredState === 'open' || desiredState === 'closed'){
+          cacheDesired(id, desiredState);
+        } else if (cachedDesired){
+          desiredState = cachedDesired;
+        }
+
         card.setAttribute('data-desired', desiredState);
 
 // Visuele toestand:
@@ -1942,6 +1977,8 @@ document.addEventListener('click', async (e)=>{
             }
 
             if (!boxId || boxId === '-'){
+              card.setAttribute('data-busy','0');
+              btn.disabled = false;
               alert('Box id ontbreekt.');
               return;
             }
@@ -1976,6 +2013,7 @@ document.addEventListener('click', async (e)=>{
               }
 
               card.setAttribute('data-desired', (next === 'open') ? 'open' : 'closed');
+              cacheDesired(boxId, (next === 'open') ? 'open' : 'closed');
 
               // compat
               card.setAttribute('data-shutter-state', card.getAttribute('data-door-state') || card.getAttribute('data-motion-state') || '');
@@ -2057,6 +2095,7 @@ document.addEventListener('click', async (e)=>{
 
           currentCard.classList.add('is-open');
           currentCard.setAttribute('data-desired','open');
+          cacheDesired(boxId,'open');
           currentCard.setAttribute('data-motion-state','opening');
           currentCard.setAttribute('data-lifecycle-state','opening');
           currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'opening');
@@ -2106,6 +2145,8 @@ document.addEventListener('click', async (e)=>{
         try{
 
           currentCard.classList.remove('is-open');
+          currentCard.setAttribute('data-desired','closed');
+          cacheDesired(boxId,'closed');
           currentCard.setAttribute('data-motion-state','closing');
           currentCard.setAttribute('data-lifecycle-state','closing');
           currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'closing');
