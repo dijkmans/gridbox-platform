@@ -989,11 +989,11 @@ EINDE WERKAFSPRAKEN
       }
 
 function mainButtonLabel(doorState, motionState, fallbackIsOpen){
-        const m = normalizeShutterStateDetailed(motionState);
-        if (m === 'opening') return 'OPENING';
-        if (m === 'closing') return 'CLOSING';
+        const d =
+          normalizeShutterStateDetailed(doorState) ||
+          (fallbackIsOpen ? 'open' : 'closed');
 
-        const d = normalizeShutterStateDetailed(doorState) || (fallbackIsOpen ? 'open' : 'closed');
+        // UI toont enkel acties, geen tussenstates
         if (d === 'open') return 'CLOSE';
         return 'OPEN';
       }
