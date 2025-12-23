@@ -1,5 +1,3 @@
-// api/src/dto/boxDto.js
-
 function get(obj, path) {
   if (!obj || !path) return undefined;
   const parts = path.split(".");
@@ -60,6 +58,12 @@ export function toBoxDto(id, data) {
   const lifecycle = normalizeKeys(data?.lifecycle ?? {});
   const organisation = normalizeKeys(data?.organisation ?? data?.organization ?? {});
 
+  // Nieuw: deze velden doorgeven aan de portal zodat de knop correct kan werken op status.desired
+  // en de UI info kan tonen op basis van state/status zonder te gokken.
+  const status = normalizeKeys(data?.status ?? {});
+  const state = normalizeKeys(data?.state ?? {});
+  const ui = normalizeKeys(data?.ui ?? {});
+
   return {
     id,
 
@@ -70,6 +74,11 @@ export function toBoxDto(id, data) {
     location,
     lifecycle,
     organisation,
+
+    // Nieuw
+    status,
+    state,
+    ui,
 
     Agent: data?.Agent ?? data?.agent ?? null,
     Profile: data?.Profile ?? data?.profile ?? null,
