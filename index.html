@@ -292,6 +292,13 @@ EINDE WERKAFSPRAKEN
       border:none;
     }
     .btn:active{transform:translateY(1px)}
+
+    .btn:disabled,.btn-small:disabled{
+      opacity:.55;
+      cursor:not-allowed;
+      filter:none;
+      transform:none;
+    }
     .btn-ghost{
       background:var(--chip);
     }
@@ -748,8 +755,7 @@ EINDE WERKAFSPRAKEN
           </div>
 
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn" id="btnOpen" type="button">OPEN</button>
-            <button class="btn-ghost" id="btnClose" type="button">CLOSE</button>
+            <button class="btn" id="btnToggleSide" type="button" disabled>OPEN</button>
           </div>
 
           <div style="margin-top:10px">
@@ -1545,6 +1551,8 @@ card.setAttribute('data-id', id);
 
       const sidePhones = document.getElementById('sidePhones');
 
+      const btnToggleSide = document.getElementById('btnToggleSide');
+
       function setStatusPill(card){
         const min = Number(card.getAttribute('data-lastseen-min'));
         const s = computeOnlineStateFromMinutes(min);
@@ -1573,6 +1581,26 @@ card.setAttribute('data-id', id);
           li.textContent = it.label ? (it.phone + ' (' + it.label + ')') : it.phone;
           sidePhones.appendChild(li);
         });
+      }
+
+      function syncSideToggleFromCard(card){
+        if(!btnToggleSide) return;
+        if(!card){
+          btnToggleSide.textContent = 'OPEN';
+          btnToggleSide.disabled = true;
+          return;
+        }
+
+        const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
+        btnToggleSide.disabled = (motion === 'opening' || motion === 'closing');
+
+        const door = normalizeShutterStateDetailed(
+          card.getAttribute('data-door-state') ||
+          card.getAttribute('data-shutter-state') ||
+          ''
+        );
+
+        btnToggleSide.textContent = mainButtonLabel(door, motion, card.classList.contains('is-open'));
       }
 
       function selectCard(card){
@@ -1734,6 +1762,8 @@ card.setAttribute('data-id', id);
 
         updateSharesCountUiFromCard(card);
 
+        syncSideToggleFromCard(card);
+
         openSide();
       }
 
@@ -1884,101 +1914,17 @@ card.setAttribute('data-id', id);
         updateSideFromCard(card, 'Beheer en overzicht');
       });
 
-      document.getElementById('btnOpen').addEventListener('click', async ()=>{
-        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
-        const boxId = currentCard.getAttribute('data-id');
-        const prevIsOpen = currentCard.classList.contains('is-open');
-        const prevDoor = currentCard.getAttribute('data-door-state') || '';
-        const prevMotion = currentCard.getAttribute('data-motion-state') || '';
-        const prevLifecycle = currentCard.getAttribute('data-lifecycle-state') || '';
-        const prevShutter = currentCard.getAttribute('data-shutter-state') || '';
 
-        try{
-
-          currentCard.classList.add('is-open');
-          currentCard.setAttribute('data-motion-state','opening');
-          currentCard.setAttribute('data-lifecycle-state','opening');
-          currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'opening');
-
-          const btn = currentCard.querySelector('button[data-action="toggle"]');
-          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), true);
-
-          setTimeout(()=>{
-            if(!currentCard) return;
-            const st = String(currentCard.getAttribute('data-shutter-state') || '').toLowerCase();
-            if(st === 'opening'){
-              currentCard.setAttribute('data-shutter-state','open');
-              currentCard.setAttribute('data-lifecycle-state','open');
-              const b = currentCard.querySelector('button[data-action="toggle"]');
-              if(b) b.textContent = mainButtonLabel('open', '', true);
-              updateSideFromCard(currentCard, 'Beheer en overzicht');
-            }
-          }, 5200);
-
-          await sendCommand(boxId, 'open');
-
-          updateSideFromCard(currentCard, 'Beheer en overzicht');
-        } catch(err){
-          if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
-          currentCard.setAttribute('data-door-state', prevDoor);
-          currentCard.setAttribute('data-motion-state', prevMotion);
-          currentCard.setAttribute('data-lifecycle-state', prevLifecycle);
-          currentCard.setAttribute('data-shutter-state', prevShutter);
-          const b0 = currentCard.querySelector('button[data-action=\"toggle\"]');
-          if(b0) b0.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
-          updateSideFromCard(currentCard, 'Beheer en overzicht');
-
-          alert('OPEN mislukt: ' + (err && err.message ? err.message : err));
-        }
-      });
-
-      document.getElementById('btnClose').addEventListener('click', async ()=>{
-        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
-        const boxId = currentCard.getAttribute('data-id');
-        const prevIsOpen = currentCard.classList.contains('is-open');
-        const prevDoor = currentCard.getAttribute('data-door-state') || '';
-        const prevMotion = currentCard.getAttribute('data-motion-state') || '';
-        const prevLifecycle = currentCard.getAttribute('data-lifecycle-state') || '';
-        const prevShutter = currentCard.getAttribute('data-shutter-state') || '';
-
-        try{
-
-          currentCard.classList.remove('is-open');
-          currentCard.setAttribute('data-motion-state','closing');
-          currentCard.setAttribute('data-lifecycle-state','closing');
-          currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'closing');
-
-          const btn = currentCard.querySelector('button[data-action="toggle"]');
-          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), false);
-
-          setTimeout(()=>{
-            if(!currentCard) return;
-            const st = String(currentCard.getAttribute('data-shutter-state') || '').toLowerCase();
-            if(st === 'closing'){
-              currentCard.setAttribute('data-shutter-state','closed');
-              currentCard.setAttribute('data-lifecycle-state','closed');
-              const b = currentCard.querySelector('button[data-action="toggle"]');
-              if(b) b.textContent = mainButtonLabel('closed', '', false);
-              updateSideFromCard(currentCard, 'Beheer en overzicht');
-            }
-          }, 5200);
-
-          await sendCommand(boxId, 'close');
-
-          updateSideFromCard(currentCard, 'Beheer en overzicht');
-        } catch(err){
-          if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
-          currentCard.setAttribute('data-door-state', prevDoor);
-          currentCard.setAttribute('data-motion-state', prevMotion);
-          currentCard.setAttribute('data-lifecycle-state', prevLifecycle);
-          currentCard.setAttribute('data-shutter-state', prevShutter);
-          const b0 = currentCard.querySelector('button[data-action=\"toggle\"]');
-          if(b0) b0.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
-          updateSideFromCard(currentCard, 'Beheer en overzicht');
-
-          alert('CLOSE mislukt: ' + (err && err.message ? err.message : err));
-        }
-      });
+      // Side panel toggle knop (flipflop direct)
+      if (btnToggleSide){
+        btnToggleSide.addEventListener('click', ()=>{
+          if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
+          const toggleBtn = currentCard.querySelector('button[data-action="toggle"]');
+          if(!toggleBtn) return alert('Actieknop niet gevonden.');
+          toggleBtn.click();
+          syncSideToggleFromCard(currentCard);
+        });
+      }
 
       document.getElementById('btnEvents').addEventListener('click', ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
