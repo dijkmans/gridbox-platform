@@ -32,6 +32,7 @@ HTML is opgedeeld in duidelijke blokken met:
 <!-- START BLOKNAAM -->
 <!-- END BLOKNAAM -->
 
+<script type="text/plain" id="worknotes">
 Aanpassingen gebeuren altijd binnen zo’n blok.
 
 WAT ALTIJD MOET BLIJVEN WERKEN
@@ -59,6 +60,7 @@ EINDE WERKAFSPRAKEN
   Bronbestand: index (19).html
   Datum: 2025-12-22
 -->
+</script>
 <html lang="nl">
 <head>
   <meta charset="utf-8" />
@@ -941,7 +943,52 @@ EINDE WERKAFSPRAKEN
 
 
       // Hoofdknop op de kaart: toont actie (OPEN/CLOSE) of overgang (OPENING/CLOSING)
-      function mainButtonLabel(doorState, motionState, fallbackIsOpen){
+      
+      // Tijd parsing voor "since/timestamp/updatedAt" velden (Firestore/ISO/ms)
+      function parseAnyTime(v){
+        try{
+          if (v === null || v === undefined) return null;
+          if (typeof v === 'number' && isFinite(v)){
+            // ms of seconds
+            return v > 1e12 ? v : Math.round(v * 1000);
+          }
+          if (typeof v === 'string'){
+            const t = Date.parse(v);
+            return isNaN(t) ? null : t;
+          }
+          if (typeof v === 'object'){
+            // Firestore Timestamp {seconds, nanoseconds} of {_seconds, _nanoseconds}
+            const sec = (v.seconds !== undefined) ? v.seconds : (v._seconds !== undefined ? v._seconds : null);
+            const nsec = (v.nanoseconds !== undefined) ? v.nanoseconds : (v._nanoseconds !== undefined ? v._nanoseconds : 0);
+            if (sec !== null && sec !== undefined){
+              const ms = Number(sec) * 1000 + Math.floor(Number(nsec || 0) / 1e6);
+              return isFinite(ms) ? ms : null;
+            }
+          }
+          return null;
+        } catch(_){
+          return null;
+        }
+      }
+
+      function pickMotionSince(box){
+        return pick(box, [
+          'state.since',
+          'lifecycle.since',
+          'status.timestamp',
+          'state.timestamp',
+          'status.updatedAt',
+          'updatedAt'
+        ]) ?? null;
+      }
+
+      function isRecent(tsVal, maxMs){
+        const ms = parseAnyTime(tsVal);
+        if (!ms) return false;
+        return Math.abs(Date.now() - ms) <= maxMs;
+      }
+
+function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         const m = normalizeShutterStateDetailed(motionState);
         if (m === 'opening') return 'OPENING';
         if (m === 'closing') return 'CLOSING';
@@ -1195,10 +1242,12 @@ EINDE WERKAFSPRAKEN
         const rawMotionState = pickMotionState(box);
         const rawDoorState = pickDoorState(box);
 
-        const motionState = normalizeShutterStateDetailed(rawMotionState);
+        const motionStateAll = normalizeShutterStateDetailed(rawMotionState);
+        const motionSince = pickMotionSince(box);
+        // Voorkom 'stale' opening/closing die dagen blijft hangen: enkel gebruiken als recent
+        const motionState = (motionStateAll && isRecent(motionSince, 20000)) ? motionStateAll : '';
         const doorState = normalizeShutterStateDetailed(rawDoorState);
-
-        // Visuele toestand:
+// Visuele toestand:
         // - opening: direct omhoog
         // - closing: direct omlaag
         // - anders: volg de deurstatus
@@ -1716,7 +1765,7 @@ card.setAttribute('data-id', id);
 
             const boxId = card.getAttribute('data-id');
 
-            const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || card.getAttribute('data-lifecycle-state') || '');
+            const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
             const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || card.getAttribute('data-shutter-state') || '');
 
             // Tijdens OPENING/CLOSING geen extra klik-acties
@@ -1742,10 +1791,18 @@ card.setAttribute('data-id', id);
             try{
 
               if(next === 'open'){
+                // forceer animatie ook als de class al eens gezet was
+                card.classList.remove('is-open');
+                void card.offsetWidth;
                 card.classList.add('is-open');
                 card.setAttribute('data-motion-state', 'opening');
                 card.setAttribute('data-lifecycle-state', 'opening');
               } else {
+                // forceer animatie ook als de UI even uit sync was
+                if(!card.classList.contains('is-open')){
+                  card.classList.add('is-open');
+                  void card.offsetWidth;
+                }
                 card.classList.remove('is-open');
                 card.setAttribute('data-motion-state', 'closing');
                 card.setAttribute('data-lifecycle-state', 'closing');
