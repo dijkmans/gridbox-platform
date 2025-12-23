@@ -1822,7 +1822,7 @@ card.setAttribute('data-id', id);
                   card.setAttribute('data-shutter-state', 'open');
                   card.setAttribute('data-lifecycle-state', 'open');
                   btn.textContent = mainButtonLabel('open', '', true);
-                  if(currentCard === card) updateSideFromCard(card, 'Beheer en overzicht');
+                  if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
                 }
 
                 if(next === 'close' && motionNow === 'closing'){
@@ -1831,11 +1831,11 @@ card.setAttribute('data-id', id);
                   card.setAttribute('data-shutter-state', 'closed');
                   card.setAttribute('data-lifecycle-state', 'closed');
                   btn.textContent = mainButtonLabel('closed', '', false);
-                  if(currentCard === card) updateSideFromCard(card, 'Beheer en overzicht');
+                  if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
                 }
               }, 5100);
 
-              updateSideFromCard(card, 'Beheer en overzicht');
+              if(side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
               await sendCommand(boxId, next);
             } catch(err){
               if(prevIsOpen) card.classList.add('is-open'); else card.classList.remove('is-open');
@@ -1844,7 +1844,7 @@ card.setAttribute('data-id', id);
               card.setAttribute('data-lifecycle-state', prevLifecycle);
               card.setAttribute('data-shutter-state', prevShutter);
               btn.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
-              if(currentCard === card) updateSideFromCard(card, 'Beheer en overzicht');
+              if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
 
               alert('Actie mislukt: ' + (err && err.message ? err.message : err));
             }
