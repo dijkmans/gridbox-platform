@@ -1284,7 +1284,7 @@ function mainButtonLabel(desiredState, doorState, motionState, fallbackIsOpen){
         }
 
         // Voor de rest van de UI houden we beide bij
-        , motionState);
+        card.setAttribute('data-motion-state', motionState);
         card.setAttribute('data-door-state', doorState);
 
         // data-shutter-state blijft bestaan voor compatibiliteit (we gebruiken vooral doorState)
@@ -2012,8 +2012,6 @@ card.setAttribute('data-id', id);
         const prevMotion = currentCard.getAttribute('data-motion-state') || '';
         const prevLifecycle = currentCard.getAttribute('data-lifecycle-state') || '';
         const prevShutter = currentCard.getAttribute('data-shutter-state') || '';
-        const prevDesired = currentCard.getAttribute('data-desired') || '';
-
         const prevDesired = currentCard.getAttribute('data-desired') || '';
 
 
