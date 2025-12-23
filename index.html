@@ -920,12 +920,23 @@ EINDE WERKAFSPRAKEN
         return undefined;
       }
 
-      function normalizeShutterState(v){
+      function normalizeShutterStateDetailed(v){
         const s = String(v ?? '').trim().toLowerCase();
         if (!s) return '';
-        if (s === 'open' || s === 'opened' || s === 'opening') return 'open';
-        if (s === 'closed' || s === 'close' || s === 'closing') return 'closed';
+        if (s === 'open' || s === 'opened') return 'open';
+        if (s === 'opening') return 'opening';
+        if (s === 'closed' || s === 'close') return 'closed';
+        if (s === 'closing') return 'closing';
         return s;
+      }
+
+      function shutterLabel(state){
+        const s = String(state ?? '').trim().toLowerCase();
+        if (s === 'open') return 'OPEN';
+        if (s === 'closed') return 'CLOSED';
+        if (s === 'opening') return 'OPENING';
+        if (s === 'closing') return 'CLOSING';
+        return 'UNKNOWN';
       }
 
       function pickCustomer(box){
@@ -1145,8 +1156,10 @@ EINDE WERKAFSPRAKEN
         const card = document.createElement('article');
         card.className = 'gb-card';
 
-        const shutterState = normalizeShutterState(pickLifecycleState(box) ?? pick(box, ['status','state']));
-        if (shutterState === 'open') card.classList.add('is-open');
+        const rawShutterState = pickLifecycleState(box) ?? pick(box, ['status','state']);
+        const shutterState = normalizeShutterStateDetailed(rawShutterState);
+
+        if (shutterState === 'open' || shutterState === 'opening') card.classList.add('is-open');
         card.setAttribute('data-shutter-state', shutterState);
 
         card.setAttribute('data-id', id);
@@ -1174,7 +1187,7 @@ EINDE WERKAFSPRAKEN
 
         card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
 
-        const toggleLabel = card.classList.contains('is-open') ? 'CLOSE' : 'OPEN';
+        const toggleLabel = shutterLabel(shutterState || (card.classList.contains('is-open') ? 'open' : 'closed'));
 
         const sharesPill = (sharesCount === null || Number.isNaN(sharesCount))
           ? `<span class="pill ghost" title="sharesCount">shares -</span>`
@@ -1646,7 +1659,13 @@ EINDE WERKAFSPRAKEN
             e.preventDefault(); e.stopPropagation();
 
             const boxId = card.getAttribute('data-id');
-            const isOpen = card.classList.contains('is-open');
+
+            const curState = String(card.getAttribute('data-shutter-state') || card.getAttribute('data-lifecycle-state') || '').toLowerCase();
+            const isOpen =
+              (curState === 'open' || curState === 'opening') ? true :
+              (curState === 'closed' || curState === 'closing') ? false :
+              card.classList.contains('is-open');
+
             const next = isOpen ? 'close' : 'open';
 
             if (!boxId || boxId === '-'){
@@ -1660,10 +1679,35 @@ EINDE WERKAFSPRAKEN
             try{
               await sendCommand(boxId, next);
 
-              card.classList.toggle('is-open', next === 'open');
-              card.setAttribute('data-shutter-state', next);
-              card.setAttribute('data-lifecycle-state', next);
-              btn.textContent = next === 'open' ? 'CLOSE' : 'OPEN';
+              if(next === 'open'){
+                card.classList.add('is-open');
+                card.setAttribute('data-shutter-state', 'opening');
+                card.setAttribute('data-lifecycle-state', 'opening');
+              } else {
+                card.classList.remove('is-open');
+                card.setAttribute('data-shutter-state', 'closing');
+                card.setAttribute('data-lifecycle-state', 'closing');
+              }
+
+              btn.textContent = shutterLabel(card.getAttribute('data-shutter-state'));
+
+              setTimeout(()=>{
+                const st = String(card.getAttribute('data-shutter-state') || '').toLowerCase();
+
+                if(next === 'open' && st === 'opening'){
+                  card.setAttribute('data-shutter-state', 'open');
+                  card.setAttribute('data-lifecycle-state', 'open');
+                  btn.textContent = shutterLabel('open');
+                  if(currentCard === card) updateSideFromCard(card, 'Beheer en overzicht');
+                }
+
+                if(next === 'close' && st === 'closing'){
+                  card.setAttribute('data-shutter-state', 'closed');
+                  card.setAttribute('data-lifecycle-state', 'closed');
+                  btn.textContent = shutterLabel('closed');
+                  if(currentCard === card) updateSideFromCard(card, 'Beheer en overzicht');
+                }
+              }, 5200);
 
               updateSideFromCard(card, 'Beheer en overzicht');
             } catch(err){
@@ -1713,11 +1757,26 @@ EINDE WERKAFSPRAKEN
 
         try{
           await sendCommand(boxId, 'open');
+
           currentCard.classList.add('is-open');
-          currentCard.setAttribute('data-shutter-state','open');
-          currentCard.setAttribute('data-lifecycle-state','open');
+          currentCard.setAttribute('data-shutter-state','opening');
+          currentCard.setAttribute('data-lifecycle-state','opening');
+
           const btn = currentCard.querySelector('button[data-action="toggle"]');
-          if(btn) btn.textContent = 'CLOSE';
+          if(btn) btn.textContent = shutterLabel('opening');
+
+          setTimeout(()=>{
+            if(!currentCard) return;
+            const st = String(currentCard.getAttribute('data-shutter-state') || '').toLowerCase();
+            if(st === 'opening'){
+              currentCard.setAttribute('data-shutter-state','open');
+              currentCard.setAttribute('data-lifecycle-state','open');
+              const b = currentCard.querySelector('button[data-action="toggle"]');
+              if(b) b.textContent = shutterLabel('open');
+              updateSideFromCard(currentCard, 'Beheer en overzicht');
+            }
+          }, 5200);
+
           updateSideFromCard(currentCard, 'Beheer en overzicht');
         } catch(err){
           alert('OPEN mislukt: ' + (err && err.message ? err.message : err));
@@ -1732,11 +1791,26 @@ EINDE WERKAFSPRAKEN
 
         try{
           await sendCommand(boxId, 'close');
+
           currentCard.classList.remove('is-open');
-          currentCard.setAttribute('data-shutter-state','closed');
-          currentCard.setAttribute('data-lifecycle-state','closed');
+          currentCard.setAttribute('data-shutter-state','closing');
+          currentCard.setAttribute('data-lifecycle-state','closing');
+
           const btn = currentCard.querySelector('button[data-action="toggle"]');
-          if(btn) btn.textContent = 'OPEN';
+          if(btn) btn.textContent = shutterLabel('closing');
+
+          setTimeout(()=>{
+            if(!currentCard) return;
+            const st = String(currentCard.getAttribute('data-shutter-state') || '').toLowerCase();
+            if(st === 'closing'){
+              currentCard.setAttribute('data-shutter-state','closed');
+              currentCard.setAttribute('data-lifecycle-state','closed');
+              const b = currentCard.querySelector('button[data-action="toggle"]');
+              if(b) b.textContent = shutterLabel('closed');
+              updateSideFromCard(currentCard, 'Beheer en overzicht');
+            }
+          }, 5200);
+
           updateSideFromCard(currentCard, 'Beheer en overzicht');
         } catch(err){
           alert('CLOSE mislukt: ' + (err && err.message ? err.message : err));
