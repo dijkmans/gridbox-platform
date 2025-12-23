@@ -1,5 +1,59 @@
 <!DOCTYPE html>
+
 <!--
+=====================================================
+HTML WERKAFSPRAKEN – LEES DIT VOOR JE IETS WIJZIGT
+=====================================================
+
+DOEL
+Dit bestand bevat HTML, CSS en JavaScript die samen één werkend geheel vormen.
+Aanpassingen mogen NOOIT bestaande functionaliteit breken.
+
+ALGEMENE REGELS
+- Wijzig alleen wat expliciet gevraagd wordt
+- Raak bestaande id’s, class-namen en data-attributes niet aan
+- Verwijder geen code tenzij dit expliciet gevraagd wordt
+- Herschrijf geen JavaScript-logica zonder duidelijke reden
+- Verander geen volgorde van elementen als dit impact kan hebben
+
+WERKWIJZE BIJ AANPASSINGEN
+1. Eerst analyseren, nog geen code aanpassen
+   - Welke onderdelen zijn afhankelijk van elkaar?
+   - Welke elementen worden gebruikt door JavaScript?
+   - Waar zit risico op breuk?
+
+2. Pas daarna aanpassen
+   - Enkel binnen het aangeduide blok
+   - Zo lokaal mogelijk
+   - Geen onnodige refactors
+
+BLOKSTRUCTUUR
+HTML is opgedeeld in duidelijke blokken met:
+<!-- START BLOKNAAM -->
+<!-- END BLOKNAAM -->
+
+Aanpassingen gebeuren altijd binnen zo’n blok.
+
+WAT ALTIJD MOET BLIJVEN WERKEN
+- Event listeners
+- Dynamische updates
+- Formulieren
+- Firestore / API koppelingen
+- Navigatie en zichtbaarheid van secties
+
+CONTROLE NA WIJZIGING
+Na elke wijziging controleren:
+- Werkt alles nog zoals voorheen?
+- Zijn er id’s of classes gewijzigd?
+- Kan bestaande logica hierdoor breken?
+
+BIJ TWIJFEL
+Niet aanpassen. Eerst uitleggen waar het risico zit.
+
+=====================================================
+EINDE WERKAFSPRAKEN
+=====================================================
+
   Deze versie is dezelfde functionaliteit als je origineel,
   maar beter gegroepeerd met duidelijke blokken en secties.
   Bronbestand: index (19).html
