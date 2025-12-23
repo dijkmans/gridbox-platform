@@ -939,6 +939,42 @@ EINDE WERKAFSPRAKEN
         return 'UNKNOWN';
       }
 
+
+      // Hoofdknop op de kaart: toont actie (OPEN/CLOSE) of overgang (OPENING/CLOSING)
+      function mainButtonLabel(doorState, motionState, fallbackIsOpen){
+        const m = normalizeShutterStateDetailed(motionState);
+        if (m === 'opening') return 'OPENING';
+        if (m === 'closing') return 'CLOSING';
+
+        const d = normalizeShutterStateDetailed(doorState) || (fallbackIsOpen ? 'open' : 'closed');
+        if (d === 'open') return 'CLOSE';
+        return 'OPEN';
+      }
+
+      // Bewegingsstatus (meestal "opening/closing") komt typisch uit state.state
+      function pickMotionState(box){
+        return pick(box, [
+          'state.state',
+          'lifecycle.state',
+          'lifecycle.status',
+          'lifecycleState',
+          'shutterState',
+          'state'
+        ]) ?? null;
+      }
+
+      // Deurstatus (meestal "open/closed") komt typisch uit status.door of status.state
+      function pickDoorState(box){
+        return pick(box, [
+          'status.door',
+          'status.state',
+          'lifecycle.door',
+          'door',
+          'shutter.door',
+          'shutter.state'
+        ]) ?? null;
+      }
+
       function pickCustomer(box){
         return pick(box, [
           'Portal.Customer',
@@ -1156,13 +1192,33 @@ EINDE WERKAFSPRAKEN
         const card = document.createElement('article');
         card.className = 'gb-card';
 
-        const rawShutterState = pickLifecycleState(box) ?? pick(box, ['status','state']);
-        const shutterState = normalizeShutterStateDetailed(rawShutterState);
+        const rawMotionState = pickMotionState(box);
+        const rawDoorState = pickDoorState(box);
 
-        if (shutterState === 'open' || shutterState === 'opening') card.classList.add('is-open');
-        card.setAttribute('data-shutter-state', shutterState);
+        const motionState = normalizeShutterStateDetailed(rawMotionState);
+        const doorState = normalizeShutterStateDetailed(rawDoorState);
 
-        card.setAttribute('data-id', id);
+        // Visuele toestand:
+        // - opening: direct omhoog
+        // - closing: direct omlaag
+        // - anders: volg de deurstatus
+        if (motionState === 'opening') {
+          card.classList.add('is-open');
+        } else if (motionState === 'closing') {
+          card.classList.remove('is-open');
+        } else if (doorState === 'open') {
+          card.classList.add('is-open');
+        } else if (doorState === 'closed') {
+          card.classList.remove('is-open');
+        }
+
+        // Voor de rest van de UI houden we beide bij
+        card.setAttribute('data-motion-state', motionState);
+        card.setAttribute('data-door-state', doorState);
+
+        // data-shutter-state blijft bestaan voor compatibiliteit (we gebruiken vooral doorState)
+        card.setAttribute('data-shutter-state', doorState || motionState);
+card.setAttribute('data-id', id);
         card.setAttribute('data-site', site === '-' ? '' : site);
         card.setAttribute('data-box', boxNumber === '-' ? '' : boxNumber);
         card.setAttribute('data-agent', agent ?? '');
@@ -1187,7 +1243,7 @@ EINDE WERKAFSPRAKEN
 
         card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
 
-        const toggleLabel = shutterLabel(shutterState || (card.classList.contains('is-open') ? 'open' : 'closed'));
+        const toggleLabel = mainButtonLabel(doorState, motionState, card.classList.contains('is-open'));
 
         const sharesPill = (sharesCount === null || Number.isNaN(sharesCount))
           ? `<span class="pill ghost" title="sharesCount">shares -</span>`
@@ -1660,12 +1716,15 @@ EINDE WERKAFSPRAKEN
 
             const boxId = card.getAttribute('data-id');
 
-            const curState = String(card.getAttribute('data-shutter-state') || card.getAttribute('data-lifecycle-state') || '').toLowerCase();
-            const isOpen =
-              (curState === 'open' || curState === 'opening') ? true :
-              (curState === 'closed' || curState === 'closing') ? false :
-              card.classList.contains('is-open');
+            const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || card.getAttribute('data-lifecycle-state') || '');
+            const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || card.getAttribute('data-shutter-state') || '');
 
+            // Tijdens OPENING/CLOSING geen extra klik-acties
+            if (motion === 'opening' || motion === 'closing'){
+              return;
+            }
+
+            const isOpen = (door === 'open') ? true : (door === 'closed') ? false : card.classList.contains('is-open');
             const next = isOpen ? 'close' : 'open';
 
             if (!boxId || boxId === '-'){
@@ -1673,44 +1732,63 @@ EINDE WERKAFSPRAKEN
               return;
             }
 
-            const ok = confirm(next === 'open' ? 'Box openen?' : 'Box sluiten?');
-            if(!ok) return;
+            const prevIsOpen = card.classList.contains('is-open');
+            const prevDoor = card.getAttribute('data-door-state') || '';
+            const prevMotion = card.getAttribute('data-motion-state') || '';
+            const prevLifecycle = card.getAttribute('data-lifecycle-state') || '';
+            const prevShutter = card.getAttribute('data-shutter-state') || '';
+
 
             try{
-              await sendCommand(boxId, next);
 
               if(next === 'open'){
                 card.classList.add('is-open');
-                card.setAttribute('data-shutter-state', 'opening');
+                card.setAttribute('data-motion-state', 'opening');
                 card.setAttribute('data-lifecycle-state', 'opening');
               } else {
                 card.classList.remove('is-open');
-                card.setAttribute('data-shutter-state', 'closing');
+                card.setAttribute('data-motion-state', 'closing');
                 card.setAttribute('data-lifecycle-state', 'closing');
               }
 
-              btn.textContent = shutterLabel(card.getAttribute('data-shutter-state'));
+              // compat
+              card.setAttribute('data-shutter-state', card.getAttribute('data-door-state') || card.getAttribute('data-motion-state') || '');
+
+              btn.textContent = mainButtonLabel(card.getAttribute('data-door-state'), card.getAttribute('data-motion-state'), card.classList.contains('is-open'));
 
               setTimeout(()=>{
-                const st = String(card.getAttribute('data-shutter-state') || '').toLowerCase();
+                const motionNow = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
 
-                if(next === 'open' && st === 'opening'){
+                if(next === 'open' && motionNow === 'opening'){
+                  card.setAttribute('data-door-state', 'open');
+                  card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'open');
                   card.setAttribute('data-lifecycle-state', 'open');
-                  btn.textContent = shutterLabel('open');
+                  btn.textContent = mainButtonLabel('open', '', true);
                   if(currentCard === card) updateSideFromCard(card, 'Beheer en overzicht');
                 }
 
-                if(next === 'close' && st === 'closing'){
+                if(next === 'close' && motionNow === 'closing'){
+                  card.setAttribute('data-door-state', 'closed');
+                  card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'closed');
                   card.setAttribute('data-lifecycle-state', 'closed');
-                  btn.textContent = shutterLabel('closed');
+                  btn.textContent = mainButtonLabel('closed', '', false);
                   if(currentCard === card) updateSideFromCard(card, 'Beheer en overzicht');
                 }
-              }, 5200);
+              }, 5100);
 
               updateSideFromCard(card, 'Beheer en overzicht');
+              await sendCommand(boxId, next);
             } catch(err){
+              if(prevIsOpen) card.classList.add('is-open'); else card.classList.remove('is-open');
+              card.setAttribute('data-door-state', prevDoor);
+              card.setAttribute('data-motion-state', prevMotion);
+              card.setAttribute('data-lifecycle-state', prevLifecycle);
+              card.setAttribute('data-shutter-state', prevShutter);
+              btn.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
+              if(currentCard === card) updateSideFromCard(card, 'Beheer en overzicht');
+
               alert('Actie mislukt: ' + (err && err.message ? err.message : err));
             }
             return;
@@ -1752,18 +1830,21 @@ EINDE WERKAFSPRAKEN
       document.getElementById('btnOpen').addEventListener('click', async ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
         const boxId = currentCard.getAttribute('data-id');
-        const ok = confirm('Box openen?');
-        if(!ok) return;
+        const prevIsOpen = currentCard.classList.contains('is-open');
+        const prevDoor = currentCard.getAttribute('data-door-state') || '';
+        const prevMotion = currentCard.getAttribute('data-motion-state') || '';
+        const prevLifecycle = currentCard.getAttribute('data-lifecycle-state') || '';
+        const prevShutter = currentCard.getAttribute('data-shutter-state') || '';
 
         try{
-          await sendCommand(boxId, 'open');
 
           currentCard.classList.add('is-open');
-          currentCard.setAttribute('data-shutter-state','opening');
+          currentCard.setAttribute('data-motion-state','opening');
           currentCard.setAttribute('data-lifecycle-state','opening');
+          currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'opening');
 
           const btn = currentCard.querySelector('button[data-action="toggle"]');
-          if(btn) btn.textContent = shutterLabel('opening');
+          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), true);
 
           setTimeout(()=>{
             if(!currentCard) return;
@@ -1772,13 +1853,24 @@ EINDE WERKAFSPRAKEN
               currentCard.setAttribute('data-shutter-state','open');
               currentCard.setAttribute('data-lifecycle-state','open');
               const b = currentCard.querySelector('button[data-action="toggle"]');
-              if(b) b.textContent = shutterLabel('open');
+              if(b) b.textContent = mainButtonLabel('open', '', true);
               updateSideFromCard(currentCard, 'Beheer en overzicht');
             }
           }, 5200);
 
+          await sendCommand(boxId, 'open');
+
           updateSideFromCard(currentCard, 'Beheer en overzicht');
         } catch(err){
+          if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
+          currentCard.setAttribute('data-door-state', prevDoor);
+          currentCard.setAttribute('data-motion-state', prevMotion);
+          currentCard.setAttribute('data-lifecycle-state', prevLifecycle);
+          currentCard.setAttribute('data-shutter-state', prevShutter);
+          const b0 = currentCard.querySelector('button[data-action=\"toggle\"]');
+          if(b0) b0.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
+          updateSideFromCard(currentCard, 'Beheer en overzicht');
+
           alert('OPEN mislukt: ' + (err && err.message ? err.message : err));
         }
       });
@@ -1786,18 +1878,21 @@ EINDE WERKAFSPRAKEN
       document.getElementById('btnClose').addEventListener('click', async ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
         const boxId = currentCard.getAttribute('data-id');
-        const ok = confirm('Box sluiten?');
-        if(!ok) return;
+        const prevIsOpen = currentCard.classList.contains('is-open');
+        const prevDoor = currentCard.getAttribute('data-door-state') || '';
+        const prevMotion = currentCard.getAttribute('data-motion-state') || '';
+        const prevLifecycle = currentCard.getAttribute('data-lifecycle-state') || '';
+        const prevShutter = currentCard.getAttribute('data-shutter-state') || '';
 
         try{
-          await sendCommand(boxId, 'close');
 
           currentCard.classList.remove('is-open');
-          currentCard.setAttribute('data-shutter-state','closing');
+          currentCard.setAttribute('data-motion-state','closing');
           currentCard.setAttribute('data-lifecycle-state','closing');
+          currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'closing');
 
           const btn = currentCard.querySelector('button[data-action="toggle"]');
-          if(btn) btn.textContent = shutterLabel('closing');
+          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), false);
 
           setTimeout(()=>{
             if(!currentCard) return;
@@ -1806,13 +1901,24 @@ EINDE WERKAFSPRAKEN
               currentCard.setAttribute('data-shutter-state','closed');
               currentCard.setAttribute('data-lifecycle-state','closed');
               const b = currentCard.querySelector('button[data-action="toggle"]');
-              if(b) b.textContent = shutterLabel('closed');
+              if(b) b.textContent = mainButtonLabel('closed', '', false);
               updateSideFromCard(currentCard, 'Beheer en overzicht');
             }
           }, 5200);
 
+          await sendCommand(boxId, 'close');
+
           updateSideFromCard(currentCard, 'Beheer en overzicht');
         } catch(err){
+          if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
+          currentCard.setAttribute('data-door-state', prevDoor);
+          currentCard.setAttribute('data-motion-state', prevMotion);
+          currentCard.setAttribute('data-lifecycle-state', prevLifecycle);
+          currentCard.setAttribute('data-shutter-state', prevShutter);
+          const b0 = currentCard.querySelector('button[data-action=\"toggle\"]');
+          if(b0) b0.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
+          updateSideFromCard(currentCard, 'Beheer en overzicht');
+
           alert('CLOSE mislukt: ' + (err && err.message ? err.message : err));
         }
       });
