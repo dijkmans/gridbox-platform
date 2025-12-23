@@ -926,6 +926,10 @@ EINDE WERKAFSPRAKEN
           'portal.customer',
           'organisation.name',
           'organization.name',
+                    'Portal.Organisation',
+                    'Portal.Organization',
+                    'portal.organisation',
+                    'portal.organization',
           'customer'
         ]) ?? null;
       }
@@ -1095,6 +1099,7 @@ EINDE WERKAFSPRAKEN
         const id = fmtMaybe(box.id);
 
         const customer = pickCustomer(box);
+        const customerText = fmtMaybe(customer);
         const sitePicked = pickSite(box);
         const boxNrPicked = pickBoxNumber(box);
 
@@ -1177,6 +1182,7 @@ EINDE WERKAFSPRAKEN
             </div>
 
             <div class="gb-meta">
+              <span class="pill ghost" title="Klant"><span class="dot"></span><span>${escapeHtml(customerText)}</span></span>
               <span class="pill ${s.cls}" title="Op basis van last seen"><span class="dot"></span><span>${escapeHtml(s.label)}</span></span>
               <span class="pill ghost" title="Portal.active">active ${escapeHtml(active || '-')}</span>
               <span class="pill ghost" title="box.access24h">24/7 ${escapeHtml(access24h || '-')}</span>
