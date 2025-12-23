@@ -284,6 +284,7 @@ EINDE WERKAFSPRAKEN
       cursor:pointer;
       font:inherit;
       user-select:none;
+      touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
     }
     .btn{
@@ -292,6 +293,8 @@ EINDE WERKAFSPRAKEN
       border:none;
     }
     .btn:active{transform:translateY(1px)}
+    .btn-ghost:active{transform:translateY(1px)}
+    .btn-small:active{transform:translateY(1px)}
     .btn-ghost{
       background:var(--chip);
     }
@@ -303,6 +306,7 @@ EINDE WERKAFSPRAKEN
       border:1px solid var(--border);
       background:var(--primary);
       color:#fff;
+      touch-action: manipulation;
       cursor:pointer;
       font:inherit;
     }
@@ -1634,7 +1638,9 @@ card.setAttribute('data-id', id);
 
       let currentCard = null;
 
-      const sideTitle = document.getElementById('sideTitle');
+      
+      const inFlightByBox = new Set();
+const sideTitle = document.getElementById('sideTitle');
       const sideSub   = document.getElementById('sideSub');
 
       const kvCustomer= document.getElementById('kvCustomer');
@@ -1868,9 +1874,41 @@ card.setAttribute('data-id', id);
       // 9) Card acties
       // =========================================================
 
-      document.addEventListener('click', async (e)=>{
+      
+      // Snellere en betrouwbaardere knoppen op mobiel:
+      // - bij een lichte vingerbeweging wordt een 'click' soms niet getriggerd
+      // - pointerdown is direct, dus we sturen zelf een click en onderdrukken de echte click achteraf
+      document.addEventListener('pointerdown', (e) => {
+        if (e.pointerType && e.pointerType !== 'touch') return;
+        const btn = e.target.closest && e.target.closest('button[data-action]');
+        if (!btn) return;
+
+        // enkel als het in een card zit
+        const card = btn.closest && btn.closest('.gb-card');
+        if (!card) return;
+
+        const now = Date.now();
+        btn.dataset.pdAt = String(now);
+
+        // dispatch een synthetische click zodat de actie onmiddellijk reageert
+        // en niet afhankelijk is van de browser click-detectie
+        const ev = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+        btn.dispatchEvent(ev);
+
+        // voorkom ghost click later
+        e.preventDefault();
+        e.stopPropagation();
+      }, { capture: true });
+
+document.addEventListener('click', async (e)=>{
         const btn = e.target.closest('button[data-action]');
         const card = e.target.closest('.gb-card');
+
+        // Als pointerdown al een synthetische click stuurde, negeer dan de echte click die later nog komt
+        if (btn && e.isTrusted) {
+          const pdAt = Number(btn.dataset.pdAt || '0');
+          if (pdAt && (Date.now() - pdAt) < 700) return;
+        }
         if(!card) return;
 
         if(btn){
@@ -1882,7 +1920,7 @@ card.setAttribute('data-id', id);
             // anti dubbel-klik / multi-tap en lock tijdens API call
             const nowTap = Date.now();
             const lastTap = Number(card.getAttribute('data-last-tap') || '0');
-            if (nowTap - lastTap < 450) return;
+            if (nowTap - lastTap < 200) return;
             card.setAttribute('data-last-tap', String(nowTap));
 
             if (card.getAttribute('data-busy') === '1') return;
