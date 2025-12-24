@@ -209,7 +209,7 @@ EINDE WERKAFSPRAKEN
       background-image:url('https://gridbox.eu/images/f5b43959-ec7d-4fbe-9a38-1324a9617cf3_biss.png');
       background-repeat:repeat-y;
       background-size:100% auto;
-      transition:transform 5s cubic-bezier(.2,.7,.2,1);
+      transition:transform var(--shutter-dur, 20s) cubic-bezier(.2,.7,.2,1);
       transform:translateY(0);
     }
     .gb-card.is-open .gb-shutter__door{ transform:translateY(-100%); }
@@ -1064,6 +1064,32 @@ function mainButtonLabel(desiredState, doorState, motionState, fallbackIsOpen){
         ]) ?? null;
       }
 
+      function pickShutterMoveMs(box){
+        const v = pick(box, [
+          'hardware.shutterMoveMs',
+          'hardware.shutterMove_ms',
+          'device.shutterMoveMs',
+          'device.shutterMove_ms',
+          'box.shutterMoveMs',
+          'box.shutterMove_ms',
+          'ui.shutterMoveMs',
+          'shutterMoveMs',
+          'shutterMove_ms'
+        ]);
+        if (v === undefined || v === null || v === '') return null;
+        const n = Number(v);
+        if (Number.isNaN(n) || n <= 0) return null;
+        return n;
+      }
+
+      function shutterDurationCss(box){
+        // duur van de rolluik-simulatie, liefst vanuit de agent settings
+        const ms = pickShutterMoveMs(box) ?? 20000;
+        const safe = Math.max(800, Math.min(60000, ms));
+        return safe + 'ms';
+      }
+
+
       function pickCustomer(box){
         return pick(box, [
           'Portal.Customer',
@@ -1280,6 +1306,9 @@ function mainButtonLabel(desiredState, doorState, motionState, fallbackIsOpen){
 
         const card = document.createElement('article');
         card.className = 'gb-card';
+
+        // zet de duur van de rolluik-animatie per box
+        card.style.setProperty('--shutter-dur', shutterDurationCss(box));
 
         // Voorkom rolluik-flip bij refresh (geen animatie bij initial render)
         card.classList.add('no-anim');
