@@ -80,34 +80,6 @@ EINDE WERKAFSPRAKEN
        7) Tabellen en formulieren
        8) Responsive
        ========================================================= */
-
-/* =====================================================
-   DESIRED-DRIVEN UI HELPERS (clean & consistent)
-   ===================================================== */
-
-function getDesiredFromCard(card){
-  return card.getAttribute('data-desired') === 'open' ? 'open' : 'close';
-}
-
-function setDesiredLocal(card, desired){
-  card.setAttribute('data-desired', desired);
-}
-
-function nextDesiredFromCard(card){
-  return getDesiredFromCard(card) === 'open' ? 'close' : 'open';
-}
-
-function mainButtonLabelFromDesired(card){
-  const desired = getDesiredFromCard(card);
-  return desired === 'open' ? 'CLOSE' : 'OPEN';
-}
-
-function updateMainButtonFromDesired(card){
-  const btn = card.querySelector('.btn-main');
-  if(!btn) return;
-  btn.textContent = mainButtonLabelFromDesired(card);
-}
-
     /* 1) Design tokens */
 
 :root{
@@ -1016,15 +988,16 @@ function updateMainButtonFromDesired(card){
         return Math.abs(Date.now() - ms) <= maxMs;
       }
 
-function mainButtonLabel(doorState, motionState, fallbackIsOpen){
-        const d =
-          normalizeShutterStateDetailed(doorState) ||
-          (fallbackIsOpen ? 'open' : 'closed');
+\1
 
-        // UI toont enkel acties, geen tussenstates
-        if (d === 'open') return 'CLOSE';
-        return 'OPEN';
-      }
+
+// =====================================================
+// DESIRED-DRIVEN BUTTON LABEL (authoritative)
+// =====================================================
+function mainButtonLabelFromDesired(desired){
+  return desired === 'open' ? 'CLOSE' : 'OPEN';
+}
+
 
       // Bewegingsstatus (meestal "opening/closing") komt typisch uit state.state
       function pickMotionState(box){
@@ -1866,7 +1839,7 @@ async function sendCommand(boxId, type){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'open');
                   card.setAttribute('data-lifecycle-state', 'open');
-                  updateMainButtonFromDesired(card);
+                  btn.textContent = mainButtonLabelFromDesired(card.getAttribute('data-desired'));
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
                 }
 
@@ -1875,13 +1848,14 @@ async function sendCommand(boxId, type){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'closed');
                   card.setAttribute('data-lifecycle-state', 'closed');
-                  updateMainButtonFromDesired(card);
+                  btn.textContent = mainButtonLabelFromDesired(card.getAttribute('data-desired'));
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
                 }
               }, 5100);
 
               if(side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
-              card.setAttribute('data-desired', next);
+              card.setAttribute('data-desired', \1);
+            if (typeof btn !== 'undefined' && btn) { btn.textContent = mainButtonLabelFromDesired(card.getAttribute('data-desired')); }
               await setDesired(boxId, next);
             } catch(err){
               if(prevIsOpen) card.classList.add('is-open'); else card.classList.remove('is-open');
@@ -1889,7 +1863,7 @@ async function sendCommand(boxId, type){
               card.setAttribute('data-motion-state', prevMotion);
               card.setAttribute('data-lifecycle-state', prevLifecycle);
               card.setAttribute('data-shutter-state', prevShutter);
-              updateMainButtonFromDesired(card);
+              btn.textContent = mainButtonLabelFromDesired(card.getAttribute('data-desired'));
               if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
 
               alert('Actie mislukt: ' + (err && err.message ? err.message : err));
