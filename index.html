@@ -942,6 +942,123 @@ EINDE WERKAFSPRAKEN
       }
 
 
+      
+      // =========================================================
+      // Desired-status helpers (Firestore is bron van waarheid)
+      // =========================================================
+
+      function normalizeDesired(v){
+        const s = String(v ?? '').trim().toLowerCase();
+        if (!s) return '';
+        if (s === 'open' || s === 'opened') return 'open';
+        if (s === 'close' || s === 'closed') return 'close';
+        return '';
+      }
+
+      function invertDesired(desired){
+        const d = normalizeDesired(desired);
+        if (d === 'open') return 'close';
+        if (d === 'close') return 'open';
+        return '';
+      }
+
+      function desiredToToggleLabel(desired, fallbackIsOpen){
+        const d = normalizeDesired(desired);
+        if (d === 'open') return 'CLOSE';
+        if (d === 'close') return 'OPEN';
+        return fallbackIsOpen ? 'CLOSE' : 'OPEN';
+      }
+
+      function toggleLabelFromCard(card){
+        const desired = normalizeDesired(card.getAttribute('data-desired'));
+        const door = normalizeShutterStateDetailed(
+          card.getAttribute('data-door-state') ||
+          card.getAttribute('data-shutter-state') ||
+          ''
+        );
+        const isOpen = (door === 'open') ? true : (door === 'closed') ? false : card.classList.contains('is-open');
+        return desiredToToggleLabel(desired, isOpen);
+      }
+
+      function setButtonBusy(btn, busy){
+        if(!btn) return;
+        btn.disabled = !!busy;
+        if(busy){
+          btn.dataset.busy = '1';
+          btn.style.opacity = '0.65';
+          btn.style.cursor = 'not-allowed';
+        } else {
+          delete btn.dataset.busy;
+          btn.style.opacity = '';
+          btn.style.cursor = '';
+        }
+      }
+
+      async function fetchDesired(boxId){
+        try{
+          const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/commands`), { method:'GET' });
+          if(!res.ok) return '';
+          const data = await res.json().catch(()=> null);
+          if(!data || typeof data !== 'object') return '';
+          const v = data.desired ?? (data.status && data.status.desired) ?? (data.state && data.state.desired) ?? null;
+          return normalizeDesired(v);
+        } catch(_){
+          return '';
+        }
+      }
+
+      async function waitForDesired(boxId, expected, timeoutMs=8000, intervalMs=600){
+        const exp = normalizeDesired(expected);
+        if(!exp) return '';
+        const t0 = Date.now();
+        while(Date.now() - t0 <= timeoutMs){
+          const d = await fetchDesired(boxId);
+          if(d === exp) return d;
+          await new Promise(r=>setTimeout(r, intervalMs));
+        }
+        return '';
+      }
+
+      async function hydrateDesiredForBoxes(boxes){
+        const list = Array.isArray(boxes) ? boxes : [];
+        let idx = 0;
+        const limit = 6;
+
+        const workers = Array.from({length: limit}, async ()=>{
+          while(true){
+            const i = idx++;
+            if(i >= list.length) break;
+            const b = list[i];
+            const id = b && b.id;
+            if(!id) continue;
+            const d = await fetchDesired(id);
+            if(d) b._desired = d;
+          }
+        });
+
+        await Promise.all(workers);
+      }
+
+      function updateSideCommandButtonsFromDesired(desired){
+        const d = normalizeDesired(desired);
+        const bOpen = document.getElementById('btnOpen');
+        const bClose = document.getElementById('btnClose');
+        if(!bOpen || !bClose) return;
+
+        if(!d){
+          bOpen.style.display = '';
+          bClose.style.display = '';
+          return;
+        }
+        if(d === 'open'){
+          bOpen.style.display = 'none';
+          bClose.style.display = '';
+        } else {
+          bOpen.style.display = '';
+          bClose.style.display = 'none';
+        }
+      }
+
       // Hoofdknop op de kaart: toont actie (OPEN/CLOSE) of overgang (OPENING/CLOSING)
       
       // Tijd parsing voor "since/timestamp/updatedAt" velden (Firestore/ISO/ms)
@@ -1292,7 +1409,13 @@ card.setAttribute('data-id', id);
 
         card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
 
-        const toggleLabel = mainButtonLabel(doorState, motionState, card.classList.contains('is-open'));
+        const desiredFromApi = normalizeDesired(box && (box._desired || pick(box, ['status.desired','state.desired','desired'])));
+
+        // Bewaar desired op de kaart: knoplabel volgt desired (omgekeerd)
+        card.setAttribute('data-desired', desiredFromApi || '');
+
+        const fallbackIsOpen = (doorState === 'open') ? true : (doorState === 'closed') ? false : card.classList.contains('is-open');
+        const toggleLabel = desiredToToggleLabel(desiredFromApi, fallbackIsOpen);
 
         const sharesPill = (sharesCount === null || Number.isNaN(sharesCount))
           ? `<span class="pill ghost" title="sharesCount">shares -</span>`
@@ -1734,6 +1857,8 @@ card.setAttribute('data-id', id);
 
         updateSharesCountUiFromCard(card);
 
+        updateSideCommandButtonsFromDesired(card.getAttribute('data-desired'));
+
         openSide();
       }
 
@@ -1774,12 +1899,15 @@ card.setAttribute('data-id', id);
             }
 
             const isOpen = (door === 'open') ? true : (door === 'closed') ? false : card.classList.contains('is-open');
-            const next = isOpen ? 'close' : 'open';
+            const desiredNow = normalizeDesired(card.getAttribute('data-desired'));
+            const next = desiredNow ? invertDesired(desiredNow) : (isOpen ? 'close' : 'open');
 
             if (!boxId || boxId === '-'){
               alert('Box id ontbreekt.');
               return;
             }
+
+            setButtonBusy(btn, true);
 
             const prevIsOpen = card.classList.contains('is-open');
             const prevDoor = card.getAttribute('data-door-state') || '';
@@ -1811,7 +1939,7 @@ card.setAttribute('data-id', id);
               // compat
               card.setAttribute('data-shutter-state', card.getAttribute('data-door-state') || card.getAttribute('data-motion-state') || '');
 
-              btn.textContent = mainButtonLabel(card.getAttribute('data-door-state'), card.getAttribute('data-motion-state'), card.classList.contains('is-open'));
+              btn.textContent = toggleLabelFromCard(card);
 
               setTimeout(()=>{
                 const motionNow = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
@@ -1821,7 +1949,7 @@ card.setAttribute('data-id', id);
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'open');
                   card.setAttribute('data-lifecycle-state', 'open');
-                  btn.textContent = mainButtonLabel('open', '', true);
+                  btn.textContent = toggleLabelFromCard(card);
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
                 }
 
@@ -1830,14 +1958,31 @@ card.setAttribute('data-id', id);
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'closed');
                   card.setAttribute('data-lifecycle-state', 'closed');
-                  btn.textContent = mainButtonLabel('closed', '', false);
+                  btn.textContent = toggleLabelFromCard(card);
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
                 }
+                setButtonBusy(btn, false);
               }, 5100);
 
               if(side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
               await sendCommand(boxId, next);
-            } catch(err){
+
+              // Wacht tot Firestore desired effectief is aangepast, dan pas label updaten
+              const d2 = await waitForDesired(boxId, next);
+              if(d2){
+                card.setAttribute('data-desired', d2);
+                btn.textContent = toggleLabelFromCard(card);
+                if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
+              }
+              setTimeout(()=>{
+            if(!currentCard) return;
+            const tbtn = currentCard.querySelector('button[data-action="toggle"]');
+            setButtonBusy(tbtn, false);
+            setButtonBusy(document.getElementById('btnOpen'), false);
+            setButtonBusy(document.getElementById('btnClose'), false);
+          }, 5300);
+
+        } catch(err){
               if(prevIsOpen) card.classList.add('is-open'); else card.classList.remove('is-open');
               card.setAttribute('data-door-state', prevDoor);
               card.setAttribute('data-motion-state', prevMotion);
@@ -1845,6 +1990,8 @@ card.setAttribute('data-id', id);
               card.setAttribute('data-shutter-state', prevShutter);
               btn.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
               if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
+
+              setButtonBusy(btn, false);
 
               alert('Actie mislukt: ' + (err && err.message ? err.message : err));
             }
@@ -1895,13 +2042,17 @@ card.setAttribute('data-id', id);
 
         try{
 
+          setButtonBusy(document.querySelector('.gb-card.is-selected button[data-action="toggle"]'), true);
+          setButtonBusy(document.getElementById('btnOpen'), true);
+          setButtonBusy(document.getElementById('btnClose'), true);
+
           currentCard.classList.add('is-open');
           currentCard.setAttribute('data-motion-state','opening');
           currentCard.setAttribute('data-lifecycle-state','opening');
           currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'opening');
 
           const btn = currentCard.querySelector('button[data-action="toggle"]');
-          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), true);
+          if(btn) btn.textContent = toggleLabelFromCard(currentCard);
 
           setTimeout(()=>{
             if(!currentCard) return;
@@ -1910,14 +2061,30 @@ card.setAttribute('data-id', id);
               currentCard.setAttribute('data-shutter-state','open');
               currentCard.setAttribute('data-lifecycle-state','open');
               const b = currentCard.querySelector('button[data-action="toggle"]');
-              if(b) b.textContent = mainButtonLabel('open', '', true);
+              if(b) b.textContent = toggleLabelFromCard(currentCard);
               updateSideFromCard(currentCard, 'Beheer en overzicht');
             }
           }, 5200);
 
           await sendCommand(boxId, 'open');
 
+          const d2 = await waitForDesired(boxId, 'open');
+          if(d2){
+            currentCard.setAttribute('data-desired', d2);
+          }
+          const b2 = currentCard.querySelector('button[data-action="toggle"]');
+          if(b2) b2.textContent = toggleLabelFromCard(currentCard);
+          updateSideCommandButtonsFromDesired(currentCard.getAttribute('data-desired'));
+
           updateSideFromCard(currentCard, 'Beheer en overzicht');
+          setTimeout(()=>{
+            if(!currentCard) return;
+            const tbtn = currentCard.querySelector('button[data-action="toggle"]');
+            setButtonBusy(tbtn, false);
+            setButtonBusy(document.getElementById('btnOpen'), false);
+            setButtonBusy(document.getElementById('btnClose'), false);
+          }, 5300);
+
         } catch(err){
           if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
           currentCard.setAttribute('data-door-state', prevDoor);
@@ -1927,6 +2094,11 @@ card.setAttribute('data-id', id);
           const b0 = currentCard.querySelector('button[data-action=\"toggle\"]');
           if(b0) b0.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
           updateSideFromCard(currentCard, 'Beheer en overzicht');
+
+          setButtonBusy(document.getElementById('btnOpen'), false);
+          setButtonBusy(document.getElementById('btnClose'), false);
+          const tb = currentCard ? currentCard.querySelector('button[data-action="toggle"]') : null;
+          setButtonBusy(tb, false);
 
           alert('OPEN mislukt: ' + (err && err.message ? err.message : err));
         }
@@ -1943,13 +2115,17 @@ card.setAttribute('data-id', id);
 
         try{
 
+          setButtonBusy(document.querySelector('.gb-card.is-selected button[data-action="toggle"]'), true);
+          setButtonBusy(document.getElementById('btnOpen'), true);
+          setButtonBusy(document.getElementById('btnClose'), true);
+
           currentCard.classList.remove('is-open');
           currentCard.setAttribute('data-motion-state','closing');
           currentCard.setAttribute('data-lifecycle-state','closing');
           currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'closing');
 
           const btn = currentCard.querySelector('button[data-action="toggle"]');
-          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), false);
+          if(btn) btn.textContent = toggleLabelFromCard(currentCard);
 
           setTimeout(()=>{
             if(!currentCard) return;
@@ -1958,14 +2134,39 @@ card.setAttribute('data-id', id);
               currentCard.setAttribute('data-shutter-state','closed');
               currentCard.setAttribute('data-lifecycle-state','closed');
               const b = currentCard.querySelector('button[data-action="toggle"]');
-              if(b) b.textContent = mainButtonLabel('closed', '', false);
+              if(b) b.textContent = toggleLabelFromCard(currentCard);
               updateSideFromCard(currentCard, 'Beheer en overzicht');
             }
           }, 5200);
 
           await sendCommand(boxId, 'close');
 
+          const d2 = await waitForDesired(boxId, 'close');
+          if(d2){
+            currentCard.setAttribute('data-desired', d2);
+          }
+          const b2 = currentCard.querySelector('button[data-action="toggle"]');
+          if(b2) b2.textContent = toggleLabelFromCard(currentCard);
+          updateSideCommandButtonsFromDesired(currentCard.getAttribute('data-desired'));
+
           updateSideFromCard(currentCard, 'Beheer en overzicht');
+          setTimeout(()=>{
+            if(!currentCard) return;
+            const tbtn = currentCard.querySelector('button[data-action="toggle"]');
+            setButtonBusy(tbtn, false);
+            setButtonBusy(document.getElementById('btnOpen'), false);
+            setButtonBusy(document.getElementById('btnClose'), false);
+          }, 5300);
+
+          setTimeout(()=>{
+            if(!currentCard) return;
+            const tbtn = currentCard.querySelector('button[data-action="toggle"]');
+            setButtonBusy(tbtn, false);
+            setButtonBusy(document.getElementById('btnOpen'), false);
+            setButtonBusy(document.getElementById('btnClose'), false);
+          }, 5300);
+
+
         } catch(err){
           if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
           currentCard.setAttribute('data-door-state', prevDoor);
@@ -1975,6 +2176,11 @@ card.setAttribute('data-id', id);
           const b0 = currentCard.querySelector('button[data-action=\"toggle\"]');
           if(b0) b0.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
           updateSideFromCard(currentCard, 'Beheer en overzicht');
+
+          setButtonBusy(document.getElementById('btnOpen'), false);
+          setButtonBusy(document.getElementById('btnClose'), false);
+          const tb = currentCard ? currentCard.querySelector('button[data-action="toggle"]') : null;
+          setButtonBusy(tb, false);
 
           alert('CLOSE mislukt: ' + (err && err.message ? err.message : err));
         }
@@ -1999,7 +2205,16 @@ card.setAttribute('data-id', id);
       (async function init(){
         try{
           const boxes = await loadBoxes();
+          await hydrateDesiredForBoxes(boxes);
           renderSectionsFromBoxes(boxes);
+          setTimeout(()=>{
+            if(!currentCard) return;
+            const tbtn = currentCard.querySelector('button[data-action="toggle"]');
+            setButtonBusy(tbtn, false);
+            setButtonBusy(document.getElementById('btnOpen'), false);
+            setButtonBusy(document.getElementById('btnClose'), false);
+          }, 5300);
+
         } catch(err){
           console.error(err);
           sectionsWrap.innerHTML = `<div class="muted">Kon gridboxen niet laden</div>`;
