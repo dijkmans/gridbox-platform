@@ -1761,16 +1761,17 @@ card.setAttribute('data-id', id);
           const action = btn.getAttribute('data-action');
 
           if(action === 'toggle'){
-  const desiredNow = normalizeDesired(card.getAttribute('data-desired')) || 'close';
-  const next = invertDesired(desiredNow);
+            e.preventDefault(); e.stopPropagation();
 
-  // UI onmiddellijk laten reageren (intentiewijziging)
-  card.setAttribute('data-desired', next);
-  btn.textContent = desiredToToggleLabel(next, false);
+            const boxId = card.getAttribute('data-id');
 
-  // Command versturen (UI wacht niet op Firestore)
-  await sendCommand(boxId, next);
-}
+            const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
+            const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || card.getAttribute('data-shutter-state') || '');
+
+            // Tijdens OPENING/CLOSING geen extra klik-acties
+            if (motion === 'opening' || motion === 'closing'){
+              return;
+            }
 
             const isOpen = (door === 'open') ? true : (door === 'closed') ? false : card.classList.contains('is-open');
             const next = isOpen ? 'close' : 'open';
