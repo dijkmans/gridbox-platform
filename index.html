@@ -845,7 +845,7 @@ EINDE WERKAFSPRAKEN
 
       
       // =========================================================
-      // UI-cache voor lokale motion (OPENING/CLOSING) op basis van shutterMoveMs
+      // UI-cache voor lokale motion (beweging) op basis van shutterMoveMs
       // Dit maakt de simulatie vloeiend en voorkomt dat je UI "blijft hangen"
       // als de backend trager is.
       // =========================================================
@@ -1094,15 +1094,13 @@ EINDE WERKAFSPRAKEN
 
       function shutterLabel(state){
         const s = String(state ?? '').trim().toLowerCase();
-        if (s === 'open') return 'OPEN';
-        if (s === 'closed') return 'CLOSED';
-        if (s === 'opening') return 'OPENING';
-        if (s === 'closing') return 'CLOSING';
+        if (s === 'open' || s === 'opening') return 'OPEN';
+        if (s === 'closed' || s === 'closing') return 'CLOSED';
         return 'UNKNOWN';
       }
 
 
-      // Hoofdknop op de kaart: toont actie (OPEN/CLOSE) of overgang (OPENING/CLOSING)
+      // Hoofdknop op de kaart: toont actie (OPEN/CLOSE) ook tijdens beweging
       
       // Tijd parsing voor "since/timestamp/updatedAt" velden (Firestore/ISO/ms)
       function parseAnyTime(v){
@@ -1149,10 +1147,10 @@ EINDE WERKAFSPRAKEN
       }
 
 function mainButtonLabel(desiredState, doorState, motionState, fallbackIsOpen){
-        // Tijdens beweging: toon duidelijk OPENING/CLOSING (fijner gevoel in simulatie)
+        // Tijdens beweging: toon enkel OPEN/CLOSE (geen tussenstatus)
         const m = normalizeShutterStateDetailed(motionState);
-        if (m === 'opening') return 'OPENING';
-        if (m === 'closing') return 'CLOSING';
+        if (m === 'opening') return 'OPEN';
+        if (m === 'closing') return 'CLOSE';
 
         // Als desired gekend is, is dat leidend (intent)
         const desired = normalizeShutterStateDetailed(desiredState);
