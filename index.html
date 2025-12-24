@@ -988,16 +988,15 @@ EINDE WERKAFSPRAKEN
         return Math.abs(Date.now() - ms) <= maxMs;
       }
 
-\1
+function mainButtonLabel(doorState, motionState, fallbackIsOpen){
+        const d =
+          normalizeShutterStateDetailed(doorState) ||
+          (fallbackIsOpen ? 'open' : 'closed');
 
-
-// =====================================================
-// DESIRED-DRIVEN BUTTON LABEL (authoritative)
-// =====================================================
-function mainButtonLabelFromDesired(desired){
-  return desired === 'open' ? 'CLOSE' : 'OPEN';
-}
-
+        // UI toont enkel acties, geen tussenstates
+        if (d === 'open') return 'CLOSE';
+        return 'OPEN';
+      }
 
       // Bewegingsstatus (meestal "opening/closing") komt typisch uit state.state
       function pickMotionState(box){
@@ -1839,7 +1838,7 @@ async function sendCommand(boxId, type){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'open');
                   card.setAttribute('data-lifecycle-state', 'open');
-                  btn.textContent = mainButtonLabelFromDesired(card.getAttribute('data-desired'));
+                  btn.textContent = mainButtonLabel('open', '', true);
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
                 }
 
@@ -1848,14 +1847,13 @@ async function sendCommand(boxId, type){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'closed');
                   card.setAttribute('data-lifecycle-state', 'closed');
-                  btn.textContent = mainButtonLabelFromDesired(card.getAttribute('data-desired'));
+                  btn.textContent = mainButtonLabel('closed', '', false);
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
                 }
               }, 5100);
 
               if(side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
-              card.setAttribute('data-desired', \1);
-            if (typeof btn !== 'undefined' && btn) { btn.textContent = mainButtonLabelFromDesired(card.getAttribute('data-desired')); }
+              card.setAttribute('data-desired', next);
               await setDesired(boxId, next);
             } catch(err){
               if(prevIsOpen) card.classList.add('is-open'); else card.classList.remove('is-open');
@@ -1863,7 +1861,7 @@ async function sendCommand(boxId, type){
               card.setAttribute('data-motion-state', prevMotion);
               card.setAttribute('data-lifecycle-state', prevLifecycle);
               card.setAttribute('data-shutter-state', prevShutter);
-              btn.textContent = mainButtonLabelFromDesired(card.getAttribute('data-desired'));
+              btn.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
               if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
 
               alert('Actie mislukt: ' + (err && err.message ? err.message : err));
