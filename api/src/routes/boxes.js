@@ -6,141 +6,18 @@ import { toBoxDto } from "../dto/boxDto.js";
 
 const router = Router();
 
-const COL_BOXES = "boxes";
-const COL_COMMANDS = "commands";
-const COL_BOXCOMMANDS = "boxCommands";
-
-function computeOnlineFromLastSeen(lastSeenMinutes) {
-  const n = Number(lastSeenMinutes);
-  if (Number.isNaN(n)) return null;
-  return n <= 2;
-}
-
-function withLegacyFields(dto) {
-  return {
-    ...dto,
-    customer: dto?.Portal?.Customer ?? dto?.organisation?.name ?? null,
-    site: dto?.Portal?.Site ?? null,
-    boxNumber: dto?.Portal?.BoxNumber ?? null,
-    online: dto?.online ?? computeOnlineFromLastSeen(dto?.lastSeenMinutes)
-  };
-}
-
-async function getBoxDocAny(id) {
-  const cmdSnap = await db.collection(COL_COMMANDS).doc(id).get();
-  if (cmdSnap.exists) return { id: cmdSnap.id, data: cmdSnap.data(), source: COL_COMMANDS };
-
-  const boxSnap = await db.collection(COL_BOXES).doc(id).get();
-  if (boxSnap.exists) return { id: boxSnap.id, data: boxSnap.data(), source: COL_BOXES };
-
-  return null;
-}
-
-async function listBoxesAny(org) {
-  let q1 = db.collection(COL_COMMANDS);
-  if (org) q1 = q1.where("organisationId", "==", org);
-  const s1 = await q1.get();
-  if (!s1.empty) return s1.docs.map(d => withLegacyFields(toBoxDto(d.id, d.data())));
-
-  let q2 = db.collection(COL_BOXES);
-  if (org) q2 = q2.where("organisationId", "==", org);
-  const s2 = await q2.get();
-  return s2.docs.map(d => withLegacyFields(toBoxDto(d.id, d.data())));
-}
-
-async function ensureCommandsDoc(boxId) {
-  const cmdRef = db.collection(COL_COMMANDS).doc(boxId);
-  const cmdSnap = await cmdRef.get();
-  if (cmdSnap.exists) return { ref: cmdRef, created: false };
-
-  // clone van boxes/<id> als die bestaat
-  const boxSnap = await db.collection(COL_BOXES).doc(boxId).get();
-  if (boxSnap.exists) {
-    await cmdRef.set(
-      { ...boxSnap.data(), migratedFrom: "boxes", migratedAt: new Date() },
-      { merge: true }
-    );
-  } else {
-    await cmdRef.set({ migratedFrom: "created", migratedAt: new Date() }, { merge: true });
-  }
-
-  return { ref: cmdRef, created: true };
-}
-
-async function writeLegacyBoxCommand(boxId, desired) {
-  const commandId = `cmd-${Date.now()}`;
-  await db.collection(COL_BOXCOMMANDS).doc(boxId).set({
-    commandId,
-    type: desired,
-    status: "pending",
-    createdAt: new Date()
-  });
-  return commandId;
-}
-
-async function setDesiredDualWrite(boxId, desired) {
-  const { ref, created } = await ensureCommandsDoc(boxId);
-
-  const commandId = `cmd-${Date.now()}`;
-
-  // nieuw
-  await ref.set(
-    { status: { desired, commandId, requestedAt: new Date(), source: "portal-api" } },
-    { merge: true }
-  );
-
-  // legacy (blijven zetten voor compatibiliteit)
-  await writeLegacyBoxCommand(boxId, desired);
-
-  return { ok: true, commandId, createdCommandsDoc: created };
-}
-
 /*
 =====================================================
-ROUTES
+COMMANDS (Firestore-based)
 =====================================================
 */
 
-router.get("/", async (req, res) => {
-  try {
-    const org = (req.query.org || "").toString().trim();
-    const boxes = await listBoxesAny(org);
-    res.json(boxes);
-  } catch (err) {
-    console.error("GET /api/boxes error:", err);
-    res.status(500).json({ error: "Interne serverfout" });
-  }
-});
-
-router.get("/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
-
-    const found = await getBoxDocAny(id);
-    if (!found) return res.status(404).json({ error: "Box niet gevonden" });
-
-    res.json(withLegacyFields(toBoxDto(found.id, found.data)));
-  } catch (err) {
-    console.error("GET /api/boxes/:id error:", err);
-    res.status(500).json({ error: "Interne serverfout" });
-  }
-});
-
-// status endpoint: eerst commands (nieuw), anders boxCommands (oud)
 router.get("/:boxId/commands", async (req, res) => {
   try {
     const { boxId } = req.params;
-
-    const cmd = await db.collection(COL_COMMANDS).doc(boxId).get();
-    if (cmd.exists) {
-      const data = cmd.data() || {};
-      return res.json(data.status ?? data);
-    }
-
-    const legacy = await db.collection(COL_BOXCOMMANDS).doc(boxId).get();
-    if (legacy.exists) return res.json(legacy.data());
-
-    return res.json(null);
+    const snap = await db.collection("boxCommands").doc(boxId).get();
+    if (!snap.exists) return res.json(null);
+    res.json(snap.data());
   } catch (err) {
     console.error("Command fetch error:", err);
     res.status(500).json(null);
@@ -150,14 +27,7 @@ router.get("/:boxId/commands", async (req, res) => {
 router.post("/:boxId/commands/:commandId/ack", async (req, res) => {
   try {
     const { boxId } = req.params;
-
-    const legacyRef = db.collection(COL_BOXCOMMANDS).doc(boxId);
-    const legacy = await legacyRef.get();
-    if (legacy.exists) {
-      await legacyRef.delete();
-    }
-
-    // commands/<id> deleten we niet
+    await db.collection("boxCommands").doc(boxId).delete();
     res.json({ ok: true });
   } catch (err) {
     console.error("Command ack error:", err);
@@ -165,11 +35,104 @@ router.post("/:boxId/commands/:commandId/ack", async (req, res) => {
   }
 });
 
+/*
+=====================================================
+BOX ROUTES (Frontend / Portal)
+=====================================================
+Firestore is de bron van waarheid.
+We sturen BoxDto terug + legacy velden zodat oudere code niet breekt.
+*/
+
+function computeOnlineFromLastSeen(lastSeenMinutes) {
+  const n = Number(lastSeenMinutes);
+  if (Number.isNaN(n)) return null;
+  return n <= 2;
+}
+
+function pickLegacyAgentVersion(dto) {
+  if (dto?.Agent === null || dto?.Agent === undefined) return null;
+  if (typeof dto.Agent === "string") return dto.Agent;
+  if (typeof dto.Agent === "object") return dto.Agent.version ?? dto.Agent.name ?? null;
+  return String(dto.Agent);
+}
+
+function pickLegacyHardwareProfile(dto) {
+  if (dto?.Profile === null || dto?.Profile === undefined) return dto?.box?.type ?? null;
+  if (typeof dto.Profile === "string") return dto.Profile;
+  if (typeof dto.Profile === "object") return dto.Profile.name ?? dto.Profile.code ?? null;
+  return String(dto.Profile);
+}
+
+function withLegacyFields(dto) {
+  return {
+    ...dto,
+    customer: dto?.Portal?.Customer ?? dto?.organisation?.name ?? null,
+    site: dto?.Portal?.Site ?? null,
+    boxNumber: dto?.Portal?.BoxNumber ?? null,
+    status: dto?.lifecycle?.state ?? null,
+    online: dto?.online ?? computeOnlineFromLastSeen(dto?.lastSeenMinutes),
+    agentVersion: dto?.agentVersion ?? pickLegacyAgentVersion(dto),
+    hardwareProfile: dto?.hardwareProfile ?? pickLegacyHardwareProfile(dto),
+    sharesCount: dto?.sharesCount ?? null
+  };
+}
+
+/**
+ * GET /api/boxes
+ */
+router.get("/", async (req, res) => {
+  try {
+    const org = (req.query.org || "").toString().trim();
+
+    let query = db.collection("boxes");
+    if (org) query = query.where("organisationId", "==", org);
+
+    const snap = await query.get();
+
+    const boxes = snap.docs.map(d => withLegacyFields(toBoxDto(d.id, d.data())));
+    res.json(boxes);
+  } catch (err) {
+    console.error("GET /api/boxes error:", err);
+    res.status(500).json({ error: "Interne serverfout" });
+  }
+});
+
+/**
+ * GET /api/boxes/:id
+ */
+router.get("/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    const doc = await db.collection("boxes").doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Box niet gevonden" });
+
+    const dto = withLegacyFields(toBoxDto(doc.id, doc.data()));
+    res.json(dto);
+  } catch (err) {
+    console.error("GET /api/boxes/:id error:", err);
+    res.status(500).json({ error: "Interne serverfout" });
+  }
+});
+
+/*
+=====================================================
+ACTIONS (open / close)
+=====================================================
+*/
+
 router.post("/:id/open", async (req, res) => {
   try {
     const { id } = req.params;
-    const r = await setDesiredDualWrite(id, "open");
-    res.json({ ok: true, command: "open", boxId: id, writtenTo: "commands+boxCommands", ...r, path: `commands/${id}` });
+
+    await db.collection("boxCommands").doc(id).set({
+      commandId: `cmd-${Date.now()}`,
+      type: "open",
+      status: "pending",
+      createdAt: new Date()
+    });
+
+    res.json({ ok: true, command: "open", boxId: id });
   } catch (err) {
     console.error("Open command error:", err);
     res.status(500).json({ error: "Interne serverfout" });
@@ -179,8 +142,15 @@ router.post("/:id/open", async (req, res) => {
 router.post("/:id/close", async (req, res) => {
   try {
     const { id } = req.params;
-    const r = await setDesiredDualWrite(id, "close");
-    res.json({ ok: true, command: "close", boxId: id, writtenTo: "commands+boxCommands", ...r, path: `commands/${id}` });
+
+    await db.collection("boxCommands").doc(id).set({
+      commandId: `cmd-${Date.now()}`,
+      type: "close",
+      status: "pending",
+      createdAt: new Date()
+    });
+
+    res.json({ ok: true, command: "close", boxId: id });
   } catch (err) {
     console.error("Close command error:", err);
     res.status(500).json({ error: "Interne serverfout" });
