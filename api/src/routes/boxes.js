@@ -1,5 +1,3 @@
-// api/src/routes/boxes.js
-
 import { Router } from "express";
 import { db } from "../firebase.js";
 import { toBoxDto } from "../dto/boxDto.js";
@@ -8,7 +6,7 @@ const router = Router();
 
 /*
 =====================================================
-COMMANDS (Firestore-based)
+COMMANDS (Firestore-based, legacy)
 =====================================================
 */
 
@@ -37,10 +35,8 @@ router.post("/:boxId/commands/:commandId/ack", async (req, res) => {
 
 /*
 =====================================================
-BOX ROUTES (Frontend / Portal)
+HELPERS
 =====================================================
-Firestore is de bron van waarheid.
-We sturen BoxDto terug + legacy velden zodat oudere code niet breekt.
 */
 
 function computeOnlineFromLastSeen(lastSeenMinutes) {
@@ -50,14 +46,14 @@ function computeOnlineFromLastSeen(lastSeenMinutes) {
 }
 
 function pickLegacyAgentVersion(dto) {
-  if (dto?.Agent === null || dto?.Agent === undefined) return null;
+  if (dto?.Agent == null) return null;
   if (typeof dto.Agent === "string") return dto.Agent;
   if (typeof dto.Agent === "object") return dto.Agent.version ?? dto.Agent.name ?? null;
   return String(dto.Agent);
 }
 
 function pickLegacyHardwareProfile(dto) {
-  if (dto?.Profile === null || dto?.Profile === undefined) return dto?.box?.type ?? null;
+  if (dto?.Profile == null) return dto?.box?.type ?? null;
   if (typeof dto.Profile === "string") return dto.Profile;
   if (typeof dto.Profile === "object") return dto.Profile.name ?? dto.Profile.code ?? null;
   return String(dto.Profile);
@@ -66,16 +62,27 @@ function pickLegacyHardwareProfile(dto) {
 function withLegacyFields(dto) {
   return {
     ...dto,
+
+    // legacy frontend velden
     customer: dto?.Portal?.Customer ?? dto?.organisation?.name ?? null,
     site: dto?.Portal?.Site ?? null,
     boxNumber: dto?.Portal?.BoxNumber ?? null,
-    status: dto?.lifecycle?.state ?? null,
+
+    // ENIGE statusbron
+    status: dto?.status?.state ?? null,
+
     online: dto?.online ?? computeOnlineFromLastSeen(dto?.lastSeenMinutes),
     agentVersion: dto?.agentVersion ?? pickLegacyAgentVersion(dto),
     hardwareProfile: dto?.hardwareProfile ?? pickLegacyHardwareProfile(dto),
     sharesCount: dto?.sharesCount ?? null
   };
 }
+
+/*
+=====================================================
+BOX ROUTES (Frontend / Portal)
+=====================================================
+*/
 
 /**
  * GET /api/boxes
@@ -88,8 +95,10 @@ router.get("/", async (req, res) => {
     if (org) query = query.where("organisationId", "==", org);
 
     const snap = await query.get();
+    const boxes = snap.docs.map(d =>
+      withLegacyFields(toBoxDto(d.id, d.data()))
+    );
 
-    const boxes = snap.docs.map(d => withLegacyFields(toBoxDto(d.id, d.data())));
     res.json(boxes);
   } catch (err) {
     console.error("GET /api/boxes error:", err);
@@ -103,9 +112,11 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const id = req.params.id;
-
     const doc = await db.collection("boxes").doc(id).get();
-    if (!doc.exists) return res.status(404).json({ error: "Box niet gevonden" });
+
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Box niet gevonden" });
+    }
 
     const dto = withLegacyFields(toBoxDto(doc.id, doc.data()));
     res.json(dto);
@@ -117,7 +128,45 @@ router.get("/:id", async (req, res) => {
 
 /*
 =====================================================
-ACTIONS (open / close)
+DESIRED (nieuwe, correcte route)
+=====================================================
+*/
+
+/**
+ * POST /api/boxes/:id/desired
+ * UI / Portal zet intentie
+ */
+router.post("/:id/desired", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { desired, desiredBy } = req.body;
+
+    if (!["open", "close"].includes(desired)) {
+      return res.status(400).json({
+        ok: false,
+        message: "Ongeldige desired waarde"
+      });
+    }
+
+    await db.collection("boxes").doc(id).update({
+      desired,
+      desiredAt: new Date(),
+      desiredBy: desiredBy || "portal"
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Set desired error:", err);
+    res.status(500).json({
+      ok: false,
+      message: "Interne serverfout"
+    });
+  }
+});
+
+/*
+=====================================================
+ACTIONS (open / close – legacy, blijven werken)
 =====================================================
 */
 
