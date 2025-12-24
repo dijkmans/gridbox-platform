@@ -1400,7 +1400,24 @@ card.setAttribute('data-id', id);
         return Array.isArray(data) ? data : [];
       }
 
-      async function sendCommand(boxId, type){
+      
+      async function setDesired(boxId, desired){
+        const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/desired`), {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({
+            desired,
+            desiredAt: new Date().toISOString(),
+            desiredBy: 'portal'
+          })
+        });
+        if(!res.ok){
+          const t = await res.text().catch(()=>'');
+          throw new Error('Desired fout: ' + t);
+        }
+      }
+
+async function sendCommand(boxId, type){
         const url = apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/${type}`);
         const res = await fetch(url, { method:'POST' });
         const payload = await res.json().catch(()=> ({}));
@@ -1773,8 +1790,8 @@ card.setAttribute('data-id', id);
               return;
             }
 
-            const isOpen = (door === 'open') ? true : (door === 'closed') ? false : card.classList.contains('is-open');
-            const next = isOpen ? 'close' : 'open';
+            const currentDesired = (card.getAttribute('data-desired') === 'open') ? 'open' : 'close';
+            const next = currentDesired === 'open' ? 'close' : 'open';
 
             if (!boxId || boxId === '-'){
               alert('Box id ontbreekt.');
@@ -1836,7 +1853,8 @@ card.setAttribute('data-id', id);
               }, 5100);
 
               if(side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
-              await sendCommand(boxId, next);
+              card.setAttribute('data-desired', next);
+              await setDesired(boxId, next);
             } catch(err){
               if(prevIsOpen) card.classList.add('is-open'); else card.classList.remove('is-open');
               card.setAttribute('data-door-state', prevDoor);
@@ -1915,7 +1933,8 @@ card.setAttribute('data-id', id);
             }
           }, 5200);
 
-          await sendCommand(boxId, 'open');
+          currentCard.setAttribute('data-desired','open');
+          await setDesired(boxId, 'open');
 
           updateSideFromCard(currentCard, 'Beheer en overzicht');
         } catch(err){
@@ -1963,7 +1982,8 @@ card.setAttribute('data-id', id);
             }
           }, 5200);
 
-          await sendCommand(boxId, 'close');
+          currentCard.setAttribute('data-desired','close');
+          await setDesired(boxId, 'close');
 
           updateSideFromCard(currentCard, 'Beheer en overzicht');
         } catch(err){
