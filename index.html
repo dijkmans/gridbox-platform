@@ -214,7 +214,9 @@ EINDE WERKAFSPRAKEN
     }
     .gb-card.is-open .gb-shutter__door{ transform:translateY(-100%); }
 
-    .gb-head{
+    
+    .gb-card.no-anim .gb-shutter__door{ transition:none !important; }
+.gb-head{
       display:grid;
       grid-template-columns:1fr auto auto;
       gap:8px;
@@ -1279,6 +1281,9 @@ function mainButtonLabel(desiredState, doorState, motionState, fallbackIsOpen){
         const card = document.createElement('article');
         card.className = 'gb-card';
 
+        // Voorkom rolluik-flip bij refresh (geen animatie bij initial render)
+        card.classList.add('no-anim');
+
         const rawMotionState = pickMotionState(box);
         const rawDoorState = pickDoorState(box);
 
@@ -1392,6 +1397,9 @@ card.setAttribute('data-id', id);
             </div>
           </div>
         `;
+
+        // Laat na de eerste paint de animatie weer toe voor echte acties (klik)
+        requestAnimationFrame(()=>{ card.classList.remove('no-anim'); });
 
         setBorderByLastSeen(card);
         return card;
