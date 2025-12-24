@@ -80,6 +80,34 @@ EINDE WERKAFSPRAKEN
        7) Tabellen en formulieren
        8) Responsive
        ========================================================= */
+
+/* =====================================================
+   DESIRED-DRIVEN UI HELPERS (clean & consistent)
+   ===================================================== */
+
+function getDesiredFromCard(card){
+  return card.getAttribute('data-desired') === 'open' ? 'open' : 'close';
+}
+
+function setDesiredLocal(card, desired){
+  card.setAttribute('data-desired', desired);
+}
+
+function nextDesiredFromCard(card){
+  return getDesiredFromCard(card) === 'open' ? 'close' : 'open';
+}
+
+function mainButtonLabelFromDesired(card){
+  const desired = getDesiredFromCard(card);
+  return desired === 'open' ? 'CLOSE' : 'OPEN';
+}
+
+function updateMainButtonFromDesired(card){
+  const btn = card.querySelector('.btn-main');
+  if(!btn) return;
+  btn.textContent = mainButtonLabelFromDesired(card);
+}
+
     /* 1) Design tokens */
 
 :root{
@@ -1838,7 +1866,7 @@ async function sendCommand(boxId, type){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'open');
                   card.setAttribute('data-lifecycle-state', 'open');
-                  btn.textContent = mainButtonLabel('open', '', true);
+                  updateMainButtonFromDesired(card);
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
                 }
 
@@ -1847,7 +1875,7 @@ async function sendCommand(boxId, type){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'closed');
                   card.setAttribute('data-lifecycle-state', 'closed');
-                  btn.textContent = mainButtonLabel('closed', '', false);
+                  updateMainButtonFromDesired(card);
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
                 }
               }, 5100);
@@ -1861,7 +1889,7 @@ async function sendCommand(boxId, type){
               card.setAttribute('data-motion-state', prevMotion);
               card.setAttribute('data-lifecycle-state', prevLifecycle);
               card.setAttribute('data-shutter-state', prevShutter);
-              btn.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
+              updateMainButtonFromDesired(card);
               if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
 
               alert('Actie mislukt: ' + (err && err.message ? err.message : err));
