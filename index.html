@@ -209,7 +209,7 @@ EINDE WERKAFSPRAKEN
       background-image:url('https://gridbox.eu/images/f5b43959-ec7d-4fbe-9a38-1324a9617cf3_biss.png');
       background-repeat:repeat-y;
       background-size:100% auto;
-      transition:transform var(--shutterDur, 5000ms) cubic-bezier(.2,.7,.2,1);
+      transition:transform 5s cubic-bezier(.2,.7,.2,1);
       transform:translateY(0);
     }
     .gb-card.is-open .gb-shutter__door{ transform:translateY(-100%); }
@@ -757,73 +757,6 @@ EINDE WERKAFSPRAKEN
           </div>
         </div>
 
-
-        <div class="block" id="blockConfig">
-          <h4>Config</h4>
-
-          <div class="kv">
-            <div class="muted">configVersion</div>
-            <div title="configVersion uit Firestore."><span id="kvConfigVersion">-</span></div>
-
-            <div class="muted">activeHigh</div>
-            <div title="activeHigh (relais logica)."><span id="kvActiveHigh">-</span></div>
-
-            <div class="muted">Pins</div>
-            <div title="GPIO pins open close light."><span id="kvPins">-</span></div>
-
-            <div class="muted">relayPulse</div>
-            <div title="Duur van relais puls."><span id="kvRelayPulse">-</span></div>
-
-            <div class="muted">shutterMove</div>
-            <div title="Tijd om rolluik volledig te bewegen."><span id="kvShutterMove">-</span></div>
-          </div>
-        </div>
-
-        <div class="block" id="blockLighting">
-          <h4>Lighting</h4>
-
-          <div class="kv">
-            <div class="muted">enabled</div>
-            <div><span id="kvLightEnabled">-</span></div>
-
-            <div class="muted">onWhenOpen</div>
-            <div><span id="kvLightOnWhenOpen">-</span></div>
-
-            <div class="muted">onDuringMotion</div>
-            <div><span id="kvLightOnDuringMotion">-</span></div>
-
-            <div class="muted">afterClose</div>
-            <div><span id="kvLightAfterClose">-</span></div>
-
-            <div class="muted">maxOnWhenOpen</div>
-            <div><span id="kvLightMaxOnWhenOpen">-</span></div>
-          </div>
-        </div>
-
-        <div class="block" id="blockCamera">
-          <h4>Camera</h4>
-
-          <div class="kv">
-            <div class="muted">enabled</div>
-            <div><span id="kvCamEnabled">-</span></div>
-
-            <div class="muted">mode</div>
-            <div><span id="kvCamMode">-</span></div>
-
-            <div class="muted">snapshots</div>
-            <div><span id="kvCamSnapshots">-</span></div>
-
-            <div class="muted">interval</div>
-            <div><span id="kvCamInterval">-</span></div>
-
-            <div class="muted">cooldown</div>
-            <div><span id="kvCamCooldown">-</span></div>
-
-            <div class="muted">trigger</div>
-            <div><span id="kvCamTrigger">-</span></div>
-          </div>
-        </div>
-
         <div class="block" id="blockPhones">
           <h4>Telefoons</h4>
           <div class="muted" style="font-size:12px;margin:-4px 0 10px;">
@@ -1056,17 +989,13 @@ EINDE WERKAFSPRAKEN
       }
 
 function mainButtonLabel(doorState, motionState, fallbackIsOpen){
-        // Toon altijd de VOLGENDE actie, en switch direct bij een klik.
-        // Als we in beweging zijn, is de volgende actie het omgekeerde.
-        const m = normalizeShutterStateDetailed(motionState);
-        if (m === 'opening') return 'CLOSE';
-        if (m === 'closing') return 'OPEN';
-
         const d =
           normalizeShutterStateDetailed(doorState) ||
           (fallbackIsOpen ? 'open' : 'closed');
 
-        return (d === 'open') ? 'CLOSE' : 'OPEN';
+        // UI toont enkel acties, geen tussenstates
+        if (d === 'open') return 'CLOSE';
+        return 'OPEN';
       }
 
       // Bewegingsstatus (meestal "opening/closing") komt typisch uit state.state
@@ -1075,9 +1004,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           'state.state',
           'lifecycle.state',
           'lifecycle.status',
-          'Portal.status',
-          'portal.status',
-          'status',
           'lifecycleState',
           'shutterState',
           'state'
@@ -1089,9 +1015,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         return pick(box, [
           'status.door',
           'status.state',
-          'Portal.status',
-          'portal.status',
-          'status',
           'lifecycle.door',
           'door',
           'shutter.door',
@@ -1209,84 +1132,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         ]) ?? null;
       }
 
-
-      // =========================================================
-      // Extra: config velden (pins, lighting, camera)
-      // =========================================================
-
-      function boolJaNee(v){
-        if (v === true) return 'ja';
-        if (v === false) return 'nee';
-        return fmtMaybe(v);
-      }
-
-      function fmtDurationMs(v){
-        const n = Number(v);
-        if (!isFinite(n)) return fmtMaybe(v);
-        if (n < 1000) return n + ' ms';
-        const sec = n / 1000;
-        if (sec < 60) return (Math.round(sec * 10) / 10) + ' s';
-        const min = sec / 60;
-        if (min < 60) return (Math.round(min * 10) / 10) + ' min';
-        const h = min / 60;
-        return (Math.round(h * 10) / 10) + ' u';
-      }
-
-      function pickConfigVersion(box){
-        return pick(box, ['configVersion','Portal.configVersion','portal.configVersion']) ?? null;
-      }
-
-      function pickActiveHighConfig(box){
-        return pick(box, ['activeHigh','Portal.activeHigh','portal.activeHigh','hardware.activeHigh','hardware.ActiveHigh']) ?? null;
-      }
-
-      function pickPins(box){
-        const p = pick(box, ['pins','hardware.pins']) ?? null;
-        if (p && typeof p === 'object'){
-          return {
-            openPin: pick(p, ['openPin','open']) ?? null,
-            closePin: pick(p, ['closePin','close']) ?? null,
-            lightPin: pick(p, ['lightPin','light']) ?? null,
-            relayPulseMs: pick(p, ['relayPulseMs','relayPulse']) ?? null,
-            shutterMoveMs: pick(p, ['shutterMoveMs','shutterMove']) ?? null,
-          };
-        }
-        return {
-          openPin: pick(box, ['openPin']) ?? null,
-          closePin: pick(box, ['closePin']) ?? null,
-          lightPin: pick(box, ['lightPin']) ?? null,
-          relayPulseMs: pick(box, ['relayPulseMs']) ?? null,
-          shutterMoveMs: pick(box, ['shutterMoveMs']) ?? null,
-        };
-      }
-
-      function pickLighting(box){
-        const l = pick(box, ['lighting','hardware.lighting']) ?? null;
-        if (!l || typeof l !== 'object') return null;
-        return {
-          enabled: pick(l, ['enabled']) ?? null,
-          onWhenOpen: pick(l, ['onWhenOpen']) ?? null,
-          onDuringMotion: pick(l, ['onDuringMotion']) ?? null,
-          afterCloseMs: pick(l, ['afterCloseMs']) ?? null,
-          maxOnWhenOpenMs: pick(l, ['maxOnWhenOpenMs']) ?? null,
-        };
-      }
-
-      function pickCamera(box){
-        const c = pick(box, ['camera','hardware.camera']) ?? null;
-        if (!c || typeof c !== 'object') return null;
-        const trigger = pick(c, ['trigger']) ?? null;
-        return {
-          enabled: pick(c, ['enabled']) ?? null,
-          mode: pick(c, ['mode']) ?? null,
-          snapshotCount: pick(c, ['snapshotCount']) ?? null,
-          snapshotIntervalMs: pick(c, ['snapshotIntervalMs']) ?? null,
-          cooldownMs: pick(c, ['cooldownMs']) ?? null,
-          trigger: Array.isArray(trigger) ? trigger : null,
-        };
-      }
-
-
       function buildAddressFromBox(box){
         const street = pick(box, ['location.street']) ?? '';
         const number = pick(box, ['location.number']) ?? '';
@@ -1397,17 +1242,10 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         const rawMotionState = pickMotionState(box);
         const rawDoorState = pickDoorState(box);
 
-        const cfgPins = pickPins(box);
-        const shutterMoveMsRaw = cfgPins ? cfgPins.shutterMoveMs : null;
-        const shutterMoveMsNum = Number(shutterMoveMsRaw);
-        const motionFreshMs = (isFinite(shutterMoveMsNum) && shutterMoveMsNum > 0)
-          ? Math.min(Math.max(shutterMoveMsNum * 2, 8000), 600000)
-          : 20000;
-
         const motionStateAll = normalizeShutterStateDetailed(rawMotionState);
         const motionSince = pickMotionSince(box);
-        // Enkel opening/closing als beweging, en enkel als recent
-        const motionState = ((motionStateAll === 'opening' || motionStateAll === 'closing') && isRecent(motionSince, motionFreshMs)) ? motionStateAll : '';
+        // Voorkom 'stale' opening/closing die dagen blijft hangen: enkel gebruiken als recent
+        const motionState = (motionStateAll && isRecent(motionSince, 20000)) ? motionStateAll : '';
         const doorState = normalizeShutterStateDetailed(rawDoorState);
 // Visuele toestand:
         // - opening: direct omhoog
@@ -1453,45 +1291,6 @@ card.setAttribute('data-id', id);
         card.setAttribute('data-geo', geo ?? '');
 
         card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
-
-        // Config velden voor side panel (komen uit Firestore via API)
-        const cfgVersion = pickConfigVersion(box);
-        const cfgActiveHigh = pickActiveHighConfig(box);
-        const cfgLighting = pickLighting(box) || {};
-        const cfgCamera = pickCamera(box) || {};
-        const pinsOpen = cfgPins ? cfgPins.openPin : null;
-        const pinsClose = cfgPins ? cfgPins.closePin : null;
-        const pinsLight = cfgPins ? cfgPins.lightPin : null;
-        const relayPulseMs = cfgPins ? cfgPins.relayPulseMs : null;
-
-        const cfgVersionTxt = fmtMaybe(cfgVersion);
-        card.setAttribute('data-config-version', (cfgVersionTxt === '-') ? '' : cfgVersionTxt);
-        card.setAttribute('data-active-high', boolJaNee(cfgActiveHigh));
-
-        card.setAttribute('data-open-pin', fmtMaybe(pinsOpen));
-        card.setAttribute('data-close-pin', fmtMaybe(pinsClose));
-        card.setAttribute('data-light-pin', fmtMaybe(pinsLight));
-        card.setAttribute('data-relay-pulse-ms', fmtMaybe(relayPulseMs));
-        card.setAttribute('data-shutter-move-ms', fmtMaybe(shutterMoveMsRaw));
-
-        card.setAttribute('data-light-enabled', boolJaNee(cfgLighting.enabled));
-        card.setAttribute('data-light-onwhenopen', boolJaNee(cfgLighting.onWhenOpen));
-        card.setAttribute('data-light-onduringmotion', boolJaNee(cfgLighting.onDuringMotion));
-        card.setAttribute('data-light-afterclose-ms', fmtMaybe(cfgLighting.afterCloseMs));
-        card.setAttribute('data-light-maxonwhenopen-ms', fmtMaybe(cfgLighting.maxOnWhenOpenMs));
-
-        card.setAttribute('data-cam-enabled', boolJaNee(cfgCamera.enabled));
-        card.setAttribute('data-cam-mode', fmtMaybe(cfgCamera.mode));
-        card.setAttribute('data-cam-snapshot-count', fmtMaybe(cfgCamera.snapshotCount));
-        card.setAttribute('data-cam-snapshot-interval-ms', fmtMaybe(cfgCamera.snapshotIntervalMs));
-        card.setAttribute('data-cam-cooldown-ms', fmtMaybe(cfgCamera.cooldownMs));
-        card.setAttribute('data-cam-trigger', Array.isArray(cfgCamera.trigger) ? cfgCamera.trigger.join(', ') : fmtMaybe(cfgCamera.trigger));
-
-        // Visual: laat de shutter animatie meeschalen met shutterMoveMs (met een cap voor bruikbaarheid)
-        const visualMoveMs = (isFinite(shutterMoveMsNum) && shutterMoveMsNum > 0)
-          ? Math.min(Math.max(shutterMoveMsNum, 800), 60000)
-          : 5000;
-        card.style.setProperty('--shutterDur', visualMoveMs + 'ms');
 
         const toggleLabel = mainButtonLabel(doorState, motionState, card.classList.contains('is-open'));
 
@@ -1609,100 +1408,6 @@ card.setAttribute('data-id', id);
           throw new Error(payload.error || 'Interne serverfout');
         }
         return payload;
-      }
-
-
-
-      // =========================================================
-      // 5b) Sync met Firestore via API
-      // =========================================================
-
-      let refreshRunning = false;
-      let refreshAgain = false;
-
-      let autoRefreshStarted = false;
-      function startAutoRefresh(){
-        if (autoRefreshStarted) return;
-        autoRefreshStarted = true;
-        setInterval(()=>{ refreshBoxesPreserveUI(); }, 15000);
-      }
-
-      async function refreshBoxesPreserveUI(){
-        if (refreshRunning){
-          refreshAgain = true;
-          return;
-        }
-        refreshRunning = true;
-
-        const selectedId = currentCard ? currentCard.getAttribute('data-id') : null;
-        const sideWasOpen = side.classList.contains('is-open');
-        const sideWasWide = side.classList.contains('is-wide');
-        const appWasCollapsed = app.classList.contains('is-collapsed');
-        const appWasExpanded = app.classList.contains('is-expanded');
-        const sideScrollTop = side.scrollTop;
-        const contextLabel = sideSub ? sideSub.textContent : 'Beheer en overzicht';
-
-        try{
-          const boxes = await loadBoxes();
-          renderSectionsFromBoxes(boxes);
-          startAutoRefresh();
-
-          if (selectedId){
-            const newCard = [...document.querySelectorAll('.gb-card')].find(c => c.getAttribute('data-id') === selectedId) || null;
-
-            if (newCard){
-              currentCard = newCard;
-              selectCard(newCard);
-
-              if (sideWasOpen){
-                openSide();
-
-                if (sideWasWide) side.classList.add('is-wide');
-                else side.classList.remove('is-wide');
-
-                if (appWasExpanded){
-                  app.classList.add('is-expanded');
-                  app.classList.remove('is-collapsed');
-                } else if (appWasCollapsed){
-                  app.classList.add('is-collapsed');
-                  app.classList.remove('is-expanded');
-                }
-
-                updateSideFromCard(newCard, contextLabel || 'Beheer en overzicht');
-                side.scrollTop = sideScrollTop;
-              }
-            } else {
-              if (sideWasOpen) closeSide();
-              currentCard = null;
-            }
-          }
-        } catch(err){
-          console.error('Refresh fout', err);
-        } finally {
-          refreshRunning = false;
-          if (refreshAgain){
-            refreshAgain = false;
-            setTimeout(()=>{ refreshBoxesPreserveUI(); }, 150);
-          }
-        }
-      }
-
-      function followBoxAfterCommand(boxId){
-        // Na een OPEN/CLOSE: even volgen tot Firestore de state bijwerkt
-        const end = Date.now() + 15000;
-
-        const tick = async ()=>{
-          await refreshBoxesPreserveUI();
-
-          const cardNow = [...document.querySelectorAll('.gb-card')].find(c => c.getAttribute('data-id') === boxId) || null;
-          const motionNow = cardNow ? normalizeShutterStateDetailed(cardNow.getAttribute('data-motion-state') || '') : '';
-
-          if (Date.now() < end && (motionNow === 'opening' || motionNow === 'closing')){
-            setTimeout(tick, 700);
-          }
-        };
-
-        setTimeout(tick, 250);
       }
 
       function openLink(path){
@@ -1830,26 +1535,6 @@ card.setAttribute('data-id', id);
       const kvClosed  = document.getElementById('kvClosed');
       const kvSource  = document.getElementById('kvSource');
       const kvGeo     = document.getElementById('kvGeo');
-
-      // Config (pins, lighting, camera)
-      const kvConfigVersion = document.getElementById('kvConfigVersion');
-      const kvActiveHigh    = document.getElementById('kvActiveHigh');
-      const kvPins          = document.getElementById('kvPins');
-      const kvRelayPulse    = document.getElementById('kvRelayPulse');
-      const kvShutterMove   = document.getElementById('kvShutterMove');
-
-      const kvLightEnabled        = document.getElementById('kvLightEnabled');
-      const kvLightOnWhenOpen     = document.getElementById('kvLightOnWhenOpen');
-      const kvLightOnDuringMotion = document.getElementById('kvLightOnDuringMotion');
-      const kvLightAfterClose     = document.getElementById('kvLightAfterClose');
-      const kvLightMaxOnWhenOpen  = document.getElementById('kvLightMaxOnWhenOpen');
-
-      const kvCamEnabled   = document.getElementById('kvCamEnabled');
-      const kvCamMode      = document.getElementById('kvCamMode');
-      const kvCamSnapshots = document.getElementById('kvCamSnapshots');
-      const kvCamInterval  = document.getElementById('kvCamInterval');
-      const kvCamCooldown  = document.getElementById('kvCamCooldown');
-      const kvCamTrigger   = document.getElementById('kvCamTrigger');
 
       const kvAgent   = document.getElementById('kvAgent');
       const kvProfile = document.getElementById('kvProfile');
@@ -2038,46 +1723,6 @@ card.setAttribute('data-id', id);
         kvSource.textContent = card.getAttribute('data-source') || '-';
         kvGeo.textContent = card.getAttribute('data-geo') || '-';
 
-        // Config (pins, lighting, camera)
-        if (kvConfigVersion) kvConfigVersion.textContent = card.getAttribute('data-config-version') || '-';
-        if (kvActiveHigh) kvActiveHigh.textContent = card.getAttribute('data-active-high') || '-';
-
-        const op = card.getAttribute('data-open-pin') || '-';
-        const cl = card.getAttribute('data-close-pin') || '-';
-        const li = card.getAttribute('data-light-pin') || '-';
-        if (kvPins) kvPins.textContent = `open ${op}, close ${cl}, light ${li}`;
-
-        const rp = card.getAttribute('data-relay-pulse-ms') || '-';
-        if (kvRelayPulse) kvRelayPulse.textContent = (rp && rp !== '-') ? fmtDurationMs(rp) : '-';
-
-        const sm = card.getAttribute('data-shutter-move-ms') || '-';
-        if (kvShutterMove) kvShutterMove.textContent = (sm && sm !== '-') ? fmtDurationMs(sm) : '-';
-
-        if (kvLightEnabled) kvLightEnabled.textContent = card.getAttribute('data-light-enabled') || '-';
-        if (kvLightOnWhenOpen) kvLightOnWhenOpen.textContent = card.getAttribute('data-light-onwhenopen') || '-';
-        if (kvLightOnDuringMotion) kvLightOnDuringMotion.textContent = card.getAttribute('data-light-onduringmotion') || '-';
-
-        const lac = card.getAttribute('data-light-afterclose-ms') || '-';
-        if (kvLightAfterClose) kvLightAfterClose.textContent = (lac && lac !== '-') ? fmtDurationMs(lac) : '-';
-
-        const lmax = card.getAttribute('data-light-maxonwhenopen-ms') || '-';
-        if (kvLightMaxOnWhenOpen) kvLightMaxOnWhenOpen.textContent = (lmax && lmax !== '-') ? fmtDurationMs(lmax) : '-';
-
-        if (kvCamEnabled) kvCamEnabled.textContent = card.getAttribute('data-cam-enabled') || '-';
-        if (kvCamMode) kvCamMode.textContent = card.getAttribute('data-cam-mode') || '-';
-
-        const sc = card.getAttribute('data-cam-snapshot-count') || '-';
-        const si = card.getAttribute('data-cam-snapshot-interval-ms') || '-';
-        if (kvCamSnapshots){
-          if (sc && sc !== '-' && si && si !== '-') kvCamSnapshots.textContent = `${sc}x elke ${fmtDurationMs(si)}`;
-          else kvCamSnapshots.textContent = sc || '-';
-        }
-
-        const cc = card.getAttribute('data-cam-cooldown-ms') || '-';
-        if (kvCamCooldown) kvCamCooldown.textContent = (cc && cc !== '-') ? fmtDurationMs(cc) : '-';
-
-        if (kvCamTrigger) kvCamTrigger.textContent = card.getAttribute('data-cam-trigger') || '-';
-
         kvAgent.textContent = (card.getAttribute('data-agent') ? ('v ' + card.getAttribute('data-agent')) : '-');
         kvProfile.textContent = (card.getAttribute('data-profile') || '-');
 
@@ -2122,6 +1767,12 @@ card.setAttribute('data-id', id);
 
             const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
             const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || card.getAttribute('data-shutter-state') || '');
+
+            // Tijdens OPENING/CLOSING geen extra klik-acties
+            if (motion === 'opening' || motion === 'closing'){
+              return;
+            }
+
             const isOpen = (door === 'open') ? true : (door === 'closed') ? false : card.classList.contains('is-open');
             const next = isOpen ? 'close' : 'open';
 
@@ -2161,9 +1812,31 @@ card.setAttribute('data-id', id);
               card.setAttribute('data-shutter-state', card.getAttribute('data-door-state') || card.getAttribute('data-motion-state') || '');
 
               btn.textContent = mainButtonLabel(card.getAttribute('data-door-state'), card.getAttribute('data-motion-state'), card.classList.contains('is-open'));
+
+              setTimeout(()=>{
+                const motionNow = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
+
+                if(next === 'open' && motionNow === 'opening'){
+                  card.setAttribute('data-door-state', 'open');
+                  card.setAttribute('data-motion-state', '');
+                  card.setAttribute('data-shutter-state', 'open');
+                  card.setAttribute('data-lifecycle-state', 'open');
+                  btn.textContent = mainButtonLabel('open', '', true);
+                  if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
+                }
+
+                if(next === 'close' && motionNow === 'closing'){
+                  card.setAttribute('data-door-state', 'closed');
+                  card.setAttribute('data-motion-state', '');
+                  card.setAttribute('data-shutter-state', 'closed');
+                  card.setAttribute('data-lifecycle-state', 'closed');
+                  btn.textContent = mainButtonLabel('closed', '', false);
+                  if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
+                }
+              }, 5100);
+
               if(side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
               await sendCommand(boxId, next);
-              followBoxAfterCommand(boxId);
             } catch(err){
               if(prevIsOpen) card.classList.add('is-open'); else card.classList.remove('is-open');
               card.setAttribute('data-door-state', prevDoor);
@@ -2229,8 +1902,21 @@ card.setAttribute('data-id', id);
 
           const btn = currentCard.querySelector('button[data-action="toggle"]');
           if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), true);
+
+          setTimeout(()=>{
+            if(!currentCard) return;
+            const st = String(currentCard.getAttribute('data-shutter-state') || '').toLowerCase();
+            if(st === 'opening'){
+              currentCard.setAttribute('data-shutter-state','open');
+              currentCard.setAttribute('data-lifecycle-state','open');
+              const b = currentCard.querySelector('button[data-action="toggle"]');
+              if(b) b.textContent = mainButtonLabel('open', '', true);
+              updateSideFromCard(currentCard, 'Beheer en overzicht');
+            }
+          }, 5200);
+
           await sendCommand(boxId, 'open');
-          followBoxAfterCommand(boxId);
+
           updateSideFromCard(currentCard, 'Beheer en overzicht');
         } catch(err){
           if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
@@ -2264,8 +1950,21 @@ card.setAttribute('data-id', id);
 
           const btn = currentCard.querySelector('button[data-action="toggle"]');
           if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), false);
+
+          setTimeout(()=>{
+            if(!currentCard) return;
+            const st = String(currentCard.getAttribute('data-shutter-state') || '').toLowerCase();
+            if(st === 'closing'){
+              currentCard.setAttribute('data-shutter-state','closed');
+              currentCard.setAttribute('data-lifecycle-state','closed');
+              const b = currentCard.querySelector('button[data-action="toggle"]');
+              if(b) b.textContent = mainButtonLabel('closed', '', false);
+              updateSideFromCard(currentCard, 'Beheer en overzicht');
+            }
+          }, 5200);
+
           await sendCommand(boxId, 'close');
-          followBoxAfterCommand(boxId);
+
           updateSideFromCard(currentCard, 'Beheer en overzicht');
         } catch(err){
           if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
