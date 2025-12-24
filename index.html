@@ -2,16 +2,16 @@
 
 <!--
 =====================================================
-HTML WERKAFSPRAKEN – LEES DIT VOOR JE IETS WIJZIGT
+HTML WERKAFSPRAKEN â€“ LEES DIT VOOR JE IETS WIJZIGT
 =====================================================
 
 DOEL
-Dit bestand bevat HTML, CSS en JavaScript die samen één werkend geheel vormen.
+Dit bestand bevat HTML, CSS en JavaScript die samen Ã©Ã©n werkend geheel vormen.
 Aanpassingen mogen NOOIT bestaande functionaliteit breken.
 
 ALGEMENE REGELS
 - Wijzig alleen wat expliciet gevraagd wordt
-- Raak bestaande id’s, class-namen en data-attributes niet aan
+- Raak bestaande idâ€™s, class-namen en data-attributes niet aan
 - Verwijder geen code tenzij dit expliciet gevraagd wordt
 - Herschrijf geen JavaScript-logica zonder duidelijke reden
 - Verander geen volgorde van elementen als dit impact kan hebben
@@ -33,7 +33,7 @@ HTML is opgedeeld in duidelijke blokken met:
 <!-- END BLOKNAAM -->
 
 <script type="text/plain" id="worknotes">
-Aanpassingen gebeuren altijd binnen zo’n blok.
+Aanpassingen gebeuren altijd binnen zoâ€™n blok.
 
 WAT ALTIJD MOET BLIJVEN WERKEN
 - Event listeners
@@ -45,7 +45,7 @@ WAT ALTIJD MOET BLIJVEN WERKEN
 CONTROLE NA WIJZIGING
 Na elke wijziging controleren:
 - Werkt alles nog zoals voorheen?
-- Zijn er id’s of classes gewijzigd?
+- Zijn er idâ€™s of classes gewijzigd?
 - Kan bestaande logica hierdoor breken?
 
 BIJ TWIJFEL
@@ -1002,7 +1002,58 @@ EINDE WERKAFSPRAKEN
           if(!data || typeof data !== 'object') return '';
           const v = data.desired ?? (data.status && data.status.desired) ?? (data.state && data.state.desired) ?? null;
           return normalizeDesired(v);
+        }
+      // Haal volledige command snapshot op (voor state, simulated, lock, ...)
+      function normalizeCommandState(v){
+        const s = String(v ?? '').trim().toLowerCase();
+        if(s === 'open' || s === 'opened') return 'open';
+        if(s === 'closed' || s === 'close') return 'closed';
+        return '';
+      }
+
+      function desiredToExpectedState(desired){
+        const d = normalizeDesired(desired);
+        if(d === 'open') return 'open';
+        if(d === 'close') return 'closed';
+        return '';
+      }
+
+      async function fetchCommandSnapshot(boxId){
+        try{
+          const res = await fetch(apiUrl(/api/boxes//commands), { method:'GET' });
+          if(!res.ok) return null;
+          const data = await res.json().catch(()=> null);
+          if(!data || typeof data !== 'object') return null;
+
+          const desired = normalizeDesired(data.desired ?? (data.status && data.status.desired) ?? null);
+          const state = normalizeCommandState(data.state ?? data.door ?? (data.status && (data.status.state ?? data.status.door)) ?? null);
+
+          return {
+            desired,
+            state,
+            simulated: !!data.simulated,
+            lock: (data.lock ?? null),
+            online: (typeof data.online === 'boolean' ? data.online : null),
+            raw: data
+          };
         } catch(_){
+          return null;
+        }
+      }
+
+      async function waitForStateMatch(boxId, desired, timeoutMs=300000, intervalMs=1500){
+        const expected = desiredToExpectedState(desired);
+        if(!expected) return null;
+
+        const t0 = Date.now();
+        while(Date.now() - t0 <= timeoutMs){
+          const snap = await fetchCommandSnapshot(boxId);
+          if(snap && snap.state && snap.state === expected) return snap;
+          await new Promise(r => setTimeout(r, intervalMs));
+        }
+        return null;
+      }
+ catch(_){
           return '';
         }
       }
@@ -1941,7 +1992,9 @@ card.setAttribute('data-id', id);
 
               btn.textContent = toggleLabelFromCard(card);
 
-              setTimeout(()=>{
+              setTimeout(async ()=>{
+                const snap0 = await fetchCommandSnapshot(boxId);
+                if(snap0 && !snap0.simulated) return;
                 const motionNow = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
 
                 if(next === 'open' && motionNow === 'opening'){
@@ -1974,12 +2027,41 @@ card.setAttribute('data-id', id);
                 btn.textContent = toggleLabelFromCard(card);
                 if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
               }
+
+              // Op echte hardware: knop pas terug vrijgeven als state gevolgd heeft.
+              // In simulator doet de 5100ms animatie dit al.
+              try{
+                const snapNow = await fetchCommandSnapshot(boxId);
+                if(!snapNow || snapNow.simulated){
+                  // simulator of fetch faalde: laat de bestaande timeout het afhandelen
+                } else {
+                  waitForStateMatch(boxId, next).then((snapEnd)=>{
+                    if(snapEnd && snapEnd.state){
+                      card.setAttribute('data-door-state', snapEnd.state);
+                      card.setAttribute('data-shutter-state', snapEnd.state);
+                      if(snapEnd.state === 'open') card.classList.add('is-open');
+                      if(snapEnd.state === 'closed') card.classList.remove('is-open');
+                      btn.textContent = toggleLabelFromCard(card);
+                      if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
+                    }
+                    setButtonBusy(btn, false);
+                  });
+                }
+              } catch(_){
+                // fail-safe: voorkom dat de knop voor altijd vast hangt
+                setTimeout(()=> setButtonBusy(btn, false), 15000);
+              }
+
               setTimeout(()=>{
-            if(!currentCard) return;
+            (async ()=>{
+              const snap0 = await fetchCommandSnapshot(boxId);
+              if(snap0 && !snap0.simulated) return;
+if(!currentCard) return;
             const tbtn = currentCard.querySelector('button[data-action="toggle"]');
             setButtonBusy(tbtn, false);
             setButtonBusy(document.getElementById('btnOpen'), false);
             setButtonBusy(document.getElementById('btnClose'), false);
+            })();
           }, 5300);
 
         } catch(err){
@@ -2055,7 +2137,10 @@ card.setAttribute('data-id', id);
           if(btn) btn.textContent = toggleLabelFromCard(currentCard);
 
           setTimeout(()=>{
-            if(!currentCard) return;
+            (async ()=>{
+              const snap0 = await fetchCommandSnapshot(boxId);
+              if(snap0 && !snap0.simulated) return;
+if(!currentCard) return;
             const st = String(currentCard.getAttribute('data-shutter-state') || '').toLowerCase();
             if(st === 'opening'){
               currentCard.setAttribute('data-shutter-state','open');
@@ -2077,12 +2162,39 @@ card.setAttribute('data-id', id);
           updateSideCommandButtonsFromDesired(currentCard.getAttribute('data-desired'));
 
           updateSideFromCard(currentCard, 'Beheer en overzicht');
+          // echte hardware: knoppen pas vrijgeven als state gevolgd heeft
+          try{
+            const snapNow = await fetchCommandSnapshot(boxId);
+            if(snapNow && !snapNow.simulated){
+              waitForStateMatch(boxId, 'open').then((snapEnd)=>{
+                if(snapEnd && snapEnd.state){
+                  currentCard.setAttribute('data-door-state', snapEnd.state);
+                  currentCard.setAttribute('data-shutter-state', snapEnd.state);
+                  if(snapEnd.state === 'open') currentCard.classList.add('is-open');
+                  if(snapEnd.state === 'closed') currentCard.classList.remove('is-open');
+                }
+                const tbtn = currentCard.querySelector('button[data-action="toggle"]');
+                setButtonBusy(tbtn, false);
+                setButtonBusy(document.getElementById('btnOpen'), false);
+                setButtonBusy(document.getElementById('btnClose'), false);
+                updateSideFromCard(currentCard, 'Beheer en overzicht');
+              });
+            }
+          } catch(_){
+            setTimeout(()=>{
+              const tbtn = currentCard && currentCard.querySelector('button[data-action="toggle"]');
+              setButtonBusy(tbtn, false);
+              setButtonBusy(document.getElementById('btnOpen'), false);
+              setButtonBusy(document.getElementById('btnClose'), false);
+            }, 15000);
+          }
           setTimeout(()=>{
             if(!currentCard) return;
             const tbtn = currentCard.querySelector('button[data-action="toggle"]');
             setButtonBusy(tbtn, false);
             setButtonBusy(document.getElementById('btnOpen'), false);
             setButtonBusy(document.getElementById('btnClose'), false);
+            })();
           }, 5300);
 
         } catch(err){
@@ -2150,6 +2262,32 @@ card.setAttribute('data-id', id);
           updateSideCommandButtonsFromDesired(currentCard.getAttribute('data-desired'));
 
           updateSideFromCard(currentCard, 'Beheer en overzicht');
+          // echte hardware: knoppen pas vrijgeven als state gevolgd heeft
+          try{
+            const snapNow = await fetchCommandSnapshot(boxId);
+            if(snapNow && !snapNow.simulated){
+              waitForStateMatch(boxId, 'close').then((snapEnd)=>{
+                if(snapEnd && snapEnd.state){
+                  currentCard.setAttribute('data-door-state', snapEnd.state);
+                  currentCard.setAttribute('data-shutter-state', snapEnd.state);
+                  if(snapEnd.state === 'open') currentCard.classList.add('is-open');
+                  if(snapEnd.state === 'closed') currentCard.classList.remove('is-open');
+                }
+                const tbtn = currentCard.querySelector('button[data-action="toggle"]');
+                setButtonBusy(tbtn, false);
+                setButtonBusy(document.getElementById('btnOpen'), false);
+                setButtonBusy(document.getElementById('btnClose'), false);
+                updateSideFromCard(currentCard, 'Beheer en overzicht');
+              });
+            }
+          } catch(_){
+            setTimeout(()=>{
+              const tbtn = currentCard && currentCard.querySelector('button[data-action="toggle"]');
+              setButtonBusy(tbtn, false);
+              setButtonBusy(document.getElementById('btnOpen'), false);
+              setButtonBusy(document.getElementById('btnClose'), false);
+            }, 15000);
+          }
           setTimeout(()=>{
             if(!currentCard) return;
             const tbtn = currentCard.querySelector('button[data-action="toggle"]');
