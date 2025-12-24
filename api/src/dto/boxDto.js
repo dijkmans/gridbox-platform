@@ -19,15 +19,12 @@ function pickFirst(data, paths) {
   return undefined;
 }
 
-// Normaliseer keys deep: "street " -> "street"
-function normalizeDeep(obj) {
-  if (!obj || typeof obj !== "object") return obj;
-  if (Array.isArray(obj)) return obj.map(normalizeDeep);
-
+// Normaliseer keys: "street " -> "street"
+function normalizeKeys(obj) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
   const out = {};
   for (const k of Object.keys(obj)) {
-    const nk = String(k).trim();
-    out[nk] = normalizeDeep(obj[k]);
+    out[String(k).trim()] = obj[k];
   }
   return out;
 }
@@ -57,36 +54,11 @@ function warnIfMissing(id, data) {
 export function toBoxDto(id, data) {
   warnIfMissing(id, data);
 
-  const Portal = normalizeDeep(data?.Portal ?? data?.portal ?? {});
-
-  // box kan nieuw onder Portal.box zitten of legacy onder data.box
-  const boxRaw = normalizeDeep(data?.box ?? {});
-  const boxFromPortal = normalizeDeep(Portal?.box ?? {});
-  const box = Object.keys(boxRaw).length ? boxRaw : boxFromPortal;
-
-  // hardware kan zitten in Portal.box.hardware of box.hardware of data.hardware
-  const hardwareCandidate =
-    data?.hardware ??
-    box?.hardware ??
-    Portal?.hardware ??
-    Portal?.box?.hardware ??
-    {};
-
-  const hardware = normalizeDeep(hardwareCandidate);
-
-  const location = normalizeDeep(data?.location ?? {});
-  const lifecycle = normalizeDeep(data?.lifecycle ?? {});
-  const organisation = normalizeDeep(data?.organisation ?? data?.organization ?? {});
-
-  // backfill basisvelden indien nodig
-  const portalSite = Portal.Site ?? pickFirst(data, ["portal.site", "site.name", "site.code", "site"]);
-  if (portalSite !== undefined && Portal.Site === undefined) Portal.Site = portalSite;
-
-  const portalBoxNr = Portal.BoxNumber ?? pickFirst(data, ["portal.boxNumber", "box.number", "boxNumber"]);
-  if (portalBoxNr !== undefined && Portal.BoxNumber === undefined) Portal.BoxNumber = portalBoxNr;
-
-  const portalCustomer = Portal.Customer ?? pickFirst(data, ["portal.customer", "organisation.name", "organization.name", "customer"]);
-  if (portalCustomer !== undefined && Portal.Customer === undefined) Portal.Customer = portalCustomer;
+  const Portal = normalizeKeys(data?.Portal ?? data?.portal ?? {});
+  const box = normalizeKeys(data?.box ?? {});
+  const location = normalizeKeys(data?.location ?? {});
+  const lifecycle = normalizeKeys(data?.lifecycle ?? {});
+  const organisation = normalizeKeys(data?.organisation ?? data?.organization ?? {});
 
   return {
     id,
@@ -95,8 +67,6 @@ export function toBoxDto(id, data) {
 
     Portal,
     box,
-    hardware,
-
     location,
     lifecycle,
     organisation,
