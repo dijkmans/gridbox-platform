@@ -1,23 +1,28 @@
 // api/src/routes/status.js
 import { Router } from "express";
+import { db } from "../db.js";
 
 const router = Router();
 
-// Tijdelijke in-memory opslag
-// Wordt later vervangen door Firestore
+/**
+ * Tijdelijke in-memory status
+ * Alleen runtime info van agent (heartbeat / state)
+ * Wordt bewust NIET persistent opgeslagen
+ */
 const STATUS = {};
 
 /**
  * POST /api/status/:boxId
- * Ontvang statusupdates en heartbeats van agent (simulator of Raspberry Pi)
+ * Ontvang statusupdates en heartbeats van agent
+ * Agent is de enige schrijver van state
  */
 router.post("/:boxId", (req, res) => {
   const { boxId } = req.params;
 
   const {
-    shutterState = null,   // OPEN | CLOSED | OPENING | CLOSING
+    shutterState = null,   // open | closed | opening | closing | error
     type = "heartbeat",    // heartbeat | state | startup
-    source = "agent",      // agent | simulator | manual
+    source = "agent",      // agent | simulator
     uptime = null,
     temperature = null
   } = req.body || {};
@@ -35,7 +40,7 @@ router.post("/:boxId", (req, res) => {
     lastSeen: now
   };
 
-  console.log("STATUS update:", STATUS[boxId]);
+  console.log("[STATUS]", boxId, STATUS[boxId]);
 
   res.json({
     ok: true,
@@ -46,29 +51,48 @@ router.post("/:boxId", (req, res) => {
 
 /**
  * GET /api/status/:boxId
- * Status opvragen voor dashboard, portal of debug
+ * Geeft gecombineerde view voor UI en agent:
+ * - status: runtime toestand (agent)
+ * - box.desired: intent (Firestore)
  */
-router.get("/:boxId", (req, res) => {
+router.get("/:boxId", async (req, res) => {
   const { boxId } = req.params;
-  const status = STATUS[boxId];
 
-  if (!status) {
-    return res.status(404).json({
+  const status = STATUS[boxId] ?? null;
+
+  try {
+    const boxSnap = await db.collection("boxes").doc(boxId).get();
+    const box = boxSnap.exists ? boxSnap.data() : null;
+
+    if (!box) {
+      return res.status(404).json({
+        ok: false,
+        message: "Box niet gevonden"
+      });
+    }
+
+    res.json({
+      ok: true,
+      boxId,
+      box: {
+        desired: box.desired ?? null,
+        desiredAt: box.desiredAt ?? null,
+        desiredBy: box.desiredBy ?? null
+      },
+      status
+    });
+  } catch (err) {
+    console.error("GET /api/status/:boxId fout:", err);
+    res.status(500).json({
       ok: false,
-      message: "Geen status bekend voor deze box"
+      message: "Interne serverfout"
     });
   }
-
-  res.json({
-    ok: true,
-    boxId,
-    status
-  });
 });
 
 /**
  * GET /api/status
- * Overzicht van alle bekende boxen (admin / debug)
+ * Overzicht van alle bekende boxen (debug / admin)
  */
 router.get("/", (req, res) => {
   res.json({
