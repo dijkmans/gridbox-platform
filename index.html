@@ -998,6 +998,41 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         return 'OPEN';
       }
 
+      // Desired (intentie) voor UI knop
+      // De knop toont altijd het omgekeerde van status.desired
+      function normalizeDesired(v){
+        const s = String(v ?? '').toLowerCase().trim();
+        if (s === 'open') return 'open';
+        if (s === 'close' || s === 'closed') return 'close';
+        return null;
+      }
+
+      function pickDesired(box){
+        return pick(box, [
+          'status.desired',
+          'status.Desired',
+          'statusDesired',
+          'desired',
+          'commands.desired',
+          'command.desired'
+        ]) ?? null;
+      }
+
+      function toggleLabelFromDesired(desired){
+        return (normalizeDesired(desired) === 'open') ? 'CLOSE' : 'OPEN';
+      }
+
+      function oppositeDesired(desired){
+        return (normalizeDesired(desired) === 'open') ? 'close' : 'open';
+      }
+
+      function updateToggleButtonFromDesired(card){
+        const b = card ? card.querySelector('button[data-action="toggle"]') : null;
+        if (!b) return;
+        b.textContent = toggleLabelFromDesired(card.getAttribute('data-desired') || 'close');
+      }
+
+
       // Bewegingsstatus (meestal "opening/closing") komt typisch uit state.state
       function pickMotionState(box){
         return pick(box, [
@@ -1292,7 +1327,10 @@ card.setAttribute('data-id', id);
 
         card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
 
-        const toggleLabel = mainButtonLabel(doorState, motionState, card.classList.contains('is-open'));
+        const desired0 = normalizeDesired(pickDesired(box)) || ((doorState === 'open') ? 'open' : (doorState === 'closed') ? 'close' : (card.classList.contains('is-open') ? 'open' : 'close'));
+        card.setAttribute('data-desired', desired0);
+
+        const toggleLabel = toggleLabelFromDesired(desired0);
 
         const sharesPill = (sharesCount === null || Number.isNaN(sharesCount))
           ? `<span class="pill ghost" title="sharesCount">shares -</span>`
@@ -1760,40 +1798,34 @@ card.setAttribute('data-id', id);
         if(btn){
           const action = btn.getAttribute('data-action');
 
-          if(action === 'toggle'){
+                    if(action === 'toggle'){
             e.preventDefault(); e.stopPropagation();
 
             const boxId = card.getAttribute('data-id');
+            if(!boxId || boxId === '-') return;
 
-            const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
-            const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || card.getAttribute('data-shutter-state') || '');
-
-            // Tijdens OPENING/CLOSING geen extra klik-acties
-            if (motion === 'opening' || motion === 'closing'){
-              return;
-            }
-
-            const isOpen = (door === 'open') ? true : (door === 'closed') ? false : card.classList.contains('is-open');
-            const next = isOpen ? 'close' : 'open';
-
-            if (!boxId || boxId === '-'){
-              alert('Box id ontbreekt.');
-              return;
-            }
+            // Kleine debounce tegen dubbelklik
+            const now = Date.now();
+            const lastClick = Number(card.getAttribute('data-toggle-click-ms') || '0');
+            if(now - lastClick < 250) return;
+            card.setAttribute('data-toggle-click-ms', String(now));
 
             const prevIsOpen = card.classList.contains('is-open');
             const prevDoor = card.getAttribute('data-door-state') || '';
             const prevMotion = card.getAttribute('data-motion-state') || '';
             const prevLifecycle = card.getAttribute('data-lifecycle-state') || '';
             const prevShutter = card.getAttribute('data-shutter-state') || '';
+            const prevDesired = normalizeDesired(card.getAttribute('data-desired')) || 'close';
 
+            const nextDesired = oppositeDesired(prevDesired);
 
             try{
+              // Zet desired meteen, zodat de knop altijd "strak" aanvoelt
+              card.setAttribute('data-desired', nextDesired);
+              btn.textContent = toggleLabelFromDesired(nextDesired);
 
-              if(next === 'open'){
-                // forceer animatie ook als de class al eens gezet was
-                card.classList.remove('is-open');
-                void card.offsetWidth;
+              // Visueel: meteen richting tonen (ook tijdens opening/closing)
+              if(nextDesired === 'open'){
                 card.classList.add('is-open');
                 card.setAttribute('data-motion-state', 'opening');
                 card.setAttribute('data-lifecycle-state', 'opening');
@@ -1811,42 +1843,50 @@ card.setAttribute('data-id', id);
               // compat
               card.setAttribute('data-shutter-state', card.getAttribute('data-door-state') || card.getAttribute('data-motion-state') || '');
 
-              btn.textContent = mainButtonLabel(card.getAttribute('data-door-state'), card.getAttribute('data-motion-state'), card.classList.contains('is-open'));
+              if(side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
+
+              // Fallback: na ~5s zetten we de "eindstate" als er nog niets anders gebeurde
+              const expectedDesired = nextDesired;
+              const expectedMotion = (nextDesired === 'open') ? 'opening' : 'closing';
 
               setTimeout(()=>{
+                const desiredNow = normalizeDesired(card.getAttribute('data-desired')) || 'close';
                 const motionNow = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
+                if(desiredNow !== expectedDesired) return;
+                if(motionNow !== expectedMotion) return;
 
-                if(next === 'open' && motionNow === 'opening'){
+                if(expectedDesired === 'open'){
+                  card.classList.add('is-open');
                   card.setAttribute('data-door-state', 'open');
                   card.setAttribute('data-motion-state', '');
-                  card.setAttribute('data-shutter-state', 'open');
                   card.setAttribute('data-lifecycle-state', 'open');
-                  btn.textContent = mainButtonLabel('open', '', true);
-                  if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
-                }
-
-                if(next === 'close' && motionNow === 'closing'){
+                  card.setAttribute('data-shutter-state', 'open');
+                } else {
+                  card.classList.remove('is-open');
                   card.setAttribute('data-door-state', 'closed');
                   card.setAttribute('data-motion-state', '');
-                  card.setAttribute('data-shutter-state', 'closed');
                   card.setAttribute('data-lifecycle-state', 'closed');
-                  btn.textContent = mainButtonLabel('closed', '', false);
-                  if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
+                  card.setAttribute('data-shutter-state', 'closed');
                 }
+
+                updateToggleButtonFromDesired(card);
+                if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
               }, 5100);
 
-              if(side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
-              await sendCommand(boxId, next);
+              await sendCommand(boxId, nextDesired);
             } catch(err){
+              // Herstel alles
               if(prevIsOpen) card.classList.add('is-open'); else card.classList.remove('is-open');
               card.setAttribute('data-door-state', prevDoor);
               card.setAttribute('data-motion-state', prevMotion);
               card.setAttribute('data-lifecycle-state', prevLifecycle);
               card.setAttribute('data-shutter-state', prevShutter);
-              btn.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
+              card.setAttribute('data-desired', prevDesired);
+
+              btn.textContent = toggleLabelFromDesired(prevDesired);
               if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
 
-              alert('Actie mislukt: ' + (err && err.message ? err.message : err));
+              alert((nextDesired === 'open' ? 'OPEN' : 'CLOSE') + ' mislukt: ' + (err && err.message ? err.message : err));
             }
             return;
           }
@@ -1884,7 +1924,7 @@ card.setAttribute('data-id', id);
         updateSideFromCard(card, 'Beheer en overzicht');
       });
 
-      document.getElementById('btnOpen').addEventListener('click', async ()=>{
+            document.getElementById('btnOpen').addEventListener('click', async ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
         const boxId = currentCard.getAttribute('data-id');
         const prevIsOpen = currentCard.classList.contains('is-open');
@@ -1892,47 +1932,51 @@ card.setAttribute('data-id', id);
         const prevMotion = currentCard.getAttribute('data-motion-state') || '';
         const prevLifecycle = currentCard.getAttribute('data-lifecycle-state') || '';
         const prevShutter = currentCard.getAttribute('data-shutter-state') || '';
+        const prevDesired = normalizeDesired(currentCard.getAttribute('data-desired')) || (prevIsOpen ? 'open' : 'close');
 
         try{
+          currentCard.setAttribute('data-desired', 'open');
 
           currentCard.classList.add('is-open');
           currentCard.setAttribute('data-motion-state','opening');
           currentCard.setAttribute('data-lifecycle-state','opening');
           currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'opening');
 
-          const btn = currentCard.querySelector('button[data-action="toggle"]');
-          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), true);
+          updateToggleButtonFromDesired(currentCard);
+          if(side.classList.contains('is-open')) updateSideFromCard(currentCard, 'Beheer en overzicht');
 
           setTimeout(()=>{
             if(!currentCard) return;
-            const st = String(currentCard.getAttribute('data-shutter-state') || '').toLowerCase();
-            if(st === 'opening'){
-              currentCard.setAttribute('data-shutter-state','open');
-              currentCard.setAttribute('data-lifecycle-state','open');
-              const b = currentCard.querySelector('button[data-action="toggle"]');
-              if(b) b.textContent = mainButtonLabel('open', '', true);
-              updateSideFromCard(currentCard, 'Beheer en overzicht');
-            }
+            const desiredNow = normalizeDesired(currentCard.getAttribute('data-desired')) || 'close';
+            const motionNow = normalizeShutterStateDetailed(currentCard.getAttribute('data-motion-state') || '');
+            if(desiredNow !== 'open') return;
+            if(motionNow !== 'opening') return;
+
+            currentCard.classList.add('is-open');
+            currentCard.setAttribute('data-door-state','open');
+            currentCard.setAttribute('data-motion-state','');
+            currentCard.setAttribute('data-lifecycle-state','open');
+            currentCard.setAttribute('data-shutter-state','open');
+            updateToggleButtonFromDesired(currentCard);
+            updateSideFromCard(currentCard, 'Beheer en overzicht');
           }, 5200);
 
           await sendCommand(boxId, 'open');
-
-          updateSideFromCard(currentCard, 'Beheer en overzicht');
         } catch(err){
           if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
           currentCard.setAttribute('data-door-state', prevDoor);
           currentCard.setAttribute('data-motion-state', prevMotion);
           currentCard.setAttribute('data-lifecycle-state', prevLifecycle);
           currentCard.setAttribute('data-shutter-state', prevShutter);
-          const b0 = currentCard.querySelector('button[data-action=\"toggle\"]');
-          if(b0) b0.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
+          currentCard.setAttribute('data-desired', prevDesired);
+          updateToggleButtonFromDesired(currentCard);
           updateSideFromCard(currentCard, 'Beheer en overzicht');
 
           alert('OPEN mislukt: ' + (err && err.message ? err.message : err));
         }
-      });
+      }););
 
-      document.getElementById('btnClose').addEventListener('click', async ()=>{
+            document.getElementById('btnClose').addEventListener('click', async ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
         const boxId = currentCard.getAttribute('data-id');
         const prevIsOpen = currentCard.classList.contains('is-open');
@@ -1940,45 +1984,54 @@ card.setAttribute('data-id', id);
         const prevMotion = currentCard.getAttribute('data-motion-state') || '';
         const prevLifecycle = currentCard.getAttribute('data-lifecycle-state') || '';
         const prevShutter = currentCard.getAttribute('data-shutter-state') || '';
+        const prevDesired = normalizeDesired(currentCard.getAttribute('data-desired')) || (prevIsOpen ? 'open' : 'close');
 
         try{
+          currentCard.setAttribute('data-desired', 'close');
 
+          // forceer animatie ook als de UI even uit sync was
+          if(!currentCard.classList.contains('is-open')){
+            currentCard.classList.add('is-open');
+            void currentCard.offsetWidth;
+          }
           currentCard.classList.remove('is-open');
           currentCard.setAttribute('data-motion-state','closing');
           currentCard.setAttribute('data-lifecycle-state','closing');
           currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'closing');
 
-          const btn = currentCard.querySelector('button[data-action="toggle"]');
-          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), false);
+          updateToggleButtonFromDesired(currentCard);
+          if(side.classList.contains('is-open')) updateSideFromCard(currentCard, 'Beheer en overzicht');
 
           setTimeout(()=>{
             if(!currentCard) return;
-            const st = String(currentCard.getAttribute('data-shutter-state') || '').toLowerCase();
-            if(st === 'closing'){
-              currentCard.setAttribute('data-shutter-state','closed');
-              currentCard.setAttribute('data-lifecycle-state','closed');
-              const b = currentCard.querySelector('button[data-action="toggle"]');
-              if(b) b.textContent = mainButtonLabel('closed', '', false);
-              updateSideFromCard(currentCard, 'Beheer en overzicht');
-            }
+            const desiredNow = normalizeDesired(currentCard.getAttribute('data-desired')) || 'close';
+            const motionNow = normalizeShutterStateDetailed(currentCard.getAttribute('data-motion-state') || '');
+            if(desiredNow !== 'close') return;
+            if(motionNow !== 'closing') return;
+
+            currentCard.classList.remove('is-open');
+            currentCard.setAttribute('data-door-state','closed');
+            currentCard.setAttribute('data-motion-state','');
+            currentCard.setAttribute('data-lifecycle-state','closed');
+            currentCard.setAttribute('data-shutter-state','closed');
+            updateToggleButtonFromDesired(currentCard);
+            updateSideFromCard(currentCard, 'Beheer en overzicht');
           }, 5200);
 
           await sendCommand(boxId, 'close');
-
-          updateSideFromCard(currentCard, 'Beheer en overzicht');
         } catch(err){
           if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
           currentCard.setAttribute('data-door-state', prevDoor);
           currentCard.setAttribute('data-motion-state', prevMotion);
           currentCard.setAttribute('data-lifecycle-state', prevLifecycle);
           currentCard.setAttribute('data-shutter-state', prevShutter);
-          const b0 = currentCard.querySelector('button[data-action=\"toggle\"]');
-          if(b0) b0.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
+          currentCard.setAttribute('data-desired', prevDesired);
+          updateToggleButtonFromDesired(currentCard);
           updateSideFromCard(currentCard, 'Beheer en overzicht');
 
           alert('CLOSE mislukt: ' + (err && err.message ? err.message : err));
         }
-      });
+      }););
 
       document.getElementById('btnEvents').addEventListener('click', ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
