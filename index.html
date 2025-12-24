@@ -1828,7 +1828,7 @@ async function sendCommand(boxId, type){
               // compat
               card.setAttribute('data-shutter-state', card.getAttribute('data-door-state') || card.getAttribute('data-motion-state') || '');
 
-              btn.textContent = mainButtonLabel(card.getAttribute('data-door-state'), card.getAttribute('data-motion-state'), card.classList.contains('is-open'));
+              btn.textContent = (next === 'open') ? 'CLOSE' : 'OPEN';
 
               setTimeout(()=>{
                 const motionNow = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
@@ -1838,7 +1838,7 @@ async function sendCommand(boxId, type){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'open');
                   card.setAttribute('data-lifecycle-state', 'open');
-                  btn.textContent = mainButtonLabel('open', '', true);
+                  // label already follows desired
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
                 }
 
@@ -1847,7 +1847,7 @@ async function sendCommand(boxId, type){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'closed');
                   card.setAttribute('data-lifecycle-state', 'closed');
-                  btn.textContent = mainButtonLabel('closed', '', false);
+                  // label already follows desired
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
                 }
               }, 5100);
