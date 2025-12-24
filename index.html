@@ -1785,10 +1785,7 @@ async function sendCommand(boxId, type){
             const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
             const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || card.getAttribute('data-shutter-state') || '');
 
-            // Tijdens OPENING/CLOSING geen extra klik-acties
-            if (motion === 'opening' || motion === 'closing'){
-              return;
-            }
+            // desired mag altijd wijzigen, ook tijdens opening/closing
 
             const currentDesired = (card.getAttribute('data-desired') === 'open') ? 'open' : 'close';
             const next = currentDesired === 'open' ? 'close' : 'open';
