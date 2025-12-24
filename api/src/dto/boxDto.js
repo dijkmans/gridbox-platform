@@ -19,7 +19,7 @@ function pickFirst(data, paths) {
   return undefined;
 }
 
-// Normaliseer keys: "street " -> "street" (deep)
+// Normaliseer keys deep: "street " -> "street"
 function normalizeDeep(obj) {
   if (!obj || typeof obj !== "object") return obj;
   if (Array.isArray(obj)) return obj.map(normalizeDeep);
@@ -35,21 +35,8 @@ function normalizeDeep(obj) {
 function requiredMissing(data) {
   const missing = [];
 
-  const site = pickFirst(data, [
-    "Portal.Site",
-    "Portal.Site ",
-    "portal.site",
-    "site.name",
-    "site",
-  ]);
-
-  const boxNr = pickFirst(data, [
-    "Portal.BoxNumber",
-    "Portal.BoxNumber ",
-    "portal.boxNumber",
-    "box.number",
-    "boxNumber",
-  ]);
+  const site = pickFirst(data, ["Portal.Site", "Portal.Site ", "portal.site", "site.name", "site"]);
+  const boxNr = pickFirst(data, ["Portal.BoxNumber", "Portal.BoxNumber ", "portal.boxNumber", "box.number", "boxNumber"]);
 
   if (site === undefined || site === "") missing.push("Portal.Site");
   if (boxNr === undefined || boxNr === "") missing.push("Portal.BoxNumber");
@@ -63,32 +50,21 @@ function warnIfMissing(id, data) {
 
   const topKeys = Object.keys(data || {}).slice(0, 30);
   console.warn(
-    `[toBoxDto] Missing required fields for box ${id}: ${missing.join(
-      ", "
-    )}. Top-level keys: ${topKeys.join(", ")}`
+    `[toBoxDto] Missing required fields for box ${id}: ${missing.join(", ")}. Top-level keys: ${topKeys.join(", ")}`
   );
 }
 
 export function toBoxDto(id, data) {
   warnIfMissing(id, data);
 
-  // 1) Portal is bij jou de “bron van waarheid”
   const Portal = normalizeDeep(data?.Portal ?? data?.portal ?? {});
 
-  // 2) box kan op verschillende plaatsen zitten
-  //    - nieuw: Portal.box
-  //    - oud: data.box
-  const boxRaw =
-    normalizeDeep(data?.box ?? {}) ||
-    {}; // normalizeDeep hierboven geeft nooit null, maar houden simpel
-
+  // box kan nieuw onder Portal.box zitten of legacy onder data.box
+  const boxRaw = normalizeDeep(data?.box ?? {});
   const boxFromPortal = normalizeDeep(Portal?.box ?? {});
   const box = Object.keys(boxRaw).length ? boxRaw : boxFromPortal;
 
-  // 3) hardware kan zitten in:
-  //    - Portal.box.hardware (bij jou nu)
-  //    - box.hardware
-  //    - data.hardware (legacy)
+  // hardware kan zitten in Portal.box.hardware of box.hardware of data.hardware
   const hardwareCandidate =
     data?.hardware ??
     box?.hardware ??
@@ -102,39 +78,23 @@ export function toBoxDto(id, data) {
   const lifecycle = normalizeDeep(data?.lifecycle ?? {});
   const organisation = normalizeDeep(data?.organisation ?? data?.organization ?? {});
 
-  // 4) Backfill Portal basisvelden indien ooit nodig
-  const portalSite =
-    Portal.Site ??
-    pickFirst(data, ["portal.site", "site.name", "site.code", "site"]);
+  // backfill basisvelden indien nodig
+  const portalSite = Portal.Site ?? pickFirst(data, ["portal.site", "site.name", "site.code", "site"]);
   if (portalSite !== undefined && Portal.Site === undefined) Portal.Site = portalSite;
 
-  const portalBoxNr =
-    Portal.BoxNumber ??
-    pickFirst(data, ["portal.boxNumber", "box.number", "boxNumber"]);
-  if (portalBoxNr !== undefined && Portal.BoxNumber === undefined)
-    Portal.BoxNumber = portalBoxNr;
+  const portalBoxNr = Portal.BoxNumber ?? pickFirst(data, ["portal.boxNumber", "box.number", "boxNumber"]);
+  if (portalBoxNr !== undefined && Portal.BoxNumber === undefined) Portal.BoxNumber = portalBoxNr;
 
-  const portalCustomer =
-    Portal.Customer ??
-    pickFirst(data, [
-      "portal.customer",
-      "organisation.name",
-      "organization.name",
-      "customer",
-    ]);
-  if (portalCustomer !== undefined && Portal.Customer === undefined)
-    Portal.Customer = portalCustomer;
+  const portalCustomer = Portal.Customer ?? pickFirst(data, ["portal.customer", "organisation.name", "organization.name", "customer"]);
+  if (portalCustomer !== undefined && Portal.Customer === undefined) Portal.Customer = portalCustomer;
 
   return {
     id,
 
     organisationId: data?.organisationId ?? data?.organizationId ?? null,
 
-    // Belangrijk: index.html verwacht o.a. Portal.* en box.*
     Portal,
     box,
-
-    // Extra: handig voor later, ook al gebruikt de UI dit nog niet
     hardware,
 
     location,
@@ -148,6 +108,6 @@ export function toBoxDto(id, data) {
       data?.lastSeenMinutes ??
       data?.last_seen_minutes ??
       data?.lastSeen ??
-      null,
+      null
   };
 }
