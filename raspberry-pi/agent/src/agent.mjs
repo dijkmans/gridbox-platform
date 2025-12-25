@@ -1,3 +1,61 @@
+<!--
+============================================================
+GRIDBOX PLATFORM – FUNCTIONELE VASTLEGGING (NIET VERWIJDEREN)
+============================================================
+
+Dit HTML-bestand maakt deel uit van het Gridbox-platform
+en is functioneel gekoppeld aan de Raspberry Pi agent
+(westpiwpy-agent – desired-gestuurd).
+
+BELANGRIJK PRINCIPE
+-------------------
+De aansturing van de Gridbox gebeurt EXCLUSIEF via:
+  Firestore veld: box.desired
+
+Toegelaten waarden:
+  - "open"
+  - "close"
+
+De Raspberry Pi:
+  - leest periodiek box.desired
+  - vergelijkt met de actuele toestand
+  - voert exact één actie uit indien nodig
+  - stuurt status terug
+  - voert GEEN command-queue uit
+  - voert GEEN lokale beslissingen uit buiten desired
+
+STRICTE REGELS
+--------------
+- Deze HTML mag GEEN eigen logica toevoegen die
+  de betekenis van box.desired wijzigt.
+- Deze HTML mag GEEN alternatieve open/close logica invoeren.
+- Elke UI-actie die een beweging veroorzaakt MOET
+  box.desired aanpassen en niets anders.
+- Er mag nooit rechtstreeks hardware of timing
+  in deze HTML worden verondersteld.
+
+DOEL VAN DIT PROGRAMMA
+---------------------
+Dit programma dient als:
+- visuele representatie van de Gridbox toestand
+- invoerpunt voor box.desired
+- referentie-implementatie voor simulator en echte hardware
+
+AFWIJKINGEN
+-----------
+Elke wijziging aan deze structuur is een
+architecturale wijziging en moet bewust gebeuren.
+Geen tijdelijke hacks. Geen shortcuts.
+
+Dit comment-blok is een vaste referentie en
+moet bij herprogrammeren altijd in rekening
+worden gehouden.
+
+============================================================
+EINDE VASTLEGGING
+============================================================
+-->
+
 import fs from "fs";
 import os from "os";
 import https from "https";
