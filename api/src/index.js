@@ -44,7 +44,89 @@ app.get("/api/_debug/firestore", async (req, res) => {
   }
 });
 
+// helper: haal desired uit box doc
+function pickDesired(data) {
+  if (!data) return null;
+  if (typeof data.desired === "string") return data.desired;
+  if (data.status && typeof data.status.desired === "string") return data.status.desired;
+  return null;
+}
+
+// helper: vind box doc (primary boxes, daarna fallback)
+async function findBoxDoc(boxId) {
+  const tries = [
+    db.collection("boxes").doc(boxId),
+    db.collection("portals").doc(boxId),
+    db.collection("Portal").doc(boxId),
+    db.collection("devices").doc(boxId)
+  ];
+
+  for (const ref of tries) {
+    const snap = await ref.get();
+    if (snap.exists) return { ref, data: snap.data(), path: ref.path };
+  }
+  return null;
+}
+
+// ------------------------------------------------------------
+// PI desired endpoints
+// ------------------------------------------------------------
+
+// GET desired (Pi kan pollen)
+app.get("/api/boxes/:boxId/desired", async (req, res) => {
+  try {
+    const { boxId } = req.params;
+
+    const found = await findBoxDoc(boxId);
+    if (!found) {
+      return res.status(404).json({ ok: false, message: "Box niet gevonden", boxId });
+    }
+
+    const desired = pickDesired(found.data);
+    return res.json({
+      ok: true,
+      boxId,
+      desired,
+      source: found.path
+    });
+  } catch (e) {
+    console.error("GET /api/boxes/:boxId/desired error:", e);
+    return res.status(500).json({ ok: false, message: String(e?.message || e) });
+  }
+});
+
+// POST ack (Pi zegt: uitgevoerd, wis desired)
+app.post("/api/boxes/:boxId/desired/ack", async (req, res) => {
+  try {
+    const { boxId } = req.params;
+    const action = req.body?.action ?? null;
+
+    const found = await findBoxDoc(boxId);
+    if (!found) {
+      return res.status(404).json({ ok: false, message: "Box niet gevonden", boxId });
+    }
+
+    // Wis desired zodat het niet opnieuw uitgevoerd wordt
+    await found.ref.set(
+      {
+        desired: null,
+        status: { desired: null },
+        lastAckAt: new Date().toISOString(),
+        lastAck: action
+      },
+      { merge: true }
+    );
+
+    return res.json({ ok: true, boxId });
+  } catch (e) {
+    console.error("POST /api/boxes/:boxId/desired/ack error:", e);
+    return res.status(500).json({ ok: false, message: String(e?.message || e) });
+  }
+});
+
+// ------------------------------------------------------------
 // routes
+// ------------------------------------------------------------
 app.use("/api/boxes", boxesRouter);
 app.use("/api/status", statusRouter);
 app.use("/api/sms", smsRouter);
