@@ -44,11 +44,70 @@ app.get("/api/_debug/firestore", async (req, res) => {
   }
 });
 
-// helper: haal desired uit Firestore
-// BELANGRIJK: alleen box.desired telt
-function pickDesired(data) {
-  const v = data?.box?.desired;
-  return typeof v === "string" ? v : null;
+// helpers
+function normAction(v) {
+  if (!v) return null;
+  const s = String(v).trim().toLowerCase();
+  if (!s || s === "null" || s === "none") return null;
+  if (s === "open") return "open";
+  if (s === "close") return "close";
+  return null;
+}
+
+function toMillis(v) {
+  if (!v) return null;
+
+  // Firestore Timestamp heeft meestal toMillis()
+  if (typeof v?.toMillis === "function") return v.toMillis();
+
+  // Date object
+  if (v instanceof Date) return v.getTime();
+
+  // number
+  if (typeof v === "number") return v;
+
+  // string (ISO)
+  if (typeof v === "string") {
+    const t = Date.parse(v);
+    return Number.isFinite(t) ? t : null;
+  }
+
+  return null;
+}
+
+function pickBox(data) {
+  const b = data?.box;
+  return b && typeof b === "object" ? b : {};
+}
+
+// BELANGRIJK:
+// box.desired = doelstand (blijft staan)
+// box.state = huidige stand (blijft staan)
+// API endpoint /desired geeft enkel "desired" terug als er nog iets te doen is
+function computeDesiredForPi(data) {
+  const box = pickBox(data);
+
+  const target = normAction(box.desired);
+  const state = normAction(box.state);
+
+  // niets gevraagd
+  if (!target) return { target: null, state, desired: null, reason: "no_target" };
+
+  // als state al gelijk is aan target, dan is er niks te doen
+  if (state && state === target) {
+    return { target, state, desired: null, reason: "already_in_state" };
+  }
+
+  // extra beveiliging: als desiredAt niet nieuwer is dan lastAppliedAt, dan niet opnieuw sturen
+  const desiredAtMs = toMillis(box.desiredAt);
+  const lastAppliedAtMs = toMillis(box.lastAppliedAt) ?? toMillis(data?.lastAckAt);
+
+  if (desiredAtMs && lastAppliedAtMs && desiredAtMs <= lastAppliedAtMs) {
+    return { target, state, desired: null, reason: "already_applied_by_time" };
+  }
+
+  // anders: Pi moet dit uitvoeren
+  return { target, state, desired: target, reason: "pending" };
 }
 
 // helper: vind box doc (primary boxes, daarna fallback)
@@ -81,12 +140,18 @@ app.get("/api/boxes/:boxId/desired", async (req, res) => {
       return res.status(404).json({ ok: false, message: "Box niet gevonden", boxId });
     }
 
-    const desired = pickDesired(found.data);
+    const r = computeDesiredForPi(found.data);
 
     return res.json({
       ok: true,
       boxId,
-      desired,
+      // dit is het commando voor de Pi (alleen als er nog iets te doen is)
+      desired: r.desired,
+      // dit blijft staan ter info (doelstand)
+      target: r.target,
+      // dit blijft staan ter info (huidige stand, als aanwezig)
+      state: r.state,
+      reason: r.reason,
       source: found.path
     });
   } catch (e) {
@@ -95,24 +160,24 @@ app.get("/api/boxes/:boxId/desired", async (req, res) => {
   }
 });
 
-// POST ack (Pi zegt: uitgevoerd, wis box.desired velden)
+// POST ack (Pi zegt: uitgevoerd)
+// we wissen box.desired NIET meer
+// we zetten box.state + box.lastAppliedAt zodat Pi niet blijft herhalen
 app.post("/api/boxes/:boxId/desired/ack", async (req, res) => {
   try {
     const { boxId } = req.params;
-    const action = req.body?.action ?? null;
+    const action = normAction(req.body?.action ?? null);
 
     const found = await findBoxDoc(boxId);
     if (!found) {
       return res.status(404).json({ ok: false, message: "Box niet gevonden", boxId });
     }
 
-    // Wis box.desired zodat het niet opnieuw uitgevoerd wordt
     await found.ref.set(
       {
         box: {
-          desired: null,
-          desiredAt: null,
-          desiredBy: null
+          state: action, // huidige stand
+          lastAppliedAt: new Date() // timestamp
         },
         lastAckAt: new Date().toISOString(),
         lastAck: action
