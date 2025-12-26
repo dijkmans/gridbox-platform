@@ -45,9 +45,9 @@ app.get("/api/_debug/firestore", async (req, res) => {
 });
 
 // helper: haal desired uit Firestore
-// BELANGRIJK: alleen Portal.box.desired telt
+// BELANGRIJK: alleen box.desired telt
 function pickDesired(data) {
-  const v = data?.Portal?.box?.desired;
+  const v = data?.box?.desired;
   return typeof v === "string" ? v : null;
 }
 
@@ -95,21 +95,30 @@ app.get("/api/boxes/:boxId/desired", async (req, res) => {
   }
 });
 
-// POST ack (Pi zegt: uitgevoerd, wis Portal.box.desired velden)
+// POST ack (Pi zegt: uitgevoerd, wis box.desired velden)
 app.post("/api/boxes/:boxId/desired/ack", async (req, res) => {
   try {
     const { boxId } = req.params;
+    const action = req.body?.action ?? null;
 
     const found = await findBoxDoc(boxId);
     if (!found) {
       return res.status(404).json({ ok: false, message: "Box niet gevonden", boxId });
     }
 
-    await found.ref.update({
-      "Portal.box.desired": null,
-      "Portal.box.desiredAt": null,
-      "Portal.box.desiredBy": null
-    });
+    // Wis box.desired zodat het niet opnieuw uitgevoerd wordt
+    await found.ref.set(
+      {
+        box: {
+          desired: null,
+          desiredAt: null,
+          desiredBy: null
+        },
+        lastAckAt: new Date().toISOString(),
+        lastAck: action
+      },
+      { merge: true }
+    );
 
     return res.json({ ok: true, boxId });
   } catch (e) {
