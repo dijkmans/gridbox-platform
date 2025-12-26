@@ -7,8 +7,8 @@ function boxRefById(boxId) {
 }
 
 /**
- * Zet Firestore document om naar exact wat de frontend nodig heeft.
- * Alles wat hier niet expliciet staat, bestaat niet voor de UI.
+ * Zet Firestore document om naar exact wat frontend en agent nodig hebben.
+ * Alles wat hier niet expliciet staat, bestaat niet.
  */
 function normalizeBox(id, data) {
   const d = data || {};
@@ -19,27 +19,46 @@ function normalizeBox(id, data) {
     // Identiteit
     site: d?.Portal?.Site ?? null,
     boxNumber: d?.Portal?.BoxNumber ?? null,
+    customer: d?.Portal?.Customer ?? null,
 
-    // Status
-    state: d?.status?.state ?? null,
-    online: d?.status?.online ?? false,
+    // Box configuratie en gewenste toestand
+    box: {
+      number: d?.box?.number ?? null,
+      type: d?.box?.type ?? null,
+      description: d?.box?.description ?? null,
+
+      desired: d?.box?.desired ?? null,
+      desiredAt: d?.box?.desiredAt ?? null,
+      desiredBy: d?.box?.desiredBy ?? null
+    },
+
+    // Status (feedback van agent)
+    status: {
+      state: d?.status?.state ?? null,
+      doorState: d?.status?.doorState ?? null,
+      online: d?.status?.online ?? false,
+      updatedAt: d?.status?.updatedAt ?? null
+    },
 
     // UI gedrag
-    hidden: d?.ui?.hidden ?? false,
-    order: d?.ui?.order ?? 999
+    ui: {
+      hidden: d?.ui?.hidden ?? false,
+      order: d?.ui?.order ?? 999
+    }
   };
 }
 
 /**
- * Alle boxen ophalen voor frontend
+ * Alle boxen ophalen
  */
 export async function getAll() {
   const snap = await db.collection("boxes").get();
+
   return snap.docs
     .map(doc => normalizeBox(doc.id, doc.data()))
-    .filter(box => box.hidden === false)
+    .filter(box => box.ui.hidden === false)
     .sort((a, b) => {
-      if (a.order !== b.order) return a.order - b.order;
+      if (a.ui.order !== b.ui.order) return a.ui.order - b.ui.order;
       return (a.boxNumber ?? 0) - (b.boxNumber ?? 0);
     });
 }
@@ -54,17 +73,21 @@ export async function getById(boxId) {
 }
 
 /**
- * OPEN command
+ * OPEN box
+ * Zet desired state en registreert command
  */
 export async function openBox(boxId) {
   const ref = boxRefById(boxId);
 
   await ref.set(
     {
-      status: {
-        state: "pending",
+      box: {
         desired: "open",
-        updatedAt: Date.now()
+        desiredAt: Date.now(),
+        desiredBy: "portal"
+      },
+      status: {
+        state: "pending"
       }
     },
     { merge: true }
@@ -81,17 +104,21 @@ export async function openBox(boxId) {
 }
 
 /**
- * CLOSE command
+ * CLOSE box
+ * Zet desired state en registreert command
  */
 export async function closeBox(boxId) {
   const ref = boxRefById(boxId);
 
   await ref.set(
     {
-      status: {
-        state: "pending",
+      box: {
         desired: "close",
-        updatedAt: Date.now()
+        desiredAt: Date.now(),
+        desiredBy: "portal"
+      },
+      status: {
+        state: "pending"
       }
     },
     { merge: true }
