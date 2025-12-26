@@ -68,7 +68,7 @@ function withLegacyFields(dto) {
     site: dto?.Portal?.Site ?? null,
     boxNumber: dto?.Portal?.BoxNumber ?? null,
 
-    // ENIGE statusbron
+    // ENIGE statusbron (legacy)
     status: dto?.status?.state ?? null,
 
     online: dto?.online ?? computeOnlineFromLastSeen(dto?.lastSeenMinutes),
@@ -95,9 +95,21 @@ router.get("/", async (req, res) => {
     if (org) query = query.where("organisationId", "==", org);
 
     const snap = await query.get();
-    const boxes = snap.docs.map(d =>
-      withLegacyFields(toBoxDto(d.id, d.data()))
-    );
+
+    const boxes = snap.docs.map(d => {
+      const data = d.data();
+      const dto = toBoxDto(d.id, data);
+
+      // 🔑 desired expliciet in box zetten
+      dto.box = {
+        ...dto.box,
+        desired: data.box?.desired ?? null,
+        desiredAt: data.box?.desiredAt ?? null,
+        desiredBy: data.box?.desiredBy ?? null
+      };
+
+      return withLegacyFields(dto);
+    });
 
     res.json(boxes);
   } catch (err) {
@@ -118,8 +130,18 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ error: "Box niet gevonden" });
     }
 
-    const dto = withLegacyFields(toBoxDto(doc.id, doc.data()));
-    res.json(dto);
+    const data = doc.data();
+    const dto = toBoxDto(doc.id, data);
+
+    // 🔑 desired expliciet in box zetten
+    dto.box = {
+      ...dto.box,
+      desired: data.box?.desired ?? null,
+      desiredAt: data.box?.desiredAt ?? null,
+      desiredBy: data.box?.desiredBy ?? null
+    };
+
+    res.json(withLegacyFields(dto));
   } catch (err) {
     console.error("GET /api/boxes/:id error:", err);
     res.status(500).json({ error: "Interne serverfout" });
@@ -149,9 +171,9 @@ router.post("/:id/desired", async (req, res) => {
     }
 
     await db.collection("boxes").doc(id).update({
-      desired,
-      desiredAt: new Date(),
-      desiredBy: desiredBy || "portal"
+      "box.desired": desired,
+      "box.desiredAt": new Date(),
+      "box.desiredBy": desiredBy || "portal"
     });
 
     res.json({ ok: true });
