@@ -44,12 +44,11 @@ app.get("/api/_debug/firestore", async (req, res) => {
   }
 });
 
-// helper: haal desired uit box doc
+// helper: haal desired uit Firestore
+// BELANGRIJK: alleen Portal.box.desired telt
 function pickDesired(data) {
-  if (!data) return null;
-  if (typeof data.desired === "string") return data.desired;
-  if (data.status && typeof data.status.desired === "string") return data.status.desired;
-  return null;
+  const v = data?.Portal?.box?.desired;
+  return typeof v === "string" ? v : null;
 }
 
 // helper: vind box doc (primary boxes, daarna fallback)
@@ -83,6 +82,7 @@ app.get("/api/boxes/:boxId/desired", async (req, res) => {
     }
 
     const desired = pickDesired(found.data);
+
     return res.json({
       ok: true,
       boxId,
@@ -95,27 +95,21 @@ app.get("/api/boxes/:boxId/desired", async (req, res) => {
   }
 });
 
-// POST ack (Pi zegt: uitgevoerd, wis desired)
+// POST ack (Pi zegt: uitgevoerd, wis Portal.box.desired velden)
 app.post("/api/boxes/:boxId/desired/ack", async (req, res) => {
   try {
     const { boxId } = req.params;
-    const action = req.body?.action ?? null;
 
     const found = await findBoxDoc(boxId);
     if (!found) {
       return res.status(404).json({ ok: false, message: "Box niet gevonden", boxId });
     }
 
-    // Wis desired zodat het niet opnieuw uitgevoerd wordt
-    await found.ref.set(
-      {
-        desired: null,
-        status: { desired: null },
-        lastAckAt: new Date().toISOString(),
-        lastAck: action
-      },
-      { merge: true }
-    );
+    await found.ref.update({
+      "Portal.box.desired": null,
+      "Portal.box.desiredAt": null,
+      "Portal.box.desiredBy": null
+    });
 
     return res.json({ ok: true, boxId });
   } catch (e) {
