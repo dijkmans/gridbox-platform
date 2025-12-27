@@ -11,6 +11,9 @@ import smsRouter from "./routes/smsWebhook.js";
 import sharesRouter from "./routes/shares.js";
 import internalJobsRouter from "./routes/internalJobs.js";
 
+// NEW: capture endpoints (camera frames)
+import captureRouter from "./routes/capture.js";
+
 // device endpoints (poll commands + result + status)
 import orgBoxDeviceRouter from "./routes/orgBoxDevice.js";
 
@@ -22,7 +25,13 @@ app.use(
   cors({
     origin: "*",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Seq",
+      "X-Phase",
+      "X-Timestamp"
+    ]
   })
 );
 app.use(express.json());
@@ -200,6 +209,10 @@ app.use("/api/status", statusRouter);
 app.use("/api/sms", smsRouter);
 app.use("/api/shares", sharesRouter);
 app.use("/api/internal", internalJobsRouter);
+
+// NEW: capture routes
+app.use("/api/boxes/:boxId/capture", captureRouter);
+app.use("/api/orgs/:orgId/boxes/:boxId/capture", captureRouter);
 
 // device routes
 // zonder org (legacy)
