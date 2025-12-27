@@ -25,7 +25,7 @@ function newSessionId() {
 
 function normPhase(v) {
   const s = String(v || "").toLowerCase().trim();
-  if (["opening", "open", "closing", "post-close"].includes(s)) return s;
+  if (["opening", "open", "closing", "post-close", "close"].includes(s)) return s;
   return "unknown";
 }
 
@@ -34,6 +34,9 @@ function pad6(n) {
   return String(x).padStart(6, "0");
 }
 
+/**
+ * START: maakt een nieuwe capture session in Firestore
+ */
 router.post("/start", async (req, res) => {
   try {
     const dbx = requireDb();
@@ -70,6 +73,121 @@ router.post("/start", async (req, res) => {
   }
 });
 
+/**
+ * NIEUW: lijst met sessies voor 1 box
+ * GET /api/boxes/:boxId/capture/sessions?limit=25
+ */
+router.get("/sessions", async (req, res) => {
+  try {
+    const dbx = requireDb();
+    const { boxId } = req.params;
+
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit ?? 25)));
+
+    const q = dbx
+      .collection("captureSessions")
+      .where("boxId", "==", boxId)
+      .orderBy("startedAt", "desc")
+      .limit(limit);
+
+    const snap = await q.get();
+
+    const sessions = snap.docs.map(d => {
+      const s = d.data() || {};
+      const startedAt = s.startedAt || null;
+      const endedAt = s.endedAt || null;
+
+      let durationSec = null;
+      if (startedAt && endedAt) {
+        const ms = Date.parse(endedAt) - Date.parse(startedAt);
+        if (!Number.isNaN(ms) && ms >= 0) durationSec = Math.round(ms / 1000);
+      }
+
+      return {
+        sessionId: s.sessionId || d.id,
+        boxId: s.boxId || boxId,
+        status: s.status || null,
+        startedAt,
+        endedAt,
+        durationSec,
+        frameCount: s.frameCount ?? null,
+        intervalMs: s.intervalMs ?? null,
+        postCloseMs: s.postCloseMs ?? null,
+        lastSeq: s.lastSeq ?? null,
+        lastFrameAt: s.lastFrameAt ?? null
+      };
+    });
+
+    return res.json({ ok: true, sessions });
+  } catch (e) {
+    console.error("capture/sessions error", e);
+    return res.status(500).json({ ok: false, error: String(e?.message || "Interne serverfout") });
+  }
+});
+
+/**
+ * NIEUW: lijst van pictures in GCS voor 1 session (met signed urls)
+ * GET /api/boxes/:boxId/capture/sessions/:sessionId/pictures?limit=100&pageToken=...
+ */
+router.get("/sessions/:sessionId/pictures", async (req, res) => {
+  try {
+    const dbx = requireDb();
+    const { boxId, sessionId } = req.params;
+
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit ?? 100)));
+    const pageToken = String(req.query.pageToken || "").trim() || undefined;
+
+    const docRef = dbx.collection("captureSessions").doc(sessionId);
+    const snap = await docRef.get();
+    if (!snap.exists) return res.status(404).json({ ok: false, error: "Session niet gevonden" });
+    if (snap.data()?.boxId !== boxId) {
+      return res.status(400).json({ ok: false, error: "boxId past niet bij sessionId" });
+    }
+
+    const bucketName = requireBucketName();
+    const storage = new Storage();
+    const bucket = storage.bucket(bucketName);
+
+    const prefix = `boxes/${boxId}/sessions/${sessionId}/raw/`;
+
+    const [files, nextQuery, apiResp] = await bucket.getFiles({
+      prefix,
+      maxResults: limit,
+      pageToken,
+      autoPaginate: false
+    });
+
+    const nextPageToken = nextQuery?.pageToken || apiResp?.nextPageToken || null;
+
+    const expires = Date.now() + 10 * 60 * 1000;
+
+    const jpgs = files
+      .filter(f => f.name.endsWith(".jpg"))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const items = await Promise.all(
+      jpgs.map(async (f) => {
+        const name = f.name.split("/").pop();
+        const [url] = await f.getSignedUrl({ action: "read", expires });
+        return { name, url };
+      })
+    );
+
+    return res.json({
+      ok: true,
+      sessionId,
+      items,
+      nextPageToken
+    });
+  } catch (e) {
+    console.error("capture/session pictures error", e);
+    return res.status(500).json({ ok: false, error: String(e?.message || "Interne serverfout") });
+  }
+});
+
+/**
+ * GET: details van 1 session
+ */
 router.get("/:sessionId", async (req, res) => {
   try {
     const dbx = requireDb();
@@ -91,6 +209,9 @@ router.get("/:sessionId", async (req, res) => {
   }
 });
 
+/**
+ * FRAME: ontvangt 1 jpeg en bewaart hem in GCS + update Firestore counters
+ */
 router.post(
   "/:sessionId/frame",
   express.raw({ type: ["image/jpeg", "application/octet-stream"], limit: "8mb" }),
@@ -146,6 +267,9 @@ router.post(
   }
 );
 
+/**
+ * STOP: sluit session af
+ */
 router.post("/:sessionId/stop", async (req, res) => {
   try {
     const dbx = requireDb();
