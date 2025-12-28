@@ -5,7 +5,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://gridbox-api-960191535038.europe-west1.run.app/api/$1"
+      "destination": "https://gridbox-api-960191535038-960191535038.europe-west1.run.app/api/$1"
     }
   ]
 }
