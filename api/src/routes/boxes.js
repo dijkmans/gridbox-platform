@@ -223,7 +223,7 @@ router.get("/:id/pictures", async (req, res) => {
 
     const jpgs = (files || [])
       .filter(f => f.name.endsWith(".jpg"))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => b.name.localeCompare(a.name));
 
     if (!jpgs.length) {
       res.setHeader("content-type", "text/html; charset=utf-8");
