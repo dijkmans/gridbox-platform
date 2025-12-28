@@ -223,7 +223,7 @@ router.get("/:id/pictures", async (req, res) => {
 
     const jpgs = (files || [])
       .filter(f => f.name.endsWith(".jpg"))
-      .sort((a, b) => b.name.localeCompare(a.name));
+      .sort((a, b) => b.name.localeCompare(a.name)); // nieuwste eerst
 
     if (!jpgs.length) {
       res.setHeader("content-type", "text/html; charset=utf-8");
@@ -247,13 +247,11 @@ router.get("/:id/pictures", async (req, res) => {
       .join("");
 
     const thumbs = items
-      .map(i => {
-        return `
-          <a href="${i.url}" target="_blank" rel="noopener">
-            <img src="${i.url}" alt="${esc(i.name)}" loading="lazy">
-          </a>
-        `;
-      })
+      .map(i => `
+        <a href="${i.url}" class="thumb" data-name="${esc(i.name)}" rel="noopener">
+          <img src="${i.url}" alt="${esc(i.name)}" loading="lazy">
+        </a>
+      `)
       .join("");
 
     res.setHeader("content-type", "text/html; charset=utf-8");
@@ -267,9 +265,26 @@ router.get("/:id/pictures", async (req, res) => {
     body{font-family:system-ui,Arial;margin:16px}
     header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
-    img{width:100%;height:140px;object-fit:cover;border-radius:10px;background:#eee}
+    .grid img{width:100%;height:140px;object-fit:cover;border-radius:10px;background:#eee}
     select,button{padding:8px 10px;font-size:14px}
     .muted{opacity:.7}
+
+    .thumb{display:block}
+    .lb.hidden{display:none}
+    .lb{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center}
+    .lb-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.75)}
+    .lb-panel{position:relative;max-width:min(1200px,95vw);max-height:92vh;z-index:1}
+    .lb-img{max-width:95vw;max-height:82vh;display:block;border-radius:12px;background:#111}
+    .lb-caption{color:#fff;opacity:.85;margin-top:8px;font-size:14px}
+    .lb-btn{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.55);color:#fff;border:0;border-radius:10px;padding:10px 14px;cursor:pointer;font-size:18px}
+    .lb-prev{left:-52px}
+    .lb-next{right:-52px}
+    .lb-close{top:-46px;right:0;transform:none}
+    @media (max-width:700px){
+      .lb-prev{left:6px}
+      .lb-next{right:6px}
+      .lb-close{top:6px;right:6px}
+    }
   </style>
 </head>
 <body>
@@ -285,12 +300,69 @@ router.get("/:id/pictures", async (req, res) => {
 
   <div class="grid">${thumbs}</div>
 
+  <div id="lb" class="lb hidden">
+    <div id="lbBack" class="lb-backdrop"></div>
+    <div class="lb-panel">
+      <button id="lbClose" class="lb-btn lb-close" aria-label="Close">✕</button>
+      <button id="lbPrev" class="lb-btn lb-prev" aria-label="Previous">‹</button>
+      <img id="lbImg" class="lb-img" alt="">
+      <button id="lbNext" class="lb-btn lb-next" aria-label="Next">›</button>
+      <div id="lbCaption" class="lb-caption"></div>
+    </div>
+  </div>
+
   <script>
     const sel = document.getElementById("sess");
     document.getElementById("go").onclick = () => {
       const s = encodeURIComponent(sel.value);
       location.href = location.pathname + "?sessionId=" + s;
     };
+
+    const lb = document.getElementById("lb");
+    const lbImg = document.getElementById("lbImg");
+    const lbCaption = document.getElementById("lbCaption");
+    const lbBack = document.getElementById("lbBack");
+    const lbClose = document.getElementById("lbClose");
+    const lbPrev = document.getElementById("lbPrev");
+    const lbNext = document.getElementById("lbNext");
+
+    const thumbsEls = Array.from(document.querySelectorAll("a.thumb"));
+    let idx = -1;
+
+    function show(i) {
+      if (!thumbsEls.length) return;
+      idx = (i + thumbsEls.length) % thumbsEls.length;
+      const a = thumbsEls[idx];
+      lbImg.src = a.href;
+      lbCaption.textContent = a.dataset.name || "";
+      lb.classList.remove("hidden");
+    }
+
+    function hide() {
+      lb.classList.add("hidden");
+      lbImg.src = "";
+      idx = -1;
+    }
+
+    thumbsEls.forEach((a, i) => {
+      a.addEventListener("click", (e) => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
+        e.preventDefault();
+        show(i);
+      });
+    });
+
+    lbBack.addEventListener("click", hide);
+    lbClose.addEventListener("click", hide);
+    lbPrev.addEventListener("click", () => show(idx - 1));
+    lbNext.addEventListener("click", () => show(idx + 1));
+
+    document.addEventListener("keydown", (e) => {
+      if (lb.classList.contains("hidden")) return;
+      if (e.key === "Escape") hide();
+      if (e.key === "ArrowLeft") show(idx - 1);
+      if (e.key === "ArrowRight") show(idx + 1);
+    });
   </script>
 </body>
 </html>`);
