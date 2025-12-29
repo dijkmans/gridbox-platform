@@ -1,448 +1,380 @@
-import { Router } from "express";
+// api/src/routes/boxes.js
+
+import express from "express";
+import admin from "firebase-admin";
 import { Storage } from "@google-cloud/storage";
-import { db } from "../firebase.js";
-import { toBoxDto } from "../dto/boxDto.js";
 
-const router = Router();
+const router = express.Router();
 
-/*
-=====================================================
-COMMANDS (Firestore-based, legacy)
-=====================================================
-*/
-
+// -------------------- COMMANDS (FireStore) --------------------
 router.get("/:boxId/commands", async (req, res) => {
   try {
     const { boxId } = req.params;
-    const snap = await db.collection("boxCommands").doc(boxId).get();
-    if (!snap.exists) return res.json(null);
-    res.json(snap.data());
+
+    const doc = await admin.firestore().collection("boxCommands").doc(boxId).get();
+    if (!doc.exists) return res.json(null);
+
+    const data = doc.data() || {};
+    return res.json({
+      id: data.commandId || "unknown",
+      type: data.type || null,
+      payload: data.payload || null,
+      createdAt: data.createdAt || null
+    });
   } catch (err) {
-    console.error("Command fetch error:", err);
-    res.status(500).json(null);
+    console.error("GET /api/boxes/:boxId/commands error:", err);
+    return res.status(500).json(null);
   }
 });
 
 router.post("/:boxId/commands/:commandId/ack", async (req, res) => {
   try {
     const { boxId } = req.params;
-    await db.collection("boxCommands").doc(boxId).delete();
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("Command ack error:", err);
-    res.status(500).json({ ok: false });
-  }
-});
 
-/*
-=====================================================
-HELPERS
-=====================================================
-*/
-
-function computeOnlineFromLastSeen(lastSeenMinutes) {
-  const n = Number(lastSeenMinutes);
-  if (Number.isNaN(n)) return null;
-  return n <= 2;
-}
-
-function pickLegacyAgentVersion(dto) {
-  if (dto?.Agent == null) return null;
-  if (typeof dto.Agent === "string") return dto.Agent;
-  if (typeof dto.Agent === "object") return dto.Agent.version ?? dto.Agent.name ?? null;
-  return String(dto.Agent);
-}
-
-function pickLegacyHardwareProfile(dto) {
-  if (dto?.Profile == null) return dto?.box?.type ?? null;
-  if (typeof dto.Profile === "string") return dto.Profile;
-  if (typeof dto.Profile === "object") return dto.Profile.name ?? dto.Profile.code ?? null;
-  return String(dto.Profile);
-}
-
-function withLegacyFields(dto) {
-  return {
-    ...dto,
-
-    // legacy frontend velden
-    customer: dto?.Portal?.Customer ?? dto?.organisation?.name ?? null,
-    site: dto?.Portal?.Site ?? null,
-    boxNumber: dto?.Portal?.BoxNumber ?? null,
-
-    // ENIGE statusbron (legacy)
-    status: dto?.status?.state ?? null,
-
-    online: dto?.online ?? computeOnlineFromLastSeen(dto?.lastSeenMinutes),
-    agentVersion: dto?.agentVersion ?? pickLegacyAgentVersion(dto),
-    hardwareProfile: dto?.hardwareProfile ?? pickLegacyHardwareProfile(dto),
-    sharesCount: dto?.sharesCount ?? null
-  };
-}
-
-function requireCaptureBucket() {
-  const name = process.env.CAPTURE_BUCKET;
-  if (!name) throw new Error("CAPTURE_BUCKET ontbreekt (env var).");
-  return name;
-}
-
-function esc(s) {
-  return String(s || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-/*
-=====================================================
-BOX ROUTES (Frontend / Portal)
-=====================================================
-*/
-
-/**
- * GET /api/boxes
- */
-router.get("/", async (req, res) => {
-  try {
-    const org = (req.query.org || "").toString().trim();
-
-    let query = db.collection("boxes");
-    if (org) query = query.where("organisationId", "==", org);
-
-    const snap = await query.get();
-
-    const boxes = snap.docs.map(d => {
-      const data = d.data();
-      const dto = toBoxDto(d.id, data);
-
-      // desired expliciet in box zetten
-      dto.box = {
-        ...dto.box,
-        desired: data.box?.desired ?? null,
-        desiredAt: data.box?.desiredAt ?? null,
-        desiredBy: data.box?.desiredBy ?? null
-      };
-
-      return withLegacyFields(dto);
-    });
-
-    res.json(boxes);
-  } catch (err) {
-    console.error("GET /api/boxes error:", err);
-    res.status(500).json({ error: "Interne serverfout" });
-  }
-});
-
-/**
- * GET /api/boxes/:id
- */
-router.get("/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
-    const doc = await db.collection("boxes").doc(id).get();
-
-    if (!doc.exists) {
-      return res.status(404).json({ error: "Box niet gevonden" });
-    }
-
-    const data = doc.data();
-    const dto = toBoxDto(doc.id, data);
-
-    // desired expliciet in box zetten
-    dto.box = {
-      ...dto.box,
-      desired: data.box?.desired ?? null,
-      desiredAt: data.box?.desiredAt ?? null,
-      desiredBy: data.box?.desiredBy ?? null
-    };
-
-    res.json(withLegacyFields(dto));
-  } catch (err) {
-    console.error("GET /api/boxes/:id error:", err);
-    res.status(500).json({ error: "Interne serverfout" });
-  }
-});
-
-/*
-=====================================================
-PICTURES VIEWER (Portal)
-=====================================================
-*/
-
-/**
- * POST /api/boxes/:id/pictures/take
- * Doel: een "take_picture" command klaarzetten voor de Pi agent.
- * Dit gebruikt dezelfde legacy boxCommands doc (1 command per box).
- */
-router.post("/:id/pictures/take", async (req, res) => {
-  try {
-    const boxId = req.params.id;
-
-    await db.collection("boxCommands").doc(boxId).set({
-      commandId: `cmd-${Date.now()}`,
-      type: "take_picture",
-      status: "pending",
-      createdAt: new Date(),
-      payload: { source: "pictures-page" }
-    });
-
+    // We verwijderen gewoon het command doc (simpel ack-mechanisme)
+    await admin.firestore().collection("boxCommands").doc(boxId).delete().catch(() => {});
     return res.json({ ok: true });
   } catch (err) {
-    console.error("TAKE PICTURE command error:", err);
-    return res.status(500).json({ ok: false, error: "Interne serverfout" });
+    console.error("POST /api/boxes/:boxId/commands/:commandId/ack error:", err);
+    return res.status(500).json({ ok: false, error: "ACK mislukt" });
   }
 });
 
-/**
- * GET /api/boxes/:id/pictures
- * Doel: de portal knop "PICTURES" laten werken zonder dat je de portal moet aanpassen.
- *
- * Verwacht bestanden in GCS:
- * boxes/<boxId>/sessions/<sessionId>/raw/*.jpg
- *
- * Vereist env var:
- * CAPTURE_BUCKET
- */
-router.get("/:id/pictures", async (req, res) => {
+// -------------------- PICTURES VIEWER --------------------
+router.get("/:boxId/pictures", async (req, res) => {
   try {
-    const boxId = req.params.id;
+    const { boxId } = req.params;
+    const sessionId = (req.query.sessionId || "").toString().trim();
 
-    const bucketName = requireCaptureBucket();
+    const bucketName = process.env.GCS_BUCKET || process.env.BUCKET_NAME;
+    if (!bucketName) {
+      return res.status(500).send("GCS_BUCKET ontbreekt");
+    }
+
     const storage = new Storage();
     const bucket = storage.bucket(bucketName);
 
-    // Sessions zoeken in GCS (prefixes)
-    const sessionsPrefix = `boxes/${boxId}/sessions/`;
-    const [_files, _nextQuery, apiResp] = await bucket.getFiles({
+    // Sessions = prefixes onder boxes/<boxId>/capture/
+    const sessionsPrefix = `boxes/${boxId}/capture/`;
+    const [files, , apiResp] = await bucket.getFiles({
       prefix: sessionsPrefix,
       delimiter: "/",
-      maxResults: 200,
-      autoPaginate: false
+      autoPaginate: false,
+      maxResults: 200
     });
 
-    const prefixes = apiResp?.prefixes || [];
-    const sessions = prefixes
-      .map(p => p.slice(sessionsPrefix.length).replace(/\/$/, ""))
-      .filter(Boolean)
-      .sort((a, b) => b.localeCompare(a)); // newest eerst
+    const prefixes = (apiResp?.prefixes || []).map(p => p.replace(sessionsPrefix, "").replace("/", ""));
+    prefixes.sort().reverse(); // nieuwste eerst op basis van naam cap_YYYY...
 
-    if (!sessions.length) {
-      res.setHeader("content-type", "text/html; charset=utf-8");
-      return res
-        .status(404)
-        .send(`<h1>Geen sessions gevonden</h1><p>Box: ${esc(boxId)}</p>`);
+    const sessions = prefixes;
+
+    let activeSessionId = sessionId;
+    if (!activeSessionId) {
+      activeSessionId = sessions[0] || "";
     }
 
-    const requested = (req.query.sessionId || "").toString().trim();
-    const sessionId = requested && sessions.includes(requested) ? requested : sessions[0];
+    let items = [];
+    if (activeSessionId) {
+      const picturesPrefix = `boxes/${boxId}/capture/${activeSessionId}/`;
+      const [pics] = await bucket.getFiles({
+        prefix: picturesPrefix,
+        autoPaginate: false,
+        maxResults: 200
+      });
 
-    // Foto's zoeken in gekozen session
-    const rawPrefix = `boxes/${boxId}/sessions/${sessionId}/raw/`;
-    const [files] = await bucket.getFiles({
-      prefix: rawPrefix,
-      maxResults: 500,
-      autoPaginate: false
-    });
+      // Alleen .jpg/.jpeg/.png en geen "folders"
+      const picFiles = pics
+        .filter(f => f.name && !f.name.endsWith("/"))
+        .filter(f => /\.(jpg|jpeg|png)$/i.test(f.name));
 
-    const jpgs = (files || [])
-      .filter(f => f.name.endsWith(".jpg"))
-      .sort((a, b) => b.name.localeCompare(a.name)); // nieuwste eerst
+      // Nieuwste eerst op basis van filename (000123.jpg)
+      picFiles.sort((a, b) => (a.name < b.name ? 1 : a.name > b.name ? -1 : 0));
 
-    if (!jpgs.length) {
-      res.setHeader("content-type", "text/html; charset=utf-8");
-      return res
-        .status(404)
-        .send(`<h1>Geen foto's gevonden</h1><p>Box: ${esc(boxId)}<br>Session: ${esc(sessionId)}</p>`);
+      // Signed URLs + timestamp
+      items = await Promise.all(
+        picFiles.map(async f => {
+          const [url] = await f.getSignedUrl({
+            action: "read",
+            expires: Date.now() + 1000 * 60 * 60
+          });
+
+          const md = f.metadata || {};
+          // md.timeCreated is ISO string
+          const ts = md.timeCreated ? new Date(md.timeCreated).getTime() : null;
+
+          return {
+            name: f.name.split("/").pop(),
+            url,
+            ts
+          };
+        })
+      );
     }
 
-    // Signed URLs maken (10 min geldig)
-    const expires = Date.now() + 10 * 60 * 1000;
-    const items = await Promise.all(
-      jpgs.map(async f => {
-        const name = f.name.split("/").pop();
-        const [url] = await f.getSignedUrl({ action: "read", expires });
-        const ts = (f.metadata?.metadata?.ts || f.metadata?.timeCreated || f.metadata?.updated || null);
-        return { name, url, ts };
-      })
-    );
+    const fmtTs = (ms) => {
+      if (!ms) return "";
+      const d = new Date(ms);
+      const pad = (n) => String(n).padStart(2, "0");
+      return (
+        pad(d.getDate()) + "/" +
+        pad(d.getMonth() + 1) + "/" +
+        d.getFullYear() + ", " +
+        pad(d.getHours()) + ":" +
+        pad(d.getMinutes()) + ":" +
+        pad(d.getSeconds())
+      );
+    };
 
-    const options = sessions
-      .map(s => `<option value="${esc(s)}"${s === sessionId ? " selected" : ""}>${esc(s)}</option>`)
-      .join("");
+    const currentTopName = items?.[0]?.name || "";
 
-    const thumbs = items
-      .map(i => `
-        <div class="thumbwrap">
-          <a href="${i.url}" class="thumb" data-name="${esc(i.name)}" data-ts="${esc(i.ts || "")}" rel="noopener">
-            <img src="${i.url}" alt="${esc(i.name)}" loading="lazy">
-          </a>
-          <div class="thumb-meta" data-ts="${esc(i.ts || "")}"></div>
-        </div>
-      `)
-      .join("");
-
-    res.setHeader("content-type", "text/html; charset=utf-8");
-    return res.send(`<!doctype html>
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(`<!doctype html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Pictures ${esc(boxId)}</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pictures</title>
   <style>
-    body{font-family:system-ui,Arial;margin:16px}
-    header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
-    .grid img{width:100%;height:140px;object-fit:cover;border-radius:10px;background:#eee}
-    .thumbwrap{display:flex;flex-direction:column;gap:6px}
-    .thumb-meta{font-size:12px;opacity:.75}
-    select,button{padding:8px 10px;font-size:14px}
-    .muted{opacity:.7}
-
-    .thumb{display:block}
-    .lb.hidden{display:none}
-    .lb{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center}
-    .lb-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.75)}
-    .lb-panel{position:relative;max-width:min(1200px,95vw);max-height:92vh;z-index:1}
-    .lb-img{max-width:95vw;max-height:82vh;display:block;border-radius:12px;background:#111}
-    .lb-caption{color:#fff;opacity:.85;margin-top:8px;font-size:14px}
-    .lb-btn{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.55);color:#fff;border:0;border-radius:10px;padding:10px 14px;cursor:pointer;font-size:18px}
-    .lb-prev{left:-52px}
-    .lb-next{right:-52px}
-    .lb-close{top:-46px;right:0;transform:none}
-    @media (max-width:700px){
-      .lb-prev{left:6px}
-      .lb-next{right:6px}
-      .lb-close{top:6px;right:6px}
+    body { font-family: Arial, sans-serif; padding: 16px; }
+    .topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
     }
+    .thumb {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #f1f1f1;
+    }
+    .thumb img {
+      width: 100%;
+      height: 140px;
+      object-fit: cover;
+      display: block;
+      border-radius: 10px;
+    }
+    .thumb-meta {
+      font-size: 12px;
+      padding: 6px 4px 0 2px;
+      color: #333;
+    }
+
+    /* Lightbox */
+    .lb.hidden { display: none; }
+    .lb {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.92);
+      display: grid;
+      place-items: center;
+      z-index: 9999;
+    }
+    .lb-inner {
+      position: relative;
+      width: min(92vw, 1200px);
+      height: min(90vh, 800px);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 8px;
+    }
+    .lb-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #fff;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    .lb-imgwrap {
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+    .lb-imgwrap img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .lb-controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+    .lb-btn {
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.2);
+      padding: 10px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 14px;
+    }
+    .lb-btn:hover { background: rgba(255,255,255,0.18); }
+    .lb-close {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      background: rgba(255,255,255,0.14);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: #fff;
+      border-radius: 999px;
+      width: 36px;
+      height: 36px;
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    .take-wrap { display: inline-flex; align-items: center; gap: 10px; }
+    .take-status { font-size: 13px; color: #444; }
+    .take-btn { padding: 6px 10px; cursor: pointer; }
   </style>
 </head>
 <body>
-  <header>
-    <h2 style="margin:0">Pictures</h2>
-    <div class="muted">Box: ${esc(boxId)}</div>
-    <label>
-      Session
-      <select id="sess">${options}</select>
-    </label>
-    <button id="go">Open</button>
-    <button id="take">TAKE PICTURE</button>
-    <span id="takeStatus" class="muted"></span>
-  </header>
+  <div class="topbar">
+    <h2 style="margin:0;">Pictures</h2>
+    <div>Box: <b>${boxId}</b></div>
 
-  <div class="grid">${thumbs}</div>
+    <div>Session</div>
+    <select id="sessionSel">
+      ${sessions
+        .map(s => `<option value="${s}" ${s === activeSessionId ? "selected" : ""}>${s}</option>`)
+        .join("")}
+    </select>
+    <button id="openBtn">Open</button>
 
-  <div id="lb" class="lb hidden">
-    <div id="lbBack" class="lb-backdrop"></div>
-    <div class="lb-panel">
-      <button id="lbClose" class="lb-btn lb-close" aria-label="Close">✕</button>
-      <button id="lbPrev" class="lb-btn lb-prev" aria-label="Previous">‹</button>
-      <img id="lbImg" class="lb-img" alt="">
-      <button id="lbNext" class="lb-btn lb-next" aria-label="Next">›</button>
-      <div id="lbCaption" class="lb-caption"></div>
+    <div class="take-wrap">
+      <button id="takeBtn" class="take-btn">TAKE PICTURE</button>
+      <span id="takeStatus" class="take-status"></span>
     </div>
   </div>
 
+  <div class="grid" id="grid">
+    ${items
+      .map(
+        (it) => `
+      <a class="thumb" href="${it.url}" data-full="${it.url}" data-name="${it.name}">
+        <img src="${it.url}" alt="${it.name}" />
+        <div class="thumb-meta">${fmtTs(it.ts)}</div>
+      </a>`
+      )
+      .join("")}
+  </div>
+
+  <div class="lb hidden" id="lb">
+    <div class="lb-inner">
+      <div class="lb-top">
+        <div id="lbCaption"></div>
+        <div id="lbCounter"></div>
+      </div>
+
+      <div class="lb-imgwrap">
+        <img id="lbImg" src="" alt="" />
+      </div>
+
+      <div class="lb-controls">
+        <div class="lb-btn" id="lbPrev">Vorige</div>
+        <div class="lb-btn" id="lbNext">Volgende</div>
+      </div>
+
+      <button class="lb-close" id="lbClose">×</button>
+    </div>
+
+    <div class="lb-btn" id="lbBack" style="position: fixed; left: 16px; top: 16px;">Terug</div>
+  </div>
+
   <script>
-    const sel = document.getElementById("sess");
-    document.getElementById("go").onclick = () => {
-      const s = encodeURIComponent(sel.value);
-      location.href = location.pathname + "?sessionId=" + s;
-    };
+    const boxId = ${JSON.stringify(boxId)};
+    const currentSessionId = ${JSON.stringify(activeSessionId)};
+    const currentTopName = ${JSON.stringify(currentTopName)};
 
-    function fmtTs(ts) {
-      if (!ts) return "";
-      const t = Date.parse(ts);
-      if (!Number.isFinite(t)) return "";
-      return new Intl.DateTimeFormat("nl-BE", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit"
-      }).format(new Date(t));
-    }
+    const sel = document.getElementById("sessionSel");
+    const openBtn = document.getElementById("openBtn");
 
-    // timestamps onder thumbnails
-    document.querySelectorAll(".thumb-meta").forEach(el => {
-      const ts = el.getAttribute("data-ts") || "";
-      el.textContent = fmtTs(ts);
+    openBtn.addEventListener("click", () => {
+      const sid = sel.value;
+      location.href = location.pathname + "?sessionId=" + encodeURIComponent(sid);
     });
 
-    // TAKE PICTURE via command naar Pi
-    const takeBtn = document.getElementById("take");
+    const takeBtn = document.getElementById("takeBtn");
     const takeStatus = document.getElementById("takeStatus");
-    const boxId = "${esc(boxId)}";
-    const currentSessionId = "${esc(sessionId)}";
-    const currentTopName = "${esc(items?.[0]?.name || "")}";
 
-  async function getNewestSessionId() {
-  try {
-    let token = null;
-    let newest = null;
+    async function getNewestSessionId() {
+      try {
+        let pageToken = null;
+        let newest = null;
 
-    for (let i = 0; i < 50; i++) {
-      const url =
-        "/api/boxes/" + encodeURIComponent(boxId) +
-        "/capture/sessions?limit=100" +
-        (token ? "&pageToken=" + encodeURIComponent(token) : "");
+        // We lopen door alle pages, want de API geeft sessions per page in oplopende prefix-volgorde.
+        for (let i = 0; i < 50; i++) {
+          const url =
+            "/api/boxes/" + encodeURIComponent(boxId) +
+            "/capture/sessions?limit=100" +
+            (pageToken ? ("&pageToken=" + encodeURIComponent(pageToken)) : "");
 
-      const r = await fetch(url, { cache: "no-store" });
-      if (!r.ok) break;
+          const r = await fetch(url, { cache: "no-store" });
+          if (!r.ok) return newest;
 
-      const j = await r.json().catch(() => null);
-      const s0 = j?.sessions?.[0]?.sessionId || null;
-      if (s0) newest = s0;
+          const j = await r.json().catch(() => null);
+          const s0 = j?.sessions?.[0]?.sessionId || null;
+          if (s0) newest = s0;
 
-      token = j?.nextPageToken || null;
-      if (!token) break;
+          pageToken = j?.nextPageToken || null;
+          if (!pageToken) break;
+        }
+
+        return newest;
+      } catch (_) {
+        return null;
+      }
     }
 
-    return newest;
-  } catch (_) {
-    return null;
-  }
-}
+    async function getLatestPictureName(sessionId) {
+      try {
+        let pageToken = null;
+        let latest = null;
 
-async function getLatestPictureName(sessionId) {
-  try {
-    let token = null;
-    let lastName = null;
+        // In capture.js worden items per page oplopend gesorteerd (oudste eerst).
+        // Daarom: laatste item van de laatste page = nieuwste foto.
+        for (let i = 0; i < 200; i++) {
+          const url =
+            "/api/boxes/" + encodeURIComponent(boxId) +
+            "/capture/sessions/" + encodeURIComponent(sessionId) +
+            "/pictures?limit=500" +
+            (pageToken ? ("&pageToken=" + encodeURIComponent(pageToken)) : "");
 
-    for (let i = 0; i < 200; i++) {
-      const url =
-        "/api/boxes/" + encodeURIComponent(boxId) +
-        "/capture/sessions/" + encodeURIComponent(sessionId) +
-        "/pictures?limit=500" +
-        (token ? "&pageToken=" + encodeURIComponent(token) : "");
+          const r = await fetch(url, { cache: "no-store" });
+          if (!r.ok) return latest;
 
-      const r = await fetch(url, { cache: "no-store" });
-      if (!r.ok) break;
+          const j = await r.json().catch(() => null);
+          const items = Array.isArray(j?.items) ? j.items : [];
+          if (items.length) {
+            const last = items[items.length - 1];
+            if (last?.name) latest = last.name;
+          }
 
-      const j = await r.json().catch(() => null);
-      const arr = Array.isArray(j?.items) ? j.items : [];
+          pageToken = j?.nextPageToken || null;
+          if (!pageToken) break;
+        }
 
-      // items staan (per pagina) in oplopende volgorde, dus laatste is nieuwste binnen die pagina
-      if (arr.length) lastName = arr[arr.length - 1].name;
-
-      token = j?.nextPageToken || null;
-      if (!token) break;
+        return latest;
+      } catch (_) {
+        return null;
+      }
     }
-
-    return lastName;
-  } catch (_) {
-    return null;
-  }
-}
-
 
     async function waitForNewPicture(timeoutMs = 20000) {
       const t0 = Date.now();
       while (Date.now() - t0 < timeoutMs) {
         // 1) eerst check: kwam er iets nieuws in de huidige session?
-        const sameName = await getLatestPictureName(currentSessionId);
-        if (sameName && sameName !== currentTopName) {
+        const latestName = await getLatestPictureName(currentSessionId);
+        if (latestName && latestName !== currentTopName) {
           return { sessionId: currentSessionId };
         }
 
@@ -480,26 +412,33 @@ async function getLatestPictureName(sessionId) {
       }
     });
 
+    // Lightbox logic
+    const thumbsEls = Array.from(document.querySelectorAll("a.thumb"));
     const lb = document.getElementById("lb");
     const lbImg = document.getElementById("lbImg");
     const lbCaption = document.getElementById("lbCaption");
+    const lbCounter = document.getElementById("lbCounter");
     const lbBack = document.getElementById("lbBack");
     const lbClose = document.getElementById("lbClose");
     const lbPrev = document.getElementById("lbPrev");
     const lbNext = document.getElementById("lbNext");
 
-    const thumbsEls = Array.from(document.querySelectorAll("a.thumb"));
     let idx = -1;
 
     function show(i) {
       if (!thumbsEls.length) return;
-      idx = (i + thumbsEls.length) % thumbsEls.length;
+      if (i < 0) i = thumbsEls.length - 1;
+      if (i >= thumbsEls.length) i = 0;
+      idx = i;
+
       const a = thumbsEls[idx];
-      lbImg.src = a.href;
-      const name = a.dataset.name || "";
-      const ts = a.dataset.ts || "";
-      const fts = fmtTs(ts);
-      lbCaption.textContent = fts ? (name + "  " + fts) : name;
+      const url = a.getAttribute("data-full") || a.href;
+      const name = a.getAttribute("data-name") || "";
+
+      lbImg.src = url;
+      lbCaption.textContent = name;
+      lbCounter.textContent = (idx + 1) + " / " + thumbsEls.length;
+
       lb.classList.remove("hidden");
     }
 
@@ -531,89 +470,29 @@ async function getLatestPictureName(sessionId) {
   </script>
 </body>
 </html>`);
-  } catch (e) {
-    console.error("pictures viewer error", e);
-    return res.status(500).send(String(e?.message || e));
+  } catch (err) {
+    console.error("GET /api/boxes/:boxId/pictures error:", err);
+    res.status(500).send("Fout bij laden pictures");
   }
 });
 
-/*
-=====================================================
-DESIRED (nieuwe, correcte route)
-=====================================================
-*/
-
-/**
- * POST /api/boxes/:id/desired
- * UI / Portal zet intentie
- */
-router.post("/:id/desired", async (req, res) => {
+// -------------------- TAKE PICTURE COMMAND --------------------
+router.post("/:boxId/pictures/take", async (req, res) => {
   try {
-    const { id } = req.params;
-    const { desired, desiredBy } = req.body;
+    const { boxId } = req.params;
 
-    if (!["open", "close"].includes(desired)) {
-      return res.status(400).json({
-        ok: false,
-        message: "Ongeldige desired waarde"
-      });
-    }
-
-    await db.collection("boxes").doc(id).update({
-      "box.desired": desired,
-      "box.desiredAt": new Date(),
-      "box.desiredBy": desiredBy || "portal"
+    const commandId = "take_" + Date.now();
+    await admin.firestore().collection("boxCommands").doc(boxId).set({
+      commandId,
+      type: "take_picture",
+      payload: null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    res.json({ ok: true });
+    return res.json({ ok: true, commandId });
   } catch (err) {
-    console.error("Set desired error:", err);
-    res.status(500).json({
-      ok: false,
-      message: "Interne serverfout"
-    });
-  }
-});
-
-/*
-=====================================================
-ACTIONS (open / close, legacy, blijven werken)
-=====================================================
-*/
-
-router.post("/:id/open", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    await db.collection("boxCommands").doc(id).set({
-      commandId: `cmd-${Date.now()}`,
-      type: "open",
-      status: "pending",
-      createdAt: new Date()
-    });
-
-    res.json({ ok: true, command: "open", boxId: id });
-  } catch (err) {
-    console.error("Open command error:", err);
-    res.status(500).json({ error: "Interne serverfout" });
-  }
-});
-
-router.post("/:id/close", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    await db.collection("boxCommands").doc(id).set({
-      commandId: `cmd-${Date.now()}`,
-      type: "close",
-      status: "pending",
-      createdAt: new Date()
-    });
-
-    res.json({ ok: true, command: "close", boxId: id });
-  } catch (err) {
-    console.error("Close command error:", err);
-    res.status(500).json({ error: "Interne serverfout" });
+    console.error("POST /api/boxes/:boxId/pictures/take error:", err);
+    return res.status(500).json({ ok: false, error: "Kon command niet zetten" });
   }
 });
 
