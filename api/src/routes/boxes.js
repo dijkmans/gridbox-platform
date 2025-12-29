@@ -238,7 +238,8 @@ router.get("/:id/pictures", async (req, res) => {
       jpgs.map(async f => {
         const name = f.name.split("/").pop();
         const [url] = await f.getSignedUrl({ action: "read", expires });
-        return { name, url };
+        const ts = (f.metadata?.metadata?.ts || f.metadata?.timeCreated || f.metadata?.updated || null);
+        return { name, url, ts };
       })
     );
 
@@ -248,9 +249,12 @@ router.get("/:id/pictures", async (req, res) => {
 
     const thumbs = items
       .map(i => `
-        <a href="${i.url}" class="thumb" data-name="${esc(i.name)}" rel="noopener">
-          <img src="${i.url}" alt="${esc(i.name)}" loading="lazy">
-        </a>
+        <div class="thumbwrap">
+          <a href="${i.url}" class="thumb" data-name="${esc(i.name)}" data-ts="${esc(i.ts || "")}" rel="noopener">
+            <img src="${i.url}" alt="${esc(i.name)}" loading="lazy">
+          </a>
+          <div class="thumb-meta" data-ts="${esc(i.ts || "")}"></div>
+        </div>
       `)
       .join("");
 
@@ -266,6 +270,8 @@ router.get("/:id/pictures", async (req, res) => {
     header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
     .grid img{width:100%;height:140px;object-fit:cover;border-radius:10px;background:#eee}
+    .thumbwrap{display:flex;flex-direction:column;gap:6px}
+    .thumb-meta{font-size:12px;opacity:.75}
     select,button{padding:8px 10px;font-size:14px}
     .muted{opacity:.7}
 
@@ -296,6 +302,8 @@ router.get("/:id/pictures", async (req, res) => {
       <select id="sess">${options}</select>
     </label>
     <button id="go">Open</button>
+    <button id="take">TAKE PICTURE</button>
+    <span id="takeStatus" class="muted"></span>
   </header>
 
   <div class="grid">${thumbs}</div>
@@ -318,6 +326,79 @@ router.get("/:id/pictures", async (req, res) => {
       location.href = location.pathname + "?sessionId=" + s;
     };
 
+    function fmtTs(ts) {
+      if (!ts) return "";
+      const t = Date.parse(ts);
+      if (!Number.isFinite(t)) return "";
+      return new Intl.DateTimeFormat("nl-BE", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      }).format(new Date(t));
+    }
+
+    // timestamps onder thumbnails
+    document.querySelectorAll(".thumb-meta").forEach(el => {
+      const ts = el.getAttribute("data-ts") || "";
+      el.textContent = fmtTs(ts);
+    });
+
+    // TAKE PICTURE (manual snapshot)
+    const takeBtn = document.getElementById("take");
+    const takeStatus = document.getElementById("takeStatus");
+    const boxId = "${esc(boxId)}";
+
+    async function waitForPicture(sessionId, timeoutMs = 20000) {
+      const t0 = Date.now();
+      while (Date.now() - t0 < timeoutMs) {
+        try {
+          const url =
+            "/api/boxes/" + encodeURIComponent(boxId) +
+            "/capture/sessions/" + encodeURIComponent(sessionId) +
+            "/pictures?limit=1";
+          const r = await fetch(url, { cache: "no-store" });
+          if (r.ok) {
+            const j = await r.json().catch(() => null);
+            if (j && j.ok && Array.isArray(j.items) && j.items.length) return true;
+          }
+        } catch (_) {}
+        await new Promise(r => setTimeout(r, 1000));
+      }
+      return false;
+    }
+
+    takeBtn?.addEventListener("click", async () => {
+      takeBtn.disabled = true;
+      try {
+        takeStatus.textContent = "Foto nemen...";
+        const startUrl = "/api/boxes/" + encodeURIComponent(boxId) + "/capture/start";
+        const r = await fetch(startUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ intervalMs: 500, postCloseMs: 0 })
+        });
+        const j = await r.json().catch(() => null);
+        if (!r.ok || !j?.ok || !j?.sessionId) {
+          throw new Error(j?.error || "Start capture mislukt");
+        }
+        takeStatus.textContent = "Wachten op foto...";
+        const ok = await waitForPicture(j.sessionId, 20000);
+        if (!ok) {
+          throw new Error("Geen foto binnen 20 seconden");
+        }
+        location.href = location.pathname + "?sessionId=" + encodeURIComponent(j.sessionId);
+      } catch (e) {
+        alert("Kon geen foto nemen: " + (e?.message || e));
+      } finally {
+        takeBtn.disabled = false;
+        takeStatus.textContent = "";
+      }
+    });
+
+
     const lb = document.getElementById("lb");
     const lbImg = document.getElementById("lbImg");
     const lbCaption = document.getElementById("lbCaption");
@@ -334,7 +415,10 @@ router.get("/:id/pictures", async (req, res) => {
       idx = (i + thumbsEls.length) % thumbsEls.length;
       const a = thumbsEls[idx];
       lbImg.src = a.href;
-      lbCaption.textContent = a.dataset.name || "";
+      const name = a.dataset.name || "";
+      const ts = a.dataset.ts || "";
+      const fts = fmtTs(ts);
+      lbCaption.textContent = fts ? (name + "  " + fts) : name;
       lb.classList.remove("hidden");
     }
 
