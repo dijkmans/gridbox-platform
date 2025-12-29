@@ -80,8 +80,16 @@ function withLegacyFields(dto) {
 }
 
 function requireCaptureBucket() {
-  const name = process.env.CAPTURE_BUCKET;
-  if (!name) throw new Error("CAPTURE_BUCKET ontbreekt (env var).");
+  const name =
+    process.env.CAPTURE_BUCKET ||
+    process.env.GCS_BUCKET ||
+    process.env.BUCKET_NAME;
+
+  if (!name) {
+    throw new Error(
+      "Capture bucket ontbreekt. Zet CAPTURE_BUCKET (aanbevolen) of gebruik GCS_BUCKET/BUCKET_NAME voor compat."
+    );
+  }
   return name;
 }
 
@@ -202,7 +210,7 @@ router.post("/:id/pictures/take", async (req, res) => {
  * boxes/<boxId>/sessions/<sessionId>/raw/*.jpg
  *
  * Vereist env var:
- * CAPTURE_BUCKET
+ * CAPTURE_BUCKET (aanbevolen) of GCS_BUCKET/BUCKET_NAME
  */
 router.get("/:id/pictures", async (req, res) => {
   try {
