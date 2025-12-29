@@ -377,34 +377,65 @@ router.get("/:id/pictures", async (req, res) => {
     const currentSessionId = "${esc(sessionId)}";
     const currentTopName = "${esc(items?.[0]?.name || "")}";
 
-    async function getNewestSessionId() {
-      try {
-        const url = "/api/boxes/" + encodeURIComponent(boxId) + "/capture/sessions?limit=2";
-        const r = await fetch(url, { cache: "no-store" });
-        if (!r.ok) return null;
-        const j = await r.json().catch(() => null);
-        const s0 = j?.sessions?.[0]?.sessionId || null;
-        return s0;
-      } catch (_) {
-        return null;
-      }
+  async function getNewestSessionId() {
+  try {
+    let token = null;
+    let newest = null;
+
+    for (let i = 0; i < 50; i++) {
+      const url =
+        "/api/boxes/" + encodeURIComponent(boxId) +
+        "/capture/sessions?limit=100" +
+        (token ? "&pageToken=" + encodeURIComponent(token) : "");
+
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) break;
+
+      const j = await r.json().catch(() => null);
+      const s0 = j?.sessions?.[0]?.sessionId || null;
+      if (s0) newest = s0;
+
+      token = j?.nextPageToken || null;
+      if (!token) break;
     }
 
-    async function getLatestPictureName(sessionId) {
-      try {
-        const url =
-          "/api/boxes/" + encodeURIComponent(boxId) +
-          "/capture/sessions/" + encodeURIComponent(sessionId) +
-          "/pictures?limit=1";
-        const r = await fetch(url, { cache: "no-store" });
-        if (!r.ok) return null;
-        const j = await r.json().catch(() => null);
-        const name = j?.items?.[0]?.name || null;
-        return name;
-      } catch (_) {
-        return null;
-      }
+    return newest;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function getLatestPictureName(sessionId) {
+  try {
+    let token = null;
+    let lastName = null;
+
+    for (let i = 0; i < 200; i++) {
+      const url =
+        "/api/boxes/" + encodeURIComponent(boxId) +
+        "/capture/sessions/" + encodeURIComponent(sessionId) +
+        "/pictures?limit=500" +
+        (token ? "&pageToken=" + encodeURIComponent(token) : "");
+
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) break;
+
+      const j = await r.json().catch(() => null);
+      const arr = Array.isArray(j?.items) ? j.items : [];
+
+      // items staan (per pagina) in oplopende volgorde, dus laatste is nieuwste binnen die pagina
+      if (arr.length) lastName = arr[arr.length - 1].name;
+
+      token = j?.nextPageToken || null;
+      if (!token) break;
     }
+
+    return lastName;
+  } catch (_) {
+    return null;
+  }
+}
+
 
     async function waitForNewPicture(timeoutMs = 20000) {
       const t0 = Date.now();
