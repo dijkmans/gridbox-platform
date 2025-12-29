@@ -171,6 +171,30 @@ PICTURES VIEWER (Portal)
 */
 
 /**
+ * POST /api/boxes/:id/pictures/take
+ * Doel: een "take_picture" command klaarzetten voor de Pi agent.
+ * Dit gebruikt dezelfde legacy boxCommands doc (1 command per box).
+ */
+router.post("/:id/pictures/take", async (req, res) => {
+  try {
+    const boxId = req.params.id;
+
+    await db.collection("boxCommands").doc(boxId).set({
+      commandId: `cmd-${Date.now()}`,
+      type: "take_picture",
+      status: "pending",
+      createdAt: new Date(),
+      payload: { source: "pictures-page" }
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("TAKE PICTURE command error:", err);
+    return res.status(500).json({ ok: false, error: "Interne serverfout" });
+  }
+});
+
+/**
  * GET /api/boxes/:id/pictures
  * Doel: de portal knop "PICTURES" laten werken zonder dat je de portal moet aanpassen.
  *
@@ -346,50 +370,77 @@ router.get("/:id/pictures", async (req, res) => {
       el.textContent = fmtTs(ts);
     });
 
-    // TAKE PICTURE (manual snapshot)
+    // TAKE PICTURE via command naar Pi
     const takeBtn = document.getElementById("take");
     const takeStatus = document.getElementById("takeStatus");
     const boxId = "${esc(boxId)}";
+    const currentSessionId = "${esc(sessionId)}";
+    const currentTopName = "${esc(items?.[0]?.name || "")}";
 
-    async function waitForPicture(sessionId, timeoutMs = 20000) {
+    async function getNewestSessionId() {
+      try {
+        const url = "/api/boxes/" + encodeURIComponent(boxId) + "/capture/sessions?limit=2";
+        const r = await fetch(url, { cache: "no-store" });
+        if (!r.ok) return null;
+        const j = await r.json().catch(() => null);
+        const s0 = j?.sessions?.[0]?.sessionId || null;
+        return s0;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    async function getLatestPictureName(sessionId) {
+      try {
+        const url =
+          "/api/boxes/" + encodeURIComponent(boxId) +
+          "/capture/sessions/" + encodeURIComponent(sessionId) +
+          "/pictures?limit=1";
+        const r = await fetch(url, { cache: "no-store" });
+        if (!r.ok) return null;
+        const j = await r.json().catch(() => null);
+        const name = j?.items?.[0]?.name || null;
+        return name;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    async function waitForNewPicture(timeoutMs = 20000) {
       const t0 = Date.now();
       while (Date.now() - t0 < timeoutMs) {
-        try {
-          const url =
-            "/api/boxes/" + encodeURIComponent(boxId) +
-            "/capture/sessions/" + encodeURIComponent(sessionId) +
-            "/pictures?limit=1";
-          const r = await fetch(url, { cache: "no-store" });
-          if (r.ok) {
-            const j = await r.json().catch(() => null);
-            if (j && j.ok && Array.isArray(j.items) && j.items.length) return true;
-          }
-        } catch (_) {}
+        // 1) eerst check: kwam er iets nieuws in de huidige session?
+        const sameName = await getLatestPictureName(currentSessionId);
+        if (sameName && sameName !== currentTopName) {
+          return { sessionId: currentSessionId };
+        }
+
+        // 2) anders: is er een nieuwe session gestart?
+        const newest = await getNewestSessionId();
+        if (newest && newest !== currentSessionId) {
+          const newName = await getLatestPictureName(newest);
+          if (newName) return { sessionId: newest };
+        }
+
         await new Promise(r => setTimeout(r, 1000));
       }
-      return false;
+      return null;
     }
 
     takeBtn?.addEventListener("click", async () => {
       takeBtn.disabled = true;
       try {
-        takeStatus.textContent = "Foto nemen...";
-        const startUrl = "/api/boxes/" + encodeURIComponent(boxId) + "/capture/start";
-        const r = await fetch(startUrl, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ intervalMs: 500, postCloseMs: 0 })
-        });
+        takeStatus.textContent = "Foto vragen...";
+        const cmdUrl = "/api/boxes/" + encodeURIComponent(boxId) + "/pictures/take";
+        const r = await fetch(cmdUrl, { method: "POST" });
         const j = await r.json().catch(() => null);
-        if (!r.ok || !j?.ok || !j?.sessionId) {
-          throw new Error(j?.error || "Start capture mislukt");
-        }
+        if (!r.ok || !j?.ok) throw new Error(j?.error || "Command mislukt");
+
         takeStatus.textContent = "Wachten op foto...";
-        const ok = await waitForPicture(j.sessionId, 20000);
-        if (!ok) {
-          throw new Error("Geen foto binnen 20 seconden");
-        }
-        location.href = location.pathname + "?sessionId=" + encodeURIComponent(j.sessionId);
+        const got = await waitForNewPicture(20000);
+        if (!got?.sessionId) throw new Error("Geen foto binnen 20 seconden");
+
+        location.href = location.pathname + "?sessionId=" + encodeURIComponent(got.sessionId);
       } catch (e) {
         alert("Kon geen foto nemen: " + (e?.message || e));
       } finally {
@@ -397,7 +448,6 @@ router.get("/:id/pictures", async (req, res) => {
         takeStatus.textContent = "";
       }
     });
-
 
     const lb = document.getElementById("lb");
     const lbImg = document.getElementById("lbImg");
