@@ -212,22 +212,51 @@ router.post("/:id/pictures/take", async (req, res) => {
  * Vereist env var:
  * CAPTURE_BUCKET (aanbevolen) of GCS_BUCKET/BUCKET_NAME
  */
+/**
+ * PICTURES VIEWER (Portal)
+ *
+ * Doel:
+ * - De portal-knop "PICTURES" laten werken zonder frontend-wijzigingen
+ * - Altijd de foto's tonen van de MEEST RECENTE capture session
+ * - Eén bron van waarheid: captureSessions
+ *
+ * Flow:
+ * 1) Zoek laatste capture session (orderBy startedAt desc, limit 1)
+ * 2) Redirect naar de correcte capture pictures route
+ */
 router.get("/:id/pictures", async (req, res) => {
   try {
     const boxId = req.params.id;
 
-    const bucketName = requireCaptureBucket();
-    const storage = new Storage();
-    const bucket = storage.bucket(bucketName);
+    // 1. Haal de meest recente capture session op
+    const sessionsSnap = await db
+      .collection("boxes")
+      .doc(boxId)
+      .collection("captureSessions")
+      .orderBy("startedAt", "desc")
+      .limit(1)
+      .get();
 
-    // Sessions zoeken in GCS (prefixes)
-    const sessionsPrefix = `boxes/${boxId}/sessions/`;
-    const [_files, _nextQuery, apiResp] = await bucket.getFiles({
-      prefix: sessionsPrefix,
-      delimiter: "/",
-      maxResults: 200,
-      autoPaginate: false
-    });
+    if (sessionsSnap.empty) {
+      return res
+        .status(404)
+        .send("Geen capture session gevonden voor deze box");
+    }
+
+    const sessionId = sessionsSnap.docs[0].id;
+
+    // 2. Redirect naar de correcte capture pictures endpoint
+    const redirectUrl =
+      `/api/boxes/${encodeURIComponent(boxId)}` +
+      `/capture/sessions/${encodeURIComponent(sessionId)}/pictures`;
+
+    return res.redirect(redirectUrl);
+  } catch (err) {
+    console.error("pictures portal redirect error", err);
+    return res.status(500).send("Pictures error");
+  }
+});
+
 
     const prefixes = apiResp?.prefixes || [];
     const sessions = prefixes
