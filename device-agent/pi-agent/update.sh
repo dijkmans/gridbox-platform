@@ -3,11 +3,18 @@ set -euo pipefail
 
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_DIR="/opt/gridbox-agent"
+SERVICE_PATH="/etc/systemd/system/gridbox-agent.service"
 
 echo "Update agent files in ${TARGET_DIR}"
 sudo cp -f "${SRC_DIR}/agent.mjs" "${TARGET_DIR}/agent.mjs"
 sudo cp -f "${SRC_DIR}/take-picture.mjs" "${TARGET_DIR}/take-picture.mjs"
 sudo cp -f "${SRC_DIR}/CURRENT.txt" "${TARGET_DIR}/CURRENT.txt"
+
+# als service bestaat in repo, update die ook
+if [ -f "${SRC_DIR}/gridbox-agent.service" ]; then
+  sudo cp -f "${SRC_DIR}/gridbox-agent.service" "${SERVICE_PATH}"
+  sudo systemctl daemon-reload
+fi
 
 echo "Restart service"
 sudo systemctl restart gridbox-agent
