@@ -1,0 +1,41 @@
+{
+  "boxId": "gbox-001",
+  "apiBaseUrl": "https://gridbox-api-960191535038-zp2ouyrhka-ew.a.run.app",
+
+  "pollMs": 200,
+  "abortCheckMs": 100,
+  "openDurationMs": 30000,
+  "closeDurationMs": 30000,
+  "reverseDelayMs": 500,
+  "lightAfterCloseMs": 30000,
+
+  "device": {
+    "deviceId": "pg-geel-pi-01",
+    "agentName": "Gridbox Agent"
+  },
+
+  "hardware": {
+    "mode": "i2c",
+    "i2cBus": 1,
+    "i2cAddress": "0x10",
+    "activeHigh": true,
+    "openRelay": 1,
+    "closeRelay": 3,
+    "lightRelay": 2
+  },
+
+  "camera": {
+    "enabled": true,
+    "url": "http://192.168.10.100/cgi-bin/snapshot.cgi",
+    "user": "admin",
+    "pass": "CHANGE_ME",
+    "intervalSec": 3,
+    "postCloseSec": 30,
+    "dedupe": {
+      "enabled": false,
+      "threshold": 3,
+      "minKeepMs": 10000,
+      "maskBottomPct": 0
+    }
+  }
+}

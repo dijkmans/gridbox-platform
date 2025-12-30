@@ -8,6 +8,9 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
+_local/
+
+
 ############################
 # Runtime & process files
 ############################
@@ -77,6 +80,10 @@ raspberry-pi/agent/runtime_DISABLED/
 raspberry-pi/agent/runtime/
 test.js
 *.tmp
+
+# Pi agent secrets en exports
+device-agent/pi-agent/config.json
+gridbox-agent-current-export*.txt
 
 ############################
 # IDE / OS

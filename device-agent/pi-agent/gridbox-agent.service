@@ -1,0 +1,19 @@
+[Unit]
+Description=Gridbox Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/node /opt/gridbox-agent/agent.mjs
+WorkingDirectory=/opt/gridbox-agent
+Restart=always
+RestartSec=2
+Environment=NODE_ENV=production
+Environment=BOX_ID=gbox-001
+Environment=API_BASE=https://gridbox-api-960191535038.europe-west1.run.app
+Environment=CAMERA_SNAPSHOT_URL=http://admin:victoria1@192.168.10.100/cgi-bin/snapshot.cgi
+
+
+[Install]
+WantedBy=multi-user.target
