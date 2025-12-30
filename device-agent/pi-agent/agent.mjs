@@ -318,7 +318,7 @@ async function main(){
   const postCloseMs = Math.max(0, Number(cfg.camera?.postCloseSec ?? 30) * 1000);
 
   const dedupeCfg = cfg.camera?.dedupe || {};
-  const dedupeEnabled = false;
+  const dedupeEnabled = (dedupeCfg.enabled === true);
   const dedupeThreshold = Math.max(0, Number(dedupeCfg.threshold ?? 3));
   const dedupeMinKeepMs = Math.max(0, Number(dedupeCfg.minKeepMs ?? 10000));
   const dedupeMaskBottomPct = Math.max(0, Math.min(90, Number(dedupeCfg.maskBottomPct ?? 0)));
@@ -330,6 +330,11 @@ async function main(){
     if (!dedupeEnabled) return { skip: false, dist: null, hash: null, bucket: null };
 
     const b = phaseBucket(phase);
+  const p = String(phase || "").toLowerCase();
+  if (p.includes("opening") || p.includes("closing")){
+    return { skip: false, dist: null, hash: null, bucket: b };
+  }
+
     const h = dhashHexFromJpeg(jpgBuf, dedupeMaskBottomPct);
     if (!h) return { skip: false, dist: null, hash: null, bucket: b };
 
