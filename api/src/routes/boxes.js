@@ -182,20 +182,63 @@ PICTURES VIEWER (Portal)
  * POST /api/boxes/:id/pictures/take
  * Doel: een "take_picture" command klaarzetten voor de Pi agent.
  * Dit gebruikt dezelfde legacy boxCommands doc (1 command per box).
+ *
+ * Belangrijk:
+ * - we geven de sessionId mee die de portal op dit moment bekijkt
+ * - zo komt de nieuwe foto altijd in hetzelfde overzicht terecht
  */
 router.post("/:id/pictures/take", async (req, res) => {
   try {
     const boxId = req.params.id;
+
+    // sessionId kan meegegeven worden als query of JSON body
+    let sessionId = null;
+    const candidate = (req.query.sessionId ?? req.body?.sessionId ?? "")
+      .toString()
+      .trim();
+
+    if (candidate) {
+      // simpele sanitizing (geen rare tekens)
+      if (/^[a-zA-Z0-9_-]+$/.test(candidate)) {
+        sessionId = candidate;
+      }
+    }
+
+    // fallback: als er geen sessionId meegegeven is, pak de nieuwste session uit GCS
+    if (!sessionId) {
+      const storage = new Storage();
+      const bucketName = requireCaptureBucket();
+      const bucket = storage.bucket(bucketName);
+      const sessionsPrefix = `boxes/${boxId}/sessions/`;
+
+      const [, , apiResp] = await bucket.getFiles({
+        prefix: sessionsPrefix,
+        delimiter: "/",
+        autoPaginate: false,
+        maxResults: 500
+      });
+
+      const prefixes = apiResp?.prefixes || [];
+      const sessions = prefixes
+        .map(p => p.slice(sessionsPrefix.length).replace(/\/$/, ""))
+        .filter(Boolean)
+        .sort((a, b) => b.localeCompare(a));
+
+      sessionId = sessions[0] || null;
+    }
 
     await db.collection("boxCommands").doc(boxId).set({
       commandId: `cmd-${Date.now()}`,
       type: "take_picture",
       status: "pending",
       createdAt: new Date(),
-      payload: { source: "pictures-page" }
+      payload: {
+        source: "pictures-page",
+        sessionId
+      }
     });
 
-    return res.json({ ok: true });
+    return res.json({ ok: true, sessionId });
   } catch (err) {
     console.error("TAKE PICTURE command error:", err);
     return res.status(500).json({ ok: false, error: "Interne serverfout" });
@@ -212,51 +255,23 @@ router.post("/:id/pictures/take", async (req, res) => {
  * Vereist env var:
  * CAPTURE_BUCKET (aanbevolen) of GCS_BUCKET/BUCKET_NAME
  */
-/**
- * PICTURES VIEWER (Portal)
- *
- * Doel:
- * - De portal-knop "PICTURES" laten werken zonder frontend-wijzigingen
- * - Altijd de foto's tonen van de MEEST RECENTE capture session
- * - Eén bron van waarheid: captureSessions
- *
- * Flow:
- * 1) Zoek laatste capture session (orderBy startedAt desc, limit 1)
- * 2) Redirect naar de correcte capture pictures route
- */
 router.get("/:id/pictures", async (req, res) => {
   try {
     const boxId = req.params.id;
 
-    // 1. Haal de meest recente capture session op
-    const sessionsSnap = await db
-      .collection("boxes")
-      .doc(boxId)
-      .collection("captureSessions")
-      .orderBy("startedAt", "desc")
-      .limit(1)
-      .get();
+    const storage = new Storage();
+    const bucketName = requireCaptureBucket();
+    const bucket = storage.bucket(bucketName);
 
-    if (sessionsSnap.empty) {
-      return res
-        .status(404)
-        .send("Geen capture session gevonden voor deze box");
-    }
+    const sessionsPrefix = `boxes/${boxId}/sessions/`;
 
-    const sessionId = sessionsSnap.docs[0].id;
-
-    // 2. Redirect naar de correcte capture pictures endpoint
-    const redirectUrl =
-      `/api/boxes/${encodeURIComponent(boxId)}` +
-      `/capture/sessions/${encodeURIComponent(sessionId)}/pictures`;
-
-    return res.redirect(redirectUrl);
-  } catch (err) {
-    console.error("pictures portal redirect error", err);
-    return res.status(500).send("Pictures error");
-  }
-});
-
+    // sessies ophalen via "delimiter" zodat we enkel de mappen krijgen
+    const [, , apiResp] = await bucket.getFiles({
+      prefix: sessionsPrefix,
+      delimiter: "/",
+      autoPaginate: false,
+      maxResults: 500
+    });
 
     const prefixes = apiResp?.prefixes || [];
     const sessions = prefixes
@@ -286,20 +301,13 @@ router.get("/:id/pictures", async (req, res) => {
       .filter(f => f.name.endsWith(".jpg"))
       .sort((a, b) => b.name.localeCompare(a.name)); // nieuwste eerst
 
-    if (!jpgs.length) {
-      res.setHeader("content-type", "text/html; charset=utf-8");
-      return res
-        .status(404)
-        .send(`<h1>Geen foto's gevonden</h1><p>Box: ${esc(boxId)}<br>Session: ${esc(sessionId)}</p>`);
-    }
-
     // Signed URLs maken (10 min geldig)
     const expires = Date.now() + 10 * 60 * 1000;
     const items = await Promise.all(
       jpgs.map(async f => {
         const name = f.name.split("/").pop();
         const [url] = await f.getSignedUrl({ action: "read", expires });
-        const ts = (f.metadata?.metadata?.ts || f.metadata?.timeCreated || f.metadata?.updated || null);
+        const ts = f.metadata?.metadata?.ts || f.metadata?.timeCreated || f.metadata?.updated || null;
         return { name, url, ts };
       })
     );
@@ -414,19 +422,6 @@ router.get("/:id/pictures", async (req, res) => {
     const currentSessionId = "${esc(sessionId)}";
     const currentTopName = "${esc(items?.[0]?.name || "")}";
 
-    async function getNewestSessionId() {
-      try {
-        const url = "/api/boxes/" + encodeURIComponent(boxId) + "/capture/sessions?limit=2";
-        const r = await fetch(url, { cache: "no-store" });
-        if (!r.ok) return null;
-        const j = await r.json().catch(() => null);
-        const s0 = j?.sessions?.[0]?.sessionId || null;
-        return s0;
-      } catch (_) {
-        return null;
-      }
-    }
-
     async function getLatestPictureName(sessionId) {
       try {
         const url =
@@ -443,41 +438,37 @@ router.get("/:id/pictures", async (req, res) => {
       }
     }
 
-    async function waitForNewPicture(timeoutMs = 20000) {
+    async function waitForNewPicture(sessionId, beforeName, timeoutMs = 20000) {
       const t0 = Date.now();
       while (Date.now() - t0 < timeoutMs) {
-        // 1) eerst check: kwam er iets nieuws in de huidige session?
-        const sameName = await getLatestPictureName(currentSessionId);
-        if (sameName && sameName !== currentTopName) {
-          return { sessionId: currentSessionId };
-        }
-
-        // 2) anders: is er een nieuwe session gestart?
-        const newest = await getNewestSessionId();
-        if (newest && newest !== currentSessionId) {
-          const newName = await getLatestPictureName(newest);
-          if (newName) return { sessionId: newest };
-        }
-
+        const name = await getLatestPictureName(sessionId);
+        if (name && name !== beforeName) return true;
         await new Promise(r => setTimeout(r, 1000));
       }
-      return null;
+      return false;
     }
 
     takeBtn?.addEventListener("click", async () => {
       takeBtn.disabled = true;
       try {
+        const targetSessionId = sel.value || currentSessionId;
+
         takeStatus.textContent = "Foto vragen...";
-        const cmdUrl = "/api/boxes/" + encodeURIComponent(boxId) + "/pictures/take";
+        const beforeName = await getLatestPictureName(targetSessionId) || currentTopName;
+
+        const cmdUrl =
+          "/api/boxes/" + encodeURIComponent(boxId) +
+          "/pictures/take?sessionId=" + encodeURIComponent(targetSessionId);
+
         const r = await fetch(cmdUrl, { method: "POST" });
         const j = await r.json().catch(() => null);
         if (!r.ok || !j?.ok) throw new Error(j?.error || "Command mislukt");
 
         takeStatus.textContent = "Wachten op foto...";
-        const got = await waitForNewPicture(20000);
-        if (!got?.sessionId) throw new Error("Geen foto binnen 20 seconden");
+        const ok = await waitForNewPicture(targetSessionId, beforeName, 20000);
+        if (!ok) throw new Error("Geen foto binnen 20 seconden");
 
-        location.href = location.pathname + "?sessionId=" + encodeURIComponent(got.sessionId);
+        location.href = location.pathname + "?sessionId=" + encodeURIComponent(targetSessionId);
       } catch (e) {
         alert("Kon geen foto nemen: " + (e?.message || e));
       } finally {
