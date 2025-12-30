@@ -1,4 +1,4 @@
-﻿import fs from "fs";
+import fs from "fs";
 import jpeg from "jpeg-js";
 import os from "os";
 import https from "https";
@@ -64,7 +64,7 @@ function readCfg(){
   cfg.camera.postCloseSec ??= 30;
 
   cfg.camera.dedupe = cfg.camera.dedupe || {};
-  cfg.camera.dedupe.enabled ??= false;
+  cfg.camera.dedupe.enabled ??= true;
   cfg.camera.dedupe.threshold ??= 3;     // lager = strenger (minder weg), hoger = meer weg
   cfg.camera.dedupe.minKeepMs ??= 10000; // minstens 1 foto per 10s bewaren
   cfg.camera.dedupe.maskBottomPct ??= 0; // als je ooit toch een balk wil negeren (0 = niets)
@@ -318,7 +318,7 @@ async function main(){
   const postCloseMs = Math.max(0, Number(cfg.camera?.postCloseSec ?? 30) * 1000);
 
   const dedupeCfg = cfg.camera?.dedupe || {};
-  const dedupeEnabled = (dedupeCfg.enabled === true);
+  const dedupeEnabled = false;
   const dedupeThreshold = Math.max(0, Number(dedupeCfg.threshold ?? 3));
   const dedupeMinKeepMs = Math.max(0, Number(dedupeCfg.minKeepMs ?? 10000));
   const dedupeMaskBottomPct = Math.max(0, Math.min(90, Number(dedupeCfg.maskBottomPct ?? 0)));
@@ -330,11 +330,6 @@ async function main(){
     if (!dedupeEnabled) return { skip: false, dist: null, hash: null, bucket: null };
 
     const b = phaseBucket(phase);
-  const p = String(phase || "").toLowerCase();
-  if (p.includes("opening") || p.includes("closing")){
-    return { skip: false, dist: null, hash: null, bucket: b };
-  }
-
     const h = dhashHexFromJpeg(jpgBuf, dedupeMaskBottomPct);
     if (!h) return { skip: false, dist: null, hash: null, bucket: b };
 
