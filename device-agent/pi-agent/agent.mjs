@@ -1,4 +1,4 @@
-import fs from "fs";
+﻿import fs from "fs";
 import jpeg from "jpeg-js";
 import os from "os";
 import https from "https";
@@ -64,7 +64,7 @@ function readCfg(){
   cfg.camera.postCloseSec ??= 30;
 
   cfg.camera.dedupe = cfg.camera.dedupe || {};
-  cfg.camera.dedupe.enabled ??= true;
+  cfg.camera.dedupe.enabled ??= false;
   cfg.camera.dedupe.threshold ??= 3;     // lager = strenger (minder weg), hoger = meer weg
   cfg.camera.dedupe.minKeepMs ??= 10000; // minstens 1 foto per 10s bewaren
   cfg.camera.dedupe.maskBottomPct ??= 0; // als je ooit toch een balk wil negeren (0 = niets)
