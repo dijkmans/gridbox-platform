@@ -102,3 +102,7 @@ Thumbs.db
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# lokale exports (nooit committen)
+device-agent/pi-agent/*export*.txt
+
