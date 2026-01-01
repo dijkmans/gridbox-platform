@@ -1,0 +1,2037 @@
+﻿<!DOCTYPE html>
+
+<script type="text/plain" id="worknotes">
+Aanpassingen gebeuren altijd binnen zoâ€™n blok.
+
+WAT ALTIJD MOET BLIJVEN WERKEN
+- Event listeners
+- Dynamische updates
+- Formulieren
+- Firestore / API koppelingen
+- Navigatie en zichtbaarheid van secties
+
+CONTROLE NA WIJZIGING
+Na elke wijziging controleren:
+- Werkt alles nog zoals voorheen?
+- Zijn er idâ€™s of classes gewijzigd?
+- Kan bestaande logica hierdoor breken?
+
+BIJ TWIJFEL
+Niet aanpassen. Eerst uitleggen waar het risico zit.
+
+=====================================================
+EINDE WERKAFSPRAKEN
+=====================================================
+
+  Deze versie is dezelfde functionaliteit als je origineel,
+  maar beter gegroepeerd met duidelijke blokken en secties.
+  Bronbestand: index (19).html
+  Datum: 2025-12-22
+-->
+</script>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gridbox Portal v1</title>
+
+  <style>
+    
+    /* =========================================================
+       CSS OVERZICHT
+       1) Design tokens
+       2) Base
+       3) Layout
+       4) Toolbar
+       5) Cards + pills
+       6) Side panel
+       7) Tabellen en formulieren
+       8) Responsive
+       ========================================================= */
+    /* 1) Design tokens */
+
+:root{
+      --primary:#6d28d9;
+      --ok:#22c55e;
+      --warn:#eab308;
+      --bad:#ef4444;
+
+      --bg:#f8fafc;
+      --panel:#ffffff;
+      --ink:#0f172a;
+      --muted:#64748b;
+
+      --border:#e5e7eb;
+
+      --chip:#f4eefe;
+
+      --shadow:0 2px 10px rgba(0,0,0,.08);
+      --radius:16px;
+    }
+
+    /* 2) Base */
+
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--ink);
+      font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,'Helvetica Neue',Arial;
+    }
+
+    body.lock-scroll{
+      overflow:hidden;
+      touch-action:none;
+    }
+
+    /* 3) Layout */
+
+    .app{
+      display:grid;
+      grid-template-columns: 1fr 560px;
+      min-height:100vh;
+    }
+    .app.is-collapsed{ grid-template-columns: 1fr 360px; }
+    .app.is-expanded{ grid-template-columns: 1fr 760px; }
+
+    .main{
+      padding:18px 18px 28px;
+      overflow:auto;
+      border-right:1px solid #f1f5f9;
+    }
+
+    /* 4) Toolbar */
+
+    .toolbar{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:14px;
+    }
+
+    .brand{
+      font-weight:800;
+      font-size:20px;
+      letter-spacing:.3px;
+      white-space:nowrap;
+    }
+
+    .toolbar__right{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    #customerFilter,#locationFilter,#search{
+      padding:10px 12px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:#fff;
+      font:inherit;
+    }
+    #search{min-width:260px}
+
+    /* 5) Cards + pills */
+
+    .gb-section{margin-bottom:20px}
+    .gb-section__title{
+      font-weight:800;
+      margin:10px 0 10px 4px;
+      font-size:18px;
+    }
+    .gb-list{display:grid;gap:12px}
+
+    .gb-card{
+      display:grid;
+      grid-template-columns:64px 1fr auto;
+      gap:12px;
+      align-items:stretch;
+      background:#fff;
+      border:1px solid #eee;
+      border-left:6px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:12px;
+      cursor:pointer;
+    }
+    .gb-card.is-selected{
+  outline:3px solid var(--primary);
+  outline-offset:2px;
+  background:#faf7ff;
+  box-shadow:0 6px 20px rgba(109,40,217,.18);
+}
+
+
+    .gb-shutter{
+      position:relative;
+      width:56px;height:56px;
+      border-radius:12px;
+      background:#f3f4f6;
+      overflow:hidden;
+      box-shadow:inset 0 0 0 1px var(--border);
+      cursor:default;
+    }
+    .gb-shutter__door{
+      position:absolute;
+      inset:0;
+      background-image:url('https://gridbox.eu/images/f5b43959-ec7d-4fbe-9a38-1324a9617cf3_biss.png');
+      background-repeat:repeat-y;
+      background-size:100% auto;
+      transition:transform 5s cubic-bezier(.2,.7,.2,1);
+      transform:translateY(0);
+    }
+    .gb-card.is-open .gb-shutter__door{ transform:translateY(-100%); }
+
+    .gb-head{
+      display:grid;
+      grid-template-columns:1fr auto auto;
+      gap:8px;
+      align-items:center;
+      margin-bottom:6px;
+    }
+    .gb-site{font-weight:800; font-size:16px}
+    .gb-box{font-weight:800;color:#111827}
+    .gb-time{font-size:.85rem;color:var(--muted)}
+
+    .gb-meta{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+      margin:6px 0 0;
+    }
+
+    .pill{
+      display:inline-flex;
+      gap:6px;
+      align-items:center;
+      padding:4px 10px;
+      border-radius:999px;
+      font-size:12px;
+      border:1px solid var(--border);
+      background:#f8fafc;
+      color:#111827;
+      white-space:nowrap;
+    }
+    .pill.ok{border-color:#bbf7d0;background:#f0fdf4}
+    .pill.warn{border-color:#fde68a;background:#fffbeb}
+    .pill.bad{border-color:#fecaca;background:#fef2f2}
+    .pill .dot{width:8px;height:8px;border-radius:99px;background:#94a3b8;flex:0 0 auto}
+    .pill.ok .dot{background:var(--ok)}
+    .pill.warn .dot{background:var(--warn)}
+    .pill.bad .dot{background:var(--bad)}
+    .pill.ghost{background:#fff;border-style:dashed;color:var(--muted)}
+
+    .gb-phones{
+      margin:10px 0 0;
+      padding-left:18px;
+      color:#111827;
+    }
+    .gb-phones li{line-height:1.35}
+
+    .gb-actions{
+      display:grid;
+      grid-template-rows:auto auto;
+      gap:8px;
+      min-width:240px;
+      align-items:start;
+      justify-items:stretch;
+      cursor:default;
+    }
+    .gb-actions .gb-row{
+      display:flex;
+      gap:8px;
+      justify-content:space-between;
+      flex-wrap:wrap;
+    }
+
+    .btn,.btn-ghost{
+      border-radius:12px;
+      padding:10px 12px;
+      border:1px solid var(--border);
+      cursor:pointer;
+      font:inherit;
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn{
+      background:var(--primary);
+      color:#fff;
+      border:none;
+    }
+    .btn:active{transform:translateY(1px)}
+    .btn-ghost{
+      background:var(--chip);
+    }
+    .btn-ghost:hover{filter:brightness(.98)}
+
+    .btn-small{
+      padding:9px 12px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:var(--primary);
+      color:#fff;
+      cursor:pointer;
+      font:inherit;
+    }
+    .btn-small.btn-ghost{
+      background:var(--chip);
+      color:inherit;
+    }
+
+    .right{display:flex;justify-content:flex-end}
+    .muted{color:var(--muted)}
+
+    .badge{
+      display:inline-block;
+      padding:2px 8px;
+      border-radius:999px;
+      border:1px solid #ddd;
+      font-size:11px;
+      color:#6b7280;
+      background:#f3f4f6;
+      white-space:nowrap;
+    }
+
+    .side{
+      background:var(--panel);
+      overflow:auto;
+      box-shadow:-10px 0 30px rgba(0,0,0,.08);
+      border-left:1px solid #f1f5f9;
+    }
+
+    /* 6) Side panel */
+
+    .side-header{
+      position:sticky;
+      top:0;
+      z-index:5;
+      background:var(--panel);
+      border-bottom:1px solid #f1f5f9;
+      padding:14px 14px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+    }
+
+    .side-title{font-weight:800;font-size:16px;margin:0}
+    .side-sub{color:var(--muted);font-size:12px;margin-top:2px}
+
+    .side-actions{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+
+    .side-body{padding:14px 14px 18px}
+
+    .block{
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px;
+      background:#fff;
+      margin-bottom:12px;
+    }
+    .block h4{margin:0 0 10px;font-size:14px}
+
+    .chip{
+      display:inline-block;
+      background:#eef2ff;
+      border:1px solid #e0e7ff;
+      color:#3730a3;
+      border-radius:999px;
+      padding:2px 8px;
+      font-size:.75rem;
+    }
+
+    .kv{
+      display:grid;
+      grid-template-columns:140px 1fr;
+      gap:8px;
+      font-size:13px;
+    }
+    .kv div{padding:3px 0}
+
+    .status-pill{
+      display:inline-block;
+      border-radius:999px;
+      padding:4px 10px;
+      font-size:12px;
+      border:1px solid var(--border);
+      background:#f8fafc;
+    }
+    .status-pill.ok{border-color:#bbf7d0;background:#f0fdf4}
+    .status-pill.warn{border-color:#fde68a;background:#fffbeb}
+    .status-pill.bad{border-color:#fecaca;background:#fef2f2}
+
+    .hint{
+      color:var(--muted);
+      font-size:12px;
+      margin-left:6px;
+      white-space:nowrap;
+    }
+
+    .form-row{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+      margin-bottom:10px;
+    }
+
+    .field{display:flex;flex-direction:column;gap:6px}
+    .field input,.field textarea{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px;
+      background:#fff;
+      font:inherit;
+    }
+    .field label{font-weight:700;color:#111827;font-size:12px}
+    .check{display:flex;align-items:center;gap:8px;margin:8px 0 0}
+
+    /* 7) Tabellen en formulieren */
+
+    table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    th{
+      font-weight:700;
+      text-align:left;
+      color:var(--muted);
+      font-size:12px;
+      padding:0 8px;
+      white-space:nowrap;
+    }
+    td{
+      background:#fff;
+      border:1px solid var(--border);
+      padding:10px 8px;
+      vertical-align:top;
+      font-size:13px;
+    }
+    td:first-child{
+      border-top-left-radius:12px;
+      border-bottom-left-radius:12px;
+      width:150px;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    td:last-child{
+      border-top-right-radius:12px;
+      border-bottom-right-radius:12px;
+    }
+
+    .phone-list{margin:0;padding-left:16px}
+    .phone-list li{margin:6px 0;color:#111827}
+
+    #btnCloseSide{display:none;}
+
+    .backdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(15,23,42,.35);
+      opacity:0;
+      pointer-events:none;
+      transition:opacity .2s ease;
+      z-index:40;
+    }
+    .backdrop.is-open{opacity:1;pointer-events:auto}
+
+    .access-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .access-left{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+    .access-title{
+      font-weight:800;
+      font-size:14px;
+      color:#111827;
+    }
+    .access-sub{
+      color:var(--muted);
+      font-size:12px;
+    }
+    .access-right{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .badge.big{
+      font-size:12px;
+      padding:4px 10px;
+      border-radius:999px;
+      background:#fff;
+      border:1px solid var(--border);
+      color:#111827;
+    }
+
+    /* 8) Responsive */
+
+    @media (max-width: 980px){
+      .app, .app.is-collapsed, .app.is-expanded{ grid-template-columns: 1fr; }
+
+      .side{
+        position:fixed;
+        top:0;right:0;bottom:0;
+        width:min(92vw,720px);
+        transform:translateX(110%);
+        transition:transform .24s ease;
+        z-index:50;
+      }
+      .side.is-open{ transform:translateX(0); }
+      .side.is-wide{ width:100vw; }
+
+      #btnCloseSide{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+      }
+
+      .form-row{grid-template-columns:1fr}
+    }
+
+    @media (max-width: 640px){
+      .main{ padding:14px 14px 24px; }
+
+      .toolbar{flex-direction:column;align-items:flex-start;gap:10px}
+      .toolbar__right{width:100%;justify-content:flex-start}
+
+      #customerFilter,#locationFilter{width:calc(50% - 5px)}
+      #search{min-width:0;width:100%}
+
+      .gb-card{grid-template-columns:64px 1fr;grid-template-rows:auto auto}
+      .gb-actions{grid-column:1 / -1;min-width:0;grid-template-rows:auto}
+      .gb-actions .btn{width:100%}
+      .gb-actions .gb-row{width:100%;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+      .gb-actions .gb-row .btn-ghost{width:100%;padding:10px 8px}
+
+      .gb-head{grid-template-columns:1fr auto}
+      .gb-time{grid-column:1 / -1}
+
+      .gb-phones{display:none}
+      .pill{padding:4px 9px}
+    }
+  </style>
+</head>
+
+<body>
+    <div id="app" class="app is-collapsed">
+    <main class="main">
+      <div class="toolbar">
+        <div class="brand">Gridbox</div>
+
+        <div class="toolbar__right">
+          <select id="customerFilter" aria-label="Klant filter">
+            <option value="all">Alle klanten</option>
+          </select>
+
+          <select id="locationFilter" aria-label="Locatie filter">
+            <option value="all">Alle locaties</option>
+          </select>
+
+          <input id="search" type="search" placeholder="Zoek op box, site of telefoon..." aria-label="Zoeken"/>
+        </div>
+      </div>
+
+      <div id="sections" aria-live="polite"></div>
+    </main>
+
+    <aside id="side" class="side" aria-label="Detail">
+      <div class="side-header">
+        <div>
+          <div class="side-title" id="sideTitle">Selecteer een Gridbox</div>
+          <div class="side-sub" id="sideSub">Tik op een kaart links</div>
+        </div>
+        <div class="side-actions">
+          <button id="btnCollapse" class="btn-ghost" type="button" title="Smaller">Smaller</button>
+          <button id="btnExpand" class="btn-ghost" type="button" title="Breder">Breder</button>
+          <button id="btnCloseSide" class="btn" type="button" title="Sluiten">Sluiten</button>
+        </div>
+      </div>
+
+      <div class="side-body">
+
+        <div class="block" id="blockAccess">
+          <h4>Toegang</h4>
+          <div class="access-row">
+            <div class="access-left">
+              <div class="access-title">Shares</div>
+              <div class="access-sub">Beheer wie toegang heeft tot deze box.</div>
+            </div>
+            <div class="access-right">
+              <span id="kvSharesCount" class="badge big" title="Aantal shares (van de backend)">shares -</span>
+              <button id="btnGoShares" class="btn-small" type="button">Shares beheren</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="block" id="blockShares">
+          <h4>Shares</h4>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="sharePhone">Telefoon</label>
+              <input id="sharePhone" placeholder="+32..." inputmode="tel" />
+            </div>
+            <div class="field">
+              <label for="shareExpires">Vervalt op</label>
+              <input id="shareExpires" placeholder="bv 19/12/2025 22:00" />
+            </div>
+          </div>
+
+          <div class="field" style="margin-bottom:10px">
+            <label for="shareComment">Commentaar</label>
+            <input id="shareComment" placeholder="bv Afhaling..." />
+          </div>
+
+          <label class="check">
+            <input type="checkbox" id="shareAuth"/>
+            <span>Gemachtigd (niet zichtbaar in overzicht)</span>
+          </label>
+
+          <div class="right" style="margin:12px 0">
+            <button id="shareAdd" class="btn-small" type="button">Add Share</button>
+          </div>
+
+          <div style="overflow:auto">
+            <table id="sharesTable" aria-label="Shares tabel">
+              <thead>
+                <tr>
+                  <th>Tijd</th>
+                  <th>Telefoon</th>
+                  <th>Commentaar</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="block" id="blockStatus">
+          <h4>Status</h4>
+
+          <div class="kv">
+            <div class="muted">Klant</div>
+            <div title="De organisatie die deze box beheert.">
+              <span id="kvCustomer">-</span><span class="hint">(organisatie)</span>
+            </div>
+
+            <div class="muted">Locatie</div>
+            <div title="De plaats waar deze Gridbox staat.">
+              <span id="kvSite">-</span><span class="hint">(site)</span>
+            </div>
+
+            <div class="muted">Box</div>
+            <div title="Het nummer van deze Gridbox binnen de locatie.">
+              <span id="kvBox">-</span><span class="hint">(box nr)</span>
+            </div>
+
+            <div class="muted">Adres</div>
+            <div title="Adres waar de Gridbox staat.">
+              <span id="kvAddress">-</span><span class="hint">(adres)</span>
+            </div>
+
+            <div class="muted">Actief</div>
+            <div title="Portal.active uit Firestore.">
+              <span id="kvActive">-</span><span class="hint">(portal)</span>
+            </div>
+
+            <div class="muted">24/7</div>
+            <div title="box.access24h uit Firestore.">
+              <span id="kvAccess24h">-</span><span class="hint">(toegang)</span>
+            </div>
+
+            <div class="muted">Type</div>
+            <div title="box.type uit Firestore.">
+              <span id="kvType">-</span><span class="hint">(box)</span>
+            </div>
+
+            <div class="muted">Beschrijving</div>
+            <div title="box.description uit Firestore.">
+              <span id="kvDescription">-</span><span class="hint">(box)</span>
+            </div>
+
+            <div class="muted">Lifecycle</div>
+            <div title="lifecycle.state uit Firestore.">
+              <span id="kvLifecycleState">-</span><span class="hint">(open of closed)</span>
+            </div>
+
+            <div class="muted">Opened</div>
+            <div title="lifecycle.openedAt en openedBy.">
+              <span id="kvOpened">-</span><span class="hint">(tijd en nr)</span>
+            </div>
+
+            <div class="muted">Closed</div>
+            <div title="lifecycle.closedAt en closedBy.">
+              <span id="kvClosed">-</span><span class="hint">(tijd en nr)</span>
+            </div>
+
+            <div class="muted">Source</div>
+            <div title="lifecycle.source uit Firestore.">
+              <span id="kvSource">-</span><span class="hint">(bv sms)</span>
+            </div>
+
+            <div class="muted">Agent</div>
+            <div title="Versie of naam van de controller software in deze box.">
+              <span id="kvAgent">-</span><span class="hint">(software)</span>
+            </div>
+
+            <div class="muted">Profile</div>
+            <div title="Hardwareprofiel (aansluitingen).">
+              <span id="kvProfile">-</span><span class="hint">(hardware)</span>
+            </div>
+
+            <div class="muted">Last seen</div>
+            <div title="Laatste contact van de box controller.">
+              <span id="kvSeen">-</span><span class="hint">(laatst online)</span>
+            </div>
+
+            <div class="muted">Online</div>
+            <div title="Online is recent contact. Offline is langer geen contact.">
+              <span id="kvStatus" class="status-pill">-</span><span class="hint">(verbinding)</span>
+            </div>
+
+            <div class="muted">Geo</div>
+            <div title="location.geo uit Firestore.">
+              <span id="kvGeo">-</span><span class="hint">(coordinaten)</span>
+            </div>
+          </div>
+
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" id="btnOpen" type="button">OPEN</button>
+            <button class="btn-ghost" id="btnClose" type="button">CLOSE</button>
+          </div>
+
+          <div style="margin-top:10px">
+            <span class="chip">Beheeractie wordt gelogd als portaal</span>
+          </div>
+        </div>
+
+        <div class="block" id="blockPhones">
+          <h4>Telefoons</h4>
+          <div class="muted" style="font-size:12px;margin:-4px 0 10px;">
+            Overzicht gelinkte nummers.
+          </div>
+          <ul id="sidePhones" class="phone-list">
+            <li class="muted">Geen gegevens</li>
+          </ul>
+        </div>
+
+        <div class="block" id="blockEvents">
+  <h4>Events</h4>
+  <div id="eventsList" class="muted">Nog geen events geladen</div>
+  <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn-ghost" id="btnEvents" type="button">Open events</button>
+    <button class="btn-ghost" id="btnPictures" type="button">Open pictures</button>
+    <button class="btn" id="btnTakePicture" type="button">TAKE PICTURE</button>
+  </div>
+</div>
+
+
+  <div id="backdrop" class="backdrop" aria-hidden="true"></div>
+
+  <script>
+    
+    /* =========================================================
+       JS OVERZICHT
+       1) Config en helpers
+       2) DOM refs en state
+       3) Side panel open/sluit (desktop en mobiel)
+       4) Rendering cards en sections
+       5) API calls
+       6) Filters
+       7) Side panel details
+       8) Shares UI
+       9) Card acties (open, close, events, pictures)
+       10) Init
+       ========================================================= */
+(function(){
+
+      // =========================================================
+      // 1) Config en helpers
+      // =========================================================
+      const API_BASE = "https://gridbox-api-960191535038-zp2ouyrhka-ew.a.run.app";
+      const apiUrl = (path) => {
+        const base = (API_BASE || "").replace(/\/$/, "");
+        return base + path;
+      };
+
+      // =========================================================
+      // 2) DOM refs en state
+      // =========================================================
+
+      const app = document.getElementById('app');
+      const side = document.getElementById('side');
+      const backdrop = document.getElementById('backdrop');
+
+      const sectionsWrap = document.getElementById('sections');
+
+      // =========================================================
+      // 3) Side panel open/sluit
+      // =========================================================
+
+      function isOverlayMode(){
+        return !!(window.matchMedia && window.matchMedia('(max-width: 980px)').matches);
+      }
+
+      function openSide(){
+        side.classList.add('is-open');
+        if (isOverlayMode()){
+          backdrop.classList.add('is-open');
+          document.body.classList.add('lock-scroll');
+        }
+      }
+
+      function closeSide(){
+        side.classList.remove('is-open');
+        backdrop.classList.remove('is-open');
+        document.body.classList.remove('lock-scroll');
+
+        side.classList.remove('is-wide');
+        app.classList.remove('is-expanded');
+      }
+
+      backdrop.addEventListener('click', closeSide);
+      document.getElementById('btnCloseSide').addEventListener('click', closeSide);
+
+      document.getElementById('btnCollapse').addEventListener('click', ()=>{
+        side.classList.remove('is-wide');
+        app.classList.remove('is-expanded');
+        app.classList.add('is-collapsed');
+      });
+
+      document.getElementById('btnExpand').addEventListener('click', ()=>{
+        app.classList.remove('is-collapsed');
+        app.classList.add('is-expanded');
+      });
+
+      window.addEventListener('resize', ()=>{
+        if (!isOverlayMode()){
+          backdrop.classList.remove('is-open');
+          document.body.classList.remove('lock-scroll');
+          side.classList.remove('is-open');
+        }
+      });
+
+      document.addEventListener('keydown', (ev)=>{
+        if(ev.key === 'Escape') closeSide();
+      });
+
+      let touchStartX = null, touchStartY = null;
+      side.addEventListener('touchstart', (e)=>{
+        const t = e.touches && e.touches[0];
+        if(!t) return;
+        touchStartX = t.clientX;
+        touchStartY = t.clientY;
+      }, { passive:true });
+
+      side.addEventListener('touchend', (e)=>{
+        const t = e.changedTouches && e.changedTouches[0];
+        if(!t || touchStartX === null) return;
+        const dx = t.clientX - touchStartX;
+        const dy = t.clientY - touchStartY;
+        if (dx > 70 && Math.abs(dy) < 60) closeSide();
+        touchStartX = null; touchStartY = null;
+      }, { passive:true });
+
+      function computeOnlineStateFromMinutes(min){
+        if (min === null || Number.isNaN(min)) return { label:'Onbekend', cls:'' };
+        if (min <= 2) return { label:'Online', cls:'ok' };
+        if (min <= 10) return { label:'Opgelet', cls:'warn' };
+        return { label:'Offline', cls:'bad' };
+      }
+
+      function fmtMaybe(v){
+        if (v === null || v === undefined || v === '') return '-';
+        if (typeof v === 'object'){
+          if (v.name !== undefined) return String(v.name);
+          if (v.code !== undefined) return String(v.code);
+          if (v.number !== undefined) return String(v.number);
+          return '-';
+        }
+        return String(v);
+      }
+
+      function pick(obj, paths){
+        for (const p of paths){
+          const parts = p.split('.');
+          let cur = obj;
+          let ok = true;
+          for (const part of parts){
+            if (cur && Object.prototype.hasOwnProperty.call(cur, part)){
+              cur = cur[part];
+            } else {
+              ok = false;
+              break;
+            }
+          }
+          if (ok && cur !== undefined) return cur;
+        }
+        return undefined;
+      }
+
+      function normalizeShutterStateDetailed(v){
+        const s = String(v ?? '').trim().toLowerCase();
+        if (!s) return '';
+        if (s === 'open' || s === 'opened') return 'open';
+        if (s === 'opening') return 'opening';
+        if (s === 'closed' || s === 'close') return 'closed';
+        if (s === 'closing') return 'closing';
+        return s;
+      }
+
+      function shutterLabel(state){
+        const s = String(state ?? '').trim().toLowerCase();
+        if (s === 'open') return 'OPEN';
+        if (s === 'closed') return 'CLOSED';
+        if (s === 'opening') return 'OPENING';
+        if (s === 'closing') return 'CLOSING';
+        return 'UNKNOWN';
+      }
+
+
+      // Hoofdknop op de kaart: toont actie (OPEN/CLOSE) of overgang (OPENING/CLOSING)
+      
+      // Tijd parsing voor "since/timestamp/updatedAt" velden (Firestore/ISO/ms)
+      function parseAnyTime(v){
+        try{
+          if (v === null || v === undefined) return null;
+          if (typeof v === 'number' && isFinite(v)){
+            // ms of seconds
+            return v > 1e12 ? v : Math.round(v * 1000);
+          }
+          if (typeof v === 'string'){
+            const t = Date.parse(v);
+            return isNaN(t) ? null : t;
+          }
+          if (typeof v === 'object'){
+            // Firestore Timestamp {seconds, nanoseconds} of {_seconds, _nanoseconds}
+            const sec = (v.seconds !== undefined) ? v.seconds : (v._seconds !== undefined ? v._seconds : null);
+            const nsec = (v.nanoseconds !== undefined) ? v.nanoseconds : (v._nanoseconds !== undefined ? v._nanoseconds : 0);
+            if (sec !== null && sec !== undefined){
+              const ms = Number(sec) * 1000 + Math.floor(Number(nsec || 0) / 1e6);
+              return isFinite(ms) ? ms : null;
+            }
+          }
+          return null;
+        } catch(_){
+          return null;
+        }
+      }
+
+      function pickMotionSince(box){
+        return pick(box, [
+          'state.since',
+          'lifecycle.since',
+          'status.timestamp',
+          'state.timestamp',
+          'status.updatedAt',
+          'updatedAt'
+        ]) ?? null;
+      }
+
+      function isRecent(tsVal, maxMs){
+        const ms = parseAnyTime(tsVal);
+        if (!ms) return false;
+        return Math.abs(Date.now() - ms) <= maxMs;
+      }
+
+function mainButtonLabel(doorState, motionState, fallbackIsOpen){
+        const d =
+          normalizeShutterStateDetailed(doorState) ||
+          (fallbackIsOpen ? 'open' : 'closed');
+
+        // UI toont enkel acties, geen tussenstates
+        if (d === 'open') return 'CLOSE';
+        return 'OPEN';
+      }
+
+      // Bewegingsstatus (meestal "opening/closing") komt typisch uit state.state
+      function pickMotionState(box){
+        return pick(box, [
+          'state.state',
+          'lifecycle.state',
+          'lifecycle.status',
+          'lifecycleState',
+          'shutterState',
+          'state'
+        ]) ?? null;
+      }
+
+      // Deurstatus (meestal "open/closed") komt typisch uit status.door of status.state
+      function pickDoorState(box){
+        return pick(box, [
+          'status.door',
+          'status.state',
+          'lifecycle.door',
+          'door',
+          'shutter.door',
+          'shutter.state'
+        ]) ?? null;
+      }
+
+      function pickCustomer(box){
+        return pick(box, [
+          'Portal.Customer',
+          'portal.customer',
+          'organisation.name',
+          'organization.name',
+                    'Portal.Organisation',
+                    'Portal.Organization',
+                    'portal.organisation',
+                    'portal.organization',
+          'customer'
+        ]) ?? null;
+      }
+
+      function pickSite(box){
+        return pick(box, [
+          'Portal.Site',
+          'portal.site',
+          'site.name',
+          'site.code',
+          'site'
+        ]) ?? null;
+      }
+
+      function pickBoxNumber(box){
+        return pick(box, [
+          'Portal.BoxNumber',
+          'portal.boxNumber',
+          'box.number',
+          'boxNumber'
+        ]) ?? null;
+      }
+
+      function pickActive(box){
+        const v = pick(box, ['Portal.active','portal.active','active']);
+        if (v === true) return 'ja';
+        if (v === false) return 'nee';
+        return fmtMaybe(v);
+      }
+
+      function pickAccess24h(box){
+        const v = pick(box, ['box.access24h','box.access_24h','access24h','Portal.access24h','portal.access24h']);
+        if (v === true) return 'ja';
+        if (v === false) return 'nee';
+        return fmtMaybe(v);
+      }
+
+      function pickBoxType(box){
+        return pick(box, ['box.type','Portal.type','portal.type','type','hardwareProfile','Profile','profile']) ?? null;
+      }
+
+      function pickBoxDescription(box){
+        return pick(box, ['box.description','Portal.description','portal.description','description']) ?? null;
+      }
+
+      function pickLifecycleState(box){
+        return pick(box, ['lifecycle.state','lifecycle.status','state','status']) ?? null;
+      }
+
+      function pickLifecycleOpenedAt(box){
+        return pick(box, ['lifecycle.openedAt','lifecycle.opened_at','openedAt']) ?? null;
+      }
+
+      function pickLifecycleOpenedBy(box){
+        return pick(box, ['lifecycle.openedBy','lifecycle.opened_by','openedBy']) ?? null;
+      }
+
+      function pickLifecycleClosedAt(box){
+        return pick(box, ['lifecycle.closedAt','lifecycle.closed_at','closedAt']) ?? null;
+      }
+
+      function pickLifecycleClosedBy(box){
+        return pick(box, ['lifecycle.closedBy','lifecycle.closed_by','closedBy']) ?? null;
+      }
+
+      function pickLifecycleSource(box){
+        return pick(box, ['lifecycle.source','source']) ?? null;
+      }
+
+      function pickGeo(box){
+        const v = pick(box, ['location.geo','location.geopoint','location.geoPoint','geo','geoPoint']);
+        if (!v) return null;
+        if (typeof v === 'string') return v;
+        if (typeof v === 'object'){
+          const lat = v.latitude ?? v._latitude;
+          const lng = v.longitude ?? v._longitude;
+          if (lat !== undefined && lng !== undefined) return `${lat}, ${lng}`;
+        }
+        return fmtMaybe(v);
+      }
+
+      function pickAgent(box){
+        return pick(box, [
+          'Agent',
+          'agent',
+          'agent.version',
+          'agentVersion',
+          'softwareVersion'
+        ]) ?? null;
+      }
+
+      function pickProfile(box){
+        return pick(box, [
+          'Profile',
+          'profile',
+          'hardwareProfile',
+          'box.type'
+        ]) ?? null;
+      }
+
+      function buildAddressFromBox(box){
+        const street = pick(box, ['location.street']) ?? '';
+        const number = pick(box, ['location.number']) ?? '';
+        const postCode = pick(box, ['location.postalCode','location.postCode','location.postcode']) ?? '';
+        const city = pick(box, ['location.city']) ?? '';
+
+        let line1 = `${street} ${number}`.trim();
+        let line2 = `${postCode} ${city}`.trim();
+
+        if (!line1 && !line2) return '';
+        if (line1 && line2) return `${line1}, ${line2}`;
+        return line1 || line2;
+      }
+
+      function fmtLastSeen(min){
+        if (min === null || min === undefined) return '-';
+        const n = Number(min);
+        if (Number.isNaN(n)) return '-';
+        return n + ' min geleden';
+      }
+
+      function escapeHtml(s){
+        return String(s || '')
+          .replace(/&/g,'&amp;')
+          .replace(/</g,'&lt;')
+          .replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;')
+          .replace(/'/g,'&#39;');
+      }
+
+      function setBorderByLastSeen(card){
+        const min = Number(card.getAttribute('data-lastseen-min'));
+        const s = computeOnlineStateFromMinutes(min);
+        let color = getComputedStyle(document.documentElement).getPropertyValue('--bad').trim();
+        if (s.cls === 'ok') color = getComputedStyle(document.documentElement).getPropertyValue('--ok').trim();
+        else if (s.cls === 'warn') color = getComputedStyle(document.documentElement).getPropertyValue('--warn').trim();
+        card.style.borderLeftColor = color;
+      }
+
+      function buildPhonesListHtml(phones){
+        if (!phones || !Array.isArray(phones) || !phones.length){
+          return '<li class="muted">Geen nummers</li>';
+        }
+        return phones.map(p=>{
+          const phone = escapeHtml(p.phone || '');
+          const label = escapeHtml(p.label || '');
+          if (!phone) return '';
+          return `<li><span title="${label}">${phone}</span></li>`;
+        }).join('');
+      }
+
+      function buildPhonesDataAttr(phones){
+        if (!phones || !Array.isArray(phones) || !phones.length) return '';
+        return phones
+          .map(p => `${(p.phone||'').trim()}|${(p.label||'').trim()}`)
+          .filter(Boolean)
+          .join(',');
+      }
+
+      // =========================================================
+      // 4) Rendering cards en sections
+      // =========================================================
+
+      function createCard(box){
+        if (box && box.ui && box.ui.hidden === true) return null;
+
+        const id = fmtMaybe(box.id);
+
+        const customer = pickCustomer(box);
+        const customerText = fmtMaybe(customer);
+        const sitePicked = pickSite(box);
+        const boxNrPicked = pickBoxNumber(box);
+
+        const site = fmtMaybe(sitePicked);
+        const boxNumber = fmtMaybe(boxNrPicked);
+
+        const agent = pickAgent(box);
+        const profile = pickProfile(box);
+
+        const lastSeen = pick(box, ['lastSeenMinutes','last_seen_minutes','lastSeen']) ?? null;
+        const lastSeenNum = (lastSeen === null || lastSeen === undefined) ? NaN : Number(lastSeen);
+        const s = computeOnlineStateFromMinutes(lastSeenNum);
+
+        const sharesCountRaw = pick(box, ['sharesCount','shares_count']) ?? null;
+        const sharesCount = (sharesCountRaw === null || sharesCountRaw === undefined) ? null : Number(sharesCountRaw);
+
+        const phones = Array.isArray(box.phones) ? box.phones : [];
+        const phonesAttr = buildPhonesDataAttr(phones);
+        const phonesHtml = buildPhonesListHtml(phones);
+
+        const address = buildAddressFromBox(box);
+
+        const active = pickActive(box);
+        const access24h = pickAccess24h(box);
+        const bType = fmtMaybe(pickBoxType(box));
+        const bDesc = fmtMaybe(pickBoxDescription(box));
+        const lcState = fmtMaybe(pickLifecycleState(box));
+        const openedAt = fmtMaybe(pickLifecycleOpenedAt(box));
+        const openedBy = fmtMaybe(pickLifecycleOpenedBy(box));
+        const closedAt = fmtMaybe(pickLifecycleClosedAt(box));
+        const closedBy = fmtMaybe(pickLifecycleClosedBy(box));
+        const lcSource = fmtMaybe(pickLifecycleSource(box));
+        const geo = fmtMaybe(pickGeo(box));
+
+        const card = document.createElement('article');
+        card.className = 'gb-card';
+
+        const rawMotionState = pickMotionState(box);
+        const rawDoorState = pickDoorState(box);
+
+        const motionStateAll = normalizeShutterStateDetailed(rawMotionState);
+        const motionSince = pickMotionSince(box);
+        // Voorkom 'stale' opening/closing die dagen blijft hangen: enkel gebruiken als recent
+        const motionState = (motionStateAll && isRecent(motionSince, 20000)) ? motionStateAll : '';
+        const doorState = normalizeShutterStateDetailed(rawDoorState);
+// Visuele toestand:
+        // - opening: direct omhoog
+        // - closing: direct omlaag
+        // - anders: volg de deurstatus
+        if (motionState === 'opening') {
+          card.classList.add('is-open');
+        } else if (motionState === 'closing') {
+          card.classList.remove('is-open');
+        } else if (doorState === 'open') {
+          card.classList.add('is-open');
+        } else if (doorState === 'closed') {
+          card.classList.remove('is-open');
+        }
+
+        // Voor de rest van de UI houden we beide bij
+        card.setAttribute('data-motion-state', motionState);
+        card.setAttribute('data-door-state', doorState);
+
+        // data-shutter-state blijft bestaan voor compatibiliteit (we gebruiken vooral doorState)
+        card.setAttribute('data-shutter-state', doorState || motionState);
+card.setAttribute('data-id', id);
+        card.setAttribute('data-site', site === '-' ? '' : site);
+        card.setAttribute('data-box', boxNumber === '-' ? '' : boxNumber);
+        card.setAttribute('data-agent', agent ?? '');
+        card.setAttribute('data-profile', profile ?? '');
+        card.setAttribute('data-lastseen-min', (lastSeen === null || lastSeen === undefined) ? '' : String(lastSeen));
+        card.setAttribute('data-phones', phonesAttr);
+
+        card.setAttribute('data-customer', customer ?? '');
+        card.setAttribute('data-address', address ?? '');
+
+        card.setAttribute('data-active', active ?? '');
+        card.setAttribute('data-access24h', access24h ?? '');
+        card.setAttribute('data-type', bType ?? '');
+        card.setAttribute('data-desc', bDesc ?? '');
+        card.setAttribute('data-lifecycle-state', lcState ?? '');
+        card.setAttribute('data-opened-at', openedAt ?? '');
+        card.setAttribute('data-opened-by', openedBy ?? '');
+        card.setAttribute('data-closed-at', closedAt ?? '');
+        card.setAttribute('data-closed-by', closedBy ?? '');
+        card.setAttribute('data-source', lcSource ?? '');
+        card.setAttribute('data-geo', geo ?? '');
+
+        card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
+
+        const toggleLabel = mainButtonLabel(doorState, motionState, card.classList.contains('is-open'));
+
+        const sharesPill = (sharesCount === null || Number.isNaN(sharesCount))
+          ? `<span class="pill ghost" title="sharesCount">shares -</span>`
+          : `<span class="pill ghost" title="sharesCount">shares ${escapeHtml(String(sharesCount))}</span>`;
+
+        card.innerHTML = `
+          <div class="gb-shutter" aria-hidden="true"><div class="gb-shutter__door"></div></div>
+
+          <div>
+            <div class="gb-head">
+              <div class="gb-site">${escapeHtml(site)}</div>
+              <div class="gb-box"># ${escapeHtml(boxNumber)}</div>
+              <div class="gb-time">Last seen ${escapeHtml(fmtLastSeen(lastSeen))}</div>
+            </div>
+
+            <div class="gb-meta">
+              <span class="pill ghost" title="Klant"><span class="dot"></span><span>${escapeHtml(customerText)}</span></span>
+              <span class="pill ${s.cls}" title="Op basis van last seen"><span class="dot"></span><span>${escapeHtml(s.label)}</span></span>
+              <span class="pill ghost" title="Portal.active">active ${escapeHtml(active || '-')}</span>
+              <span class="pill ghost" title="box.access24h">24/7 ${escapeHtml(access24h || '-')}</span>
+              <span class="pill ghost" title="box.type">${escapeHtml(bType || '-')}</span>
+              ${sharesPill}
+            </div>
+
+            <ul class="gb-phones">
+              ${phonesHtml}
+            </ul>
+          </div>
+
+          <div class="gb-actions">
+            <button class="btn" data-action="toggle" type="button">${toggleLabel}</button>
+            <div class="gb-row">
+              <button class="btn-ghost" data-action="events" type="button">EVENTS</button>
+              <button class="btn-ghost" data-action="shares" type="button">SHARES</button>
+              <button class="btn-ghost" data-action="pictures" type="button">PICTURES</button>
+            </div>
+          </div>
+        `;
+
+        setBorderByLastSeen(card);
+        return card;
+      }
+
+      function groupBoxesIntoSections(boxes){
+        const map = new Map();
+        boxes.forEach(b=>{
+          const siteVal = pickSite(b) ?? 'Onbekend';
+          const site = String(siteVal);
+          if (!map.has(site)) map.set(site, []);
+          map.get(site).push(b);
+        });
+        return map;
+      }
+
+      function renderSectionsFromBoxes(boxes){
+        sectionsWrap.innerHTML = '';
+
+        boxes = (boxes || []).filter(b => !(b && b.ui && b.ui.hidden === true));
+
+        if (!boxes || !boxes.length){
+          sectionsWrap.innerHTML = `<div class="muted">Geen gridboxen gevonden</div>`;
+          rebuildFilters();
+          return;
+        }
+
+        const grouped = groupBoxesIntoSections(boxes);
+
+        [...grouped.entries()].forEach(([site, items])=>{
+          const sec = document.createElement('section');
+          sec.className = 'gb-section';
+          sec.setAttribute('data-group', site);
+
+          const customer = (items[0] && pickCustomer(items[0])) ? String(pickCustomer(items[0])) : '';
+          sec.setAttribute('data-customer', customer);
+
+          sec.innerHTML = `
+            <h3 class="gb-section__title">${escapeHtml(site)}</h3>
+            <div class="gb-list"></div>
+          `;
+
+          const list = sec.querySelector('.gb-list');
+          items.forEach(b=>{
+            const card = createCard(b);
+            if (card) list.appendChild(card);
+          });
+
+          sectionsWrap.appendChild(sec);
+        });
+
+        rebuildFilters();
+        applyFilters();
+      }
+
+      // =========================================================
+      // 5) API calls
+      // =========================================================
+
+      async function loadBoxes(){
+        const res = await fetch(apiUrl('/api/boxes'), { method:'GET' });
+        if (!res.ok){
+          const t = await res.text().catch(()=> '');
+          throw new Error('API fout: ' + res.status + ' ' + t);
+        }
+        const data = await res.json().catch(()=> []);
+        return Array.isArray(data) ? data : [];
+      }
+
+      
+      async function setDesired(boxId, desired){
+        const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/desired`), {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({
+            desired,
+            desiredAt: new Date().toISOString(),
+            desiredBy: 'portal'
+          })
+        });
+        if(!res.ok){
+          const t = await res.text().catch(()=>'');
+          throw new Error('Desired fout: ' + t);
+        }
+      }
+
+async function sendCommand(boxId, type, body){
+  const url = apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/${type}`);
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const payload = await res.json().catch(()=> ({}));
+  if (!res.ok || !payload || payload.ok !== true){
+    throw new Error(payload.error || 'Interne serverfout');
+  }
+  return payload;
+}
+
+  async function startCaptureSession(boxId) {
+        const id = typeof boxId === 'object' ? boxId.id : boxId;
+        const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(id)}/sessions`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || !payload.sessionId) {
+          throw new Error(payload.error || 'Kon geen capture session starten op de cloud');
+        }
+        return payload.sessionId;
+      }
+
+      async function sendCommand(boxId, type, payload = {}) {
+        const id = typeof boxId === 'object' ? boxId.id : boxId;
+        const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(id)}/commands`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type, payload })
+        });
+        if (!res.ok) throw new Error('Cloud commando mislukt');
+        return res.json();
+      }
+
+      // =========================================================
+      // 6) Filters
+      // =========================================================
+
+      function getSections(){
+        return [...document.querySelectorAll('.gb-section')];
+      }
+      function getCustomerOfSection(sec){ return (sec.getAttribute('data-customer') || '').trim(); }
+      function getLocationOfSection(sec){ return (sec.getAttribute('data-group') || '').trim(); }
+
+      function rebuildCustomerDropdown(){
+        const sections = getSections();
+        const customers = [...new Set(sections.map(getCustomerOfSection))].filter(Boolean).sort();
+        const current = customerFilter.value;
+
+        customerFilter.innerHTML = '<option value="all">Alle klanten</option>';
+        customers.forEach(c=>{
+          const o=document.createElement('option');
+          o.value=c; o.textContent=c;
+          customerFilter.appendChild(o);
+        });
+
+        const stillExists = [...customerFilter.options].some(opt => opt.value === current);
+        customerFilter.value = stillExists ? current : 'all';
+      }
+
+      function rebuildLocationDropdown(){
+        const sections = getSections();
+        const selectedCustomer = customerFilter.value;
+
+        const locations = sections
+          .filter(sec => selectedCustomer === 'all' || getCustomerOfSection(sec) === selectedCustomer)
+          .map(getLocationOfSection).filter(Boolean);
+
+        const uniq = [...new Set(locations)].sort();
+
+        const current = locationFilter.value;
+        locationFilter.innerHTML = '<option value="all">Alle locaties</option>';
+        uniq.forEach(loc=>{
+          const o=document.createElement('option');
+          o.value=loc; o.textContent=loc;
+          locationFilter.appendChild(o);
+        });
+
+        const stillExists = [...locationFilter.options].some(opt => opt.value === current);
+        locationFilter.value = stillExists ? current : 'all';
+      }
+
+      function matchesSearch(card, term){
+        if(!term) return true;
+        term = term.toLowerCase();
+        const site = (card.getAttribute('data-site')||'').toLowerCase();
+        const box  = (card.getAttribute('data-box')||'').toLowerCase();
+        const addr = (card.getAttribute('data-address')||'').toLowerCase();
+        const text = card.innerText.toLowerCase();
+        return site.includes(term) || box.includes(term) || addr.includes(term) || text.includes(term);
+      }
+
+      function applyFilters(){
+        const c = customerFilter.value;
+        const loc = locationFilter.value;
+        const term = search.value.trim();
+
+        const sections = getSections();
+        const cards = [...document.querySelectorAll('.gb-card')];
+
+        cards.forEach(card=>{
+          const sec = card.closest('.gb-section');
+          const secCustomer = getCustomerOfSection(sec);
+          const secLocation = getLocationOfSection(sec);
+
+          const show =
+            (c === 'all' || secCustomer === c) &&
+            (loc === 'all' || secLocation === loc) &&
+            matchesSearch(card, term);
+
+          card.style.display = show ? '' : 'none';
+        });
+
+        sections.forEach(sec=>{
+          const visible = [...sec.querySelectorAll('.gb-card')].some(x => x.style.display !== 'none');
+          sec.style.display = visible ? '' : 'none';
+        });
+      }
+
+      function rebuildFilters(){
+        rebuildCustomerDropdown();
+        rebuildLocationDropdown();
+      }
+
+      customerFilter.addEventListener('change', ()=>{
+        rebuildLocationDropdown();
+        applyFilters();
+      });
+      locationFilter.addEventListener('change', applyFilters);
+      search.addEventListener('input', applyFilters);
+
+      let currentCard = null;
+
+      const sideTitle = document.getElementById('sideTitle');
+      const sideSub   = document.getElementById('sideSub');
+
+      const kvCustomer= document.getElementById('kvCustomer');
+      const kvSite    = document.getElementById('kvSite');
+      const kvBox     = document.getElementById('kvBox');
+      const kvAddress = document.getElementById('kvAddress');
+
+      const kvActive  = document.getElementById('kvActive');
+      const kvAccess24h = document.getElementById('kvAccess24h');
+      const kvType    = document.getElementById('kvType');
+      const kvDescription = document.getElementById('kvDescription');
+      const kvLifecycleState = document.getElementById('kvLifecycleState');
+      const kvOpened  = document.getElementById('kvOpened');
+      const kvClosed  = document.getElementById('kvClosed');
+      const kvSource  = document.getElementById('kvSource');
+      const kvGeo     = document.getElementById('kvGeo');
+
+      const kvAgent   = document.getElementById('kvAgent');
+      const kvProfile = document.getElementById('kvProfile');
+      const kvSeen    = document.getElementById('kvSeen');
+      const kvStatus  = document.getElementById('kvStatus');
+
+      const kvSharesCount = document.getElementById('kvSharesCount');
+
+      const sidePhones = document.getElementById('sidePhones');
+
+      function setStatusPill(card){
+        const min = Number(card.getAttribute('data-lastseen-min'));
+        const s = computeOnlineStateFromMinutes(min);
+        kvStatus.className = 'status-pill ' + (s.cls || '');
+        kvStatus.textContent = s.label;
+        kvSeen.textContent = (Number.isNaN(min) ? '-' : (min + ' min geleden'));
+      }
+
+      function renderPhones(card){
+        const raw = (card.getAttribute('data-phones') || '').trim();
+        if(!raw){
+          sidePhones.innerHTML = '<li class="muted">Geen gegevens</li>';
+          return;
+        }
+        const items = raw.split(',').map(x=>x.trim()).filter(Boolean).map(pair=>{
+          const parts = pair.split('|');
+          return { phone:(parts[0]||'').trim(), label:(parts[1]||'').trim() };
+        });
+        if(!items.length){
+          sidePhones.innerHTML = '<li class="muted">Geen gegevens</li>';
+          return;
+        }
+        sidePhones.innerHTML = '';
+        items.forEach(it=>{
+          const li = document.createElement('li');
+          li.textContent = it.label ? (it.phone + ' (' + it.label + ')') : it.phone;
+          sidePhones.appendChild(li);
+        });
+      }
+
+      function selectCard(card){
+        document.querySelectorAll('.gb-card.is-selected').forEach(x=>x.classList.remove('is-selected'));
+        card.classList.add('is-selected');
+      }
+
+      const sharesStore = {};
+      const sharesBody = document.querySelector('#sharesTable tbody');
+      const sharePhone   = document.getElementById('sharePhone');
+      const shareExpires = document.getElementById('shareExpires');
+      const shareComment = document.getElementById('shareComment');
+      const shareAuth    = document.getElementById('shareAuth');
+
+      // =========================================================
+      // 8) Shares UI
+      // =========================================================
+
+      function renderShares(boxId){
+        const rows = (sharesStore[boxId]||[]);
+        sharesBody.innerHTML = '';
+        if(!rows.length){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td colspan="5" class="muted" style="border-radius:12px;">Geen shares</td>`;
+          sharesBody.appendChild(tr);
+          return;
+        }
+        rows.forEach((r,i)=>{
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${r.ts}</td>
+            <td>${r.phone}</td>
+            <td>${(r.comment||'').replace(/</g,'&lt;')}</td>
+            <td>${r.auth ? '<span class="badge">Gemachtigd</span>' : (r.expires ? '<span class="badge">Tijdelijk</span>' : '<span class="badge">Actief</span>')}</td>
+            <td class="right"><button class="btn-small btn-ghost" data-del="${i}" type="button">Delete</button></td>
+          `;
+          sharesBody.appendChild(tr);
+        });
+      }
+
+      sharesBody.addEventListener('click',(e)=>{
+        const del = e.target.closest('button[data-del]');
+        if(!del || !currentCard) return;
+        const boxId = currentCard.getAttribute('data-id');
+        const idx = Number(del.getAttribute('data-del'));
+        if (!sharesStore[boxId]) return;
+        sharesStore[boxId].splice(idx,1);
+        renderShares(boxId);
+        updateSharesCountUiFromLocal(boxId);
+      });
+
+      function updateSharesCountUiFromCard(card){
+        const raw = (card.getAttribute('data-shares-count') || '').trim();
+        if(!raw){
+          kvSharesCount.textContent = 'shares -';
+          return;
+        }
+        const n = Number(raw);
+        if(Number.isNaN(n)){
+          kvSharesCount.textContent = 'shares -';
+          return;
+        }
+        kvSharesCount.textContent = 'shares ' + n;
+      }
+
+      function updateSharesCountUiFromLocal(boxId){
+        const rows = (sharesStore[boxId]||[]);
+        kvSharesCount.textContent = 'shares ' + rows.length;
+      }
+
+      document.getElementById('shareAdd').addEventListener('click', ()=>{
+        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
+        const boxId = currentCard.getAttribute('data-id');
+
+        const phone = sharePhone.value.trim();
+        const comment = shareComment.value.trim();
+        const expires = shareExpires.value.trim();
+        const auth = !!shareAuth.checked;
+        if(!phone) return alert('Vul telefoon in.');
+
+        const now = new Date();
+        const pad=n=>String(n).padStart(2,'0');
+        const ts = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+        sharesStore[boxId] = sharesStore[boxId] || [];
+        sharesStore[boxId].unshift({ts, phone, comment, expires, auth});
+        renderShares(boxId);
+
+        sharePhone.value='';
+        shareComment.value='';
+        shareExpires.value='';
+        shareAuth.checked=false;
+
+        updateSharesCountUiFromLocal(boxId);
+      });
+
+      function scrollSideToBlock(blockId){
+        const el = document.getElementById(blockId);
+        if(!el) return;
+        const top = side.scrollTop + el.getBoundingClientRect().top - side.getBoundingClientRect().top - 10;
+        side.scrollTo({ top, behavior:'smooth' });
+      }
+
+      function fmtLifecycleLine(at, by){
+        const a = (at && at !== '-') ? at : '';
+        const b = (by && by !== '-') ? by : '';
+        if (!a && !b) return '-';
+        if (a && b) return a + ' (' + b + ')';
+        return a || b;
+      }
+
+      // =========================================================
+      // 7) Side panel details
+      // =========================================================
+
+      function updateSideFromCard(card, contextLabel){
+        currentCard = card;
+        selectCard(card);
+
+        const sec = card.closest('.gb-section');
+        const customer = (sec ? sec.getAttribute('data-customer') : '-') || '-';
+
+        const siteName = card.getAttribute('data-site') || '-';
+        const boxNr = card.getAttribute('data-box') || '-';
+        const address = card.getAttribute('data-address') || '-';
+
+        sideTitle.textContent = `${siteName} #${boxNr}`;
+        sideSub.textContent = contextLabel || 'Beheer en overzicht';
+
+        kvCustomer.textContent = customer;
+        kvSite.textContent = siteName || '-';
+        kvBox.textContent = '# ' + (boxNr || '-');
+        kvAddress.textContent = address || '-';
+
+        kvActive.textContent = card.getAttribute('data-active') || '-';
+        kvAccess24h.textContent = card.getAttribute('data-access24h') || '-';
+        kvType.textContent = card.getAttribute('data-type') || '-';
+        kvDescription.textContent = card.getAttribute('data-desc') || '-';
+        kvLifecycleState.textContent = card.getAttribute('data-lifecycle-state') || '-';
+
+        const openedAt = card.getAttribute('data-opened-at') || '-';
+        const openedBy = card.getAttribute('data-opened-by') || '-';
+        const closedAt = card.getAttribute('data-closed-at') || '-';
+        const closedBy = card.getAttribute('data-closed-by') || '-';
+
+        kvOpened.textContent = fmtLifecycleLine(openedAt, openedBy);
+        kvClosed.textContent = fmtLifecycleLine(closedAt, closedBy);
+        kvSource.textContent = card.getAttribute('data-source') || '-';
+        kvGeo.textContent = card.getAttribute('data-geo') || '-';
+
+        kvAgent.textContent = (card.getAttribute('data-agent') ? ('v ' + card.getAttribute('data-agent')) : '-');
+        kvProfile.textContent = (card.getAttribute('data-profile') || '-');
+
+        setStatusPill(card);
+        renderPhones(card);
+
+        const boxId = card.getAttribute('data-id');
+        renderShares(boxId);
+
+        updateSharesCountUiFromCard(card);
+
+        openSide();
+      }
+
+      document.getElementById('btnGoShares').addEventListener('click', ()=>{
+        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
+        updateSideFromCard(currentCard, 'Toegang beheren');
+
+        side.classList.add('is-wide');
+        app.classList.remove('is-collapsed');
+        app.classList.add('is-expanded');
+
+        setTimeout(()=>scrollSideToBlock('blockShares'), 0);
+      });
+
+      // =========================================================
+      // 9) Card acties
+      // =========================================================
+
+      document.addEventListener('click', async (e)=>{
+        const btn = e.target.closest('button[data-action]');
+        const card = e.target.closest('.gb-card');
+        if(!card) return;
+
+        if(btn){
+          const action = btn.getAttribute('data-action');
+
+          if(action === 'toggle'){
+            e.preventDefault(); e.stopPropagation();
+
+            const boxId = card.getAttribute('data-id');
+
+            const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
+            const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || card.getAttribute('data-shutter-state') || '');
+
+            // desired mag altijd wijzigen, ook tijdens opening/closing
+
+            const currentDesired = (card.getAttribute('data-desired') === 'open') ? 'open' : 'close';
+            const next = currentDesired === 'open' ? 'close' : 'open';
+
+            if (!boxId || boxId === '-'){
+              alert('Box id ontbreekt.');
+              return;
+            }
+
+            const prevIsOpen = card.classList.contains('is-open');
+            const prevDoor = card.getAttribute('data-door-state') || '';
+            const prevMotion = card.getAttribute('data-motion-state') || '';
+            const prevLifecycle = card.getAttribute('data-lifecycle-state') || '';
+            const prevShutter = card.getAttribute('data-shutter-state') || '';
+
+
+            try{
+
+              if(next === 'open'){
+                // forceer animatie ook als de class al eens gezet was
+                card.classList.remove('is-open');
+                void card.offsetWidth;
+                card.classList.add('is-open');
+                card.setAttribute('data-motion-state', 'opening');
+                card.setAttribute('data-lifecycle-state', 'opening');
+              } else {
+                // forceer animatie ook als de UI even uit sync was
+                if(!card.classList.contains('is-open')){
+                  card.classList.add('is-open');
+                  void card.offsetWidth;
+                }
+                card.classList.remove('is-open');
+                card.setAttribute('data-motion-state', 'closing');
+                card.setAttribute('data-lifecycle-state', 'closing');
+              }
+
+              // compat
+              card.setAttribute('data-shutter-state', card.getAttribute('data-door-state') || card.getAttribute('data-motion-state') || '');
+
+              btn.textContent = (next === 'open') ? 'CLOSE' : 'OPEN';
+
+              setTimeout(()=>{
+                const motionNow = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
+
+                if(next === 'open' && motionNow === 'opening'){
+                  card.setAttribute('data-door-state', 'open');
+                  card.setAttribute('data-motion-state', '');
+                  card.setAttribute('data-shutter-state', 'open');
+                  card.setAttribute('data-lifecycle-state', 'open');
+                  // label already follows desired
+                  if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
+                }
+
+                if(next === 'close' && motionNow === 'closing'){
+                  card.setAttribute('data-door-state', 'closed');
+                  card.setAttribute('data-motion-state', '');
+                  card.setAttribute('data-shutter-state', 'closed');
+                  card.setAttribute('data-lifecycle-state', 'closed');
+                  // label already follows desired
+                  if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
+                }
+              }, 5100);
+
+              if(side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
+              card.setAttribute('data-desired', next);
+              await setDesired(boxId, next);
+            } catch(err){
+              if(prevIsOpen) card.classList.add('is-open'); else card.classList.remove('is-open');
+              card.setAttribute('data-door-state', prevDoor);
+              card.setAttribute('data-motion-state', prevMotion);
+              card.setAttribute('data-lifecycle-state', prevLifecycle);
+              card.setAttribute('data-shutter-state', prevShutter);
+              btn.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
+              if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
+
+              alert('Actie mislukt: ' + (err && err.message ? err.message : err));
+            }
+            return;
+          }
+
+          if(action === 'shares'){
+            e.preventDefault(); e.stopPropagation();
+            updateSideFromCard(card, 'Toegang beheren');
+
+            side.classList.add('is-wide');
+            app.classList.remove('is-collapsed');
+            app.classList.add('is-expanded');
+
+            setTimeout(()=>scrollSideToBlock('blockShares'), 0);
+            return;
+          }
+
+          if(action === 'events'){
+            e.preventDefault(); e.stopPropagation();
+            updateSideFromCard(card, 'Beheer en overzicht');
+            const boxId = card.getAttribute('data-id');
+            if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/events`);
+            setTimeout(()=>scrollSideToBlock('blockEvents'), 0);
+            return;
+          }
+
+          if(action === 'pictures'){
+            e.preventDefault(); e.stopPropagation();
+            updateSideFromCard(card, 'Beheer en overzicht');
+            const boxId = card.getAttribute('data-id');
+            if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/pictures`);
+            return;
+          }
+        }
+
+        updateSideFromCard(card, 'Beheer en overzicht');
+      });
+
+      document.getElementById('btnOpen').addEventListener('click', async ()=>{
+        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
+        const boxId = currentCard.getAttribute('data-id');
+        const prevIsOpen = currentCard.classList.contains('is-open');
+        const prevDoor = currentCard.getAttribute('data-door-state') || '';
+        const prevMotion = currentCard.getAttribute('data-motion-state') || '';
+        const prevLifecycle = currentCard.getAttribute('data-lifecycle-state') || '';
+        const prevShutter = currentCard.getAttribute('data-shutter-state') || '';
+
+        try{
+
+          currentCard.classList.add('is-open');
+          currentCard.setAttribute('data-motion-state','opening');
+          currentCard.setAttribute('data-lifecycle-state','opening');
+          currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'opening');
+
+          const btn = currentCard.querySelector('button[data-action="toggle"]');
+          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), true);
+
+          setTimeout(()=>{
+            if(!currentCard) return;
+            const st = String(currentCard.getAttribute('data-shutter-state') || '').toLowerCase();
+            if(st === 'opening'){
+              currentCard.setAttribute('data-shutter-state','open');
+              currentCard.setAttribute('data-lifecycle-state','open');
+              const b = currentCard.querySelector('button[data-action="toggle"]');
+              if(b) b.textContent = mainButtonLabel('open', '', true);
+              updateSideFromCard(currentCard, 'Beheer en overzicht');
+            }
+          }, 5200);
+
+          currentCard.setAttribute('data-desired','open');
+          await setDesired(boxId, 'open');
+
+          updateSideFromCard(currentCard, 'Beheer en overzicht');
+        } catch(err){
+          if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
+          currentCard.setAttribute('data-door-state', prevDoor);
+          currentCard.setAttribute('data-motion-state', prevMotion);
+          currentCard.setAttribute('data-lifecycle-state', prevLifecycle);
+          currentCard.setAttribute('data-shutter-state', prevShutter);
+          const b0 = currentCard.querySelector('button[data-action=\"toggle\"]');
+          if(b0) b0.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
+          updateSideFromCard(currentCard, 'Beheer en overzicht');
+
+          alert('OPEN mislukt: ' + (err && err.message ? err.message : err));
+        }
+      });
+
+      document.getElementById('btnClose').addEventListener('click', async ()=>{
+        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
+        const boxId = currentCard.getAttribute('data-id');
+        const prevIsOpen = currentCard.classList.contains('is-open');
+        const prevDoor = currentCard.getAttribute('data-door-state') || '';
+        const prevMotion = currentCard.getAttribute('data-motion-state') || '';
+        const prevLifecycle = currentCard.getAttribute('data-lifecycle-state') || '';
+        const prevShutter = currentCard.getAttribute('data-shutter-state') || '';
+
+        try{
+
+          currentCard.classList.remove('is-open');
+          currentCard.setAttribute('data-motion-state','closing');
+          currentCard.setAttribute('data-lifecycle-state','closing');
+          currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'closing');
+
+          const btn = currentCard.querySelector('button[data-action="toggle"]');
+          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), false);
+
+          setTimeout(()=>{
+            if(!currentCard) return;
+            const st = String(currentCard.getAttribute('data-shutter-state') || '').toLowerCase();
+            if(st === 'closing'){
+              currentCard.setAttribute('data-shutter-state','closed');
+              currentCard.setAttribute('data-lifecycle-state','closed');
+              const b = currentCard.querySelector('button[data-action="toggle"]');
+              if(b) b.textContent = mainButtonLabel('closed', '', false);
+              updateSideFromCard(currentCard, 'Beheer en overzicht');
+            }
+          }, 5200);
+
+          currentCard.setAttribute('data-desired','close');
+          await setDesired(boxId, 'close');
+
+          updateSideFromCard(currentCard, 'Beheer en overzicht');
+        } catch(err){
+          if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
+          currentCard.setAttribute('data-door-state', prevDoor);
+          currentCard.setAttribute('data-motion-state', prevMotion);
+          currentCard.setAttribute('data-lifecycle-state', prevLifecycle);
+          currentCard.setAttribute('data-shutter-state', prevShutter);
+          const b0 = currentCard.querySelector('button[data-action=\"toggle\"]');
+          if(b0) b0.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
+          updateSideFromCard(currentCard, 'Beheer en overzicht');
+
+          alert('CLOSE mislukt: ' + (err && err.message ? err.message : err));
+        }
+      });
+// --- SPECIFIEK VOOR DE FOTO KNOP ---
+      document.getElementById('btnTakePicture').addEventListener('click', async () => {
+        if (!currentCard) {
+          alert('Selecteer eerst een Gridbox links.');
+          return;
+        }
+
+        // We noemen de variabele hier targetBoxId om verwarring te voorkomen
+        const targetBoxId = currentCard.getAttribute('data-id');
+        
+        const btn = document.getElementById('btnTakePicture');
+        const originalText = btn.innerText;
+
+        try {
+          btn.disabled = true;
+          btn.innerText = "REQUESTING...";
+
+          // 1) Start een sessie via de Cloud API voor deze specifieke ID
+          const sessionId = await startCaptureSession(targetBoxId);
+
+          // 2) Stuur het commando 'pictures/take' naar de juiste box
+          await sendCommand(targetBoxId, 'pictures/take', { sessionId: sessionId });
+
+          btn.innerText = "PI IS BUSY...";
+          
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.innerText = originalText;
+            alert('Opdracht verzonden naar box: ' + targetBoxId);
+          }, 5000);
+
+        } catch (err) {
+          console.error('Foto mislukt:', err);
+          alert('Fout: ' + (err.message || err));
+          btn.disabled = false;
+          btn.innerText = originalText;
+        }
+      });
+         
+      // =========================================================
+      // 10) Init
+      // =========================================================
+
+      (async function init(){
+        try{
+          const boxes = await loadBoxes();
+          renderSectionsFromBoxes(boxes);
+        } catch(err){
+          console.error(err);
+          sectionsWrap.innerHTML = `<div class="muted">Kon gridboxen niet laden</div>`;
+          rebuildFilters();
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>
+
