@@ -9,6 +9,7 @@ echo "1) Install naar ${TARGET_DIR}"
 sudo mkdir -p "${TARGET_DIR}"
 
 sudo cp -f "${SRC_DIR}/agent.mjs" "${TARGET_DIR}/agent.mjs"
+sudo rm -f "${TARGET_DIR}/take-picture.mjs" || true
 sudo cp -f "${SRC_DIR}/CURRENT.txt" "${TARGET_DIR}/CURRENT.txt"
 
 # service altijd installeren
