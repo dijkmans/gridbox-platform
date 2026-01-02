@@ -1,16 +1,18 @@
-﻿import fs from "fs";
-import jpeg from "jpeg-js";
+===== FILE: /opt/gridbox-agent/agent.mjs =====
+import fs from "fs";
 import os from "os";
 import https from "https";
 import http from "http";
+import jpeg from "jpeg-js";
 import { execFileSync } from "child_process";
+
 const CFG_PATHS = [
   "/opt/gridbox-agent/config.json",
   "/boot/firmware/gridbox-agent/config.json",
   "/boot/gridbox-agent/config.json"
 ];
-const STATE_PATH = "/var/lib/gridbox-agent/state.json";
 
+const STATE_PATH = "/var/lib/gridbox-agent/state.json";
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 function firstExisting(paths){
@@ -38,81 +40,87 @@ function saveState(st){ writeJson(STATE_PATH, st); }
 
 function readCfg(){
   const cfgPath = firstExisting(CFG_PATHS);
-  if (!cfgPath) throw new Error("Geen config.json gevonden");
-  const cfg = readJson(cfgPath);
-  if (!cfg.apiBaseUrl) throw new Error("config mist apiBaseUrl");
-  if (!cfg.boxId) throw new Error("config mist boxId");
+  let cfg = {};
+  if (cfgPath) {
+    try { cfg = readJson(cfgPath); } catch {}
+  }
+
+  cfg.apiBaseUrl = process.env.API_BASE || cfg.apiBaseUrl;
+  cfg.boxId = process.env.BOX_ID || cfg.boxId;
+
+  if (!cfg.apiBaseUrl || !cfg.boxId) {
+    throw new Error("Configuratie incompleet: API_BASE en/of BOX_ID ontbreekt");
+  }
 
   cfg.apiBaseUrl = String(cfg.apiBaseUrl).replace(/\/$/, "");
-  cfg.pollMs ??= 200;
-  cfg.abortCheckMs ??= 100;
-  cfg.openDurationMs ??= 30000;
-  cfg.closeDurationMs ??= 30000;
-  cfg.reverseDelayMs ??= 0;
-  cfg.lightAfterCloseMs ??= 30000;
 
-  cfg.hardware = cfg.hardware || { mode: "sim", activeHigh: true };
+  cfg.pollMs = Number(process.env.POLL_MS || cfg.pollMs || 200);
+  cfg.abortCheckMs = Number(process.env.ABORT_CHECK_MS || cfg.abortCheckMs || 100);
+
+  cfg.openDurationMs = Number(process.env.OPEN_DURATION_MS || cfg.openDurationMs || 30000);
+  cfg.closeDurationMs = Number(process.env.CLOSE_DURATION_MS || cfg.closeDurationMs || 30000);
+  cfg.reverseDelayMs = Number(process.env.REVERSE_DELAY_MS || cfg.reverseDelayMs || 0);
+  cfg.lightAfterCloseMs = Number(process.env.LIGHT_AFTER_CLOSE_MS || cfg.lightAfterCloseMs || 30000);
+
   cfg.device = cfg.device || {};
   cfg.device.deviceId = cfg.device.deviceId || os.hostname();
   cfg.device.agentName = cfg.device.agentName || "Gridbox Agent";
 
+  cfg.hardware = cfg.hardware || {
+    mode: "i2c",
+    activeHigh: true,
+    i2cBus: 1,
+    i2cAddress: "0x10",
+    openRelay: 1,
+    closeRelay: 2,
+    lightRelay: 3
+  };
+
   cfg.camera = cfg.camera || {};
-  cfg.camera.enabled ??= false;
-  cfg.camera.intervalSec ??= 3;
-  cfg.camera.postCloseSec ??= 30;
+  cfg.camera.url = process.env.CAMERA_SNAPSHOT_URL || cfg.camera.url || "";
+  cfg.camera.user = process.env.CAMERA_USER || cfg.camera.user || "";
+  cfg.camera.pass = process.env.CAMERA_PASS || cfg.camera.pass || "";
+
+  if (process.env.CAMERA_ENABLED != null) {
+    cfg.camera.enabled = ["1", "true", "yes", "on"].includes(String(process.env.CAMERA_ENABLED).toLowerCase());
+  } else {
+    cfg.camera.enabled = (cfg.camera.enabled ?? !!cfg.camera.url);
+  }
+
+  cfg.camera.intervalSec = Number(process.env.CAMERA_INTERVAL_SEC || cfg.camera.intervalSec || 3);
+  cfg.camera.postCloseSec = Number(process.env.CAMERA_POST_CLOSE_SEC || cfg.camera.postCloseSec || 30);
 
   cfg.camera.dedupe = cfg.camera.dedupe || {};
-  cfg.camera.dedupe.enabled ??= true;
-  cfg.camera.dedupe.threshold ??= 3;     // lager = strenger (minder weg), hoger = meer weg
-  cfg.camera.dedupe.minKeepMs ??= 10000; // minstens 1 foto per 10s bewaren
-  cfg.camera.dedupe.maskBottomPct ??= 0; // als je ooit toch een balk wil negeren (0 = niets)
+  cfg.camera.dedupe.enabled = (cfg.camera.dedupe.enabled ?? true);
+  cfg.camera.dedupe.threshold = Number(process.env.CAMERA_DEDUPE_THRESHOLD || cfg.camera.dedupe.threshold || 3);
+  cfg.camera.dedupe.minKeepMs = Number(process.env.CAMERA_DEDUPE_MIN_KEEP_MS || cfg.camera.dedupe.minKeepMs || 10000);
+  cfg.camera.dedupe.maskBottomPct = Number(process.env.CAMERA_DEDUPE_MASK_BOTTOM_PCT || cfg.camera.dedupe.maskBottomPct || 0);
 
-  cfg.__cfgPath = cfgPath;
+  cfg.__cfgPath = cfgPath || null;
   return cfg;
 }
 
-function httpsGetJson(url){
+function requestJson(url, method = "GET", bodyObj = null){
   return new Promise((resolve) => {
-    const u = new URL(url);
-    const req = https.request({
-      protocol: u.protocol,
-      hostname: u.hostname,
-      port: u.port || 443,
-      path: u.pathname + u.search,
-      method: "GET",
-      headers: { "Accept": "application/json" }
-    }, (res) => {
-      let data = "";
-      res.setEncoding("utf8");
-      res.on("data", c => data += c);
-      res.on("end", () => {
-        try {
-          resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, json: JSON.parse(data) });
-        } catch {
-          resolve({ ok: false, json: null });
-        }
-      });
-    });
-    req.on("error", () => resolve({ ok: false, json: null }));
-    req.end();
-  });
-}
+    let u;
+    try { u = new URL(url); } catch { return resolve({ ok: false, status: 0, json: null }); }
 
-function httpsPostJson(url, bodyObj){
-  return new Promise((resolve) => {
-    const u = new URL(url);
-    const body = JSON.stringify(bodyObj ?? {});
-    const req = https.request({
+    const lib = (u.protocol === "https:") ? https : http;
+    const body = bodyObj ? JSON.stringify(bodyObj) : null;
+
+    const headers = { "Accept": "application/json" };
+    if (body) {
+      headers["Content-Type"] = "application/json";
+      headers["Content-Length"] = Buffer.byteLength(body);
+    }
+
+    const req = lib.request({
       protocol: u.protocol,
       hostname: u.hostname,
-      port: u.port || 443,
+      port: u.port || (u.protocol === "https:" ? 443 : 80),
       path: u.pathname + u.search,
-      method: "POST",
-      headers: {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(body)
-      }
+      method,
+      headers
     }, (res) => {
       let data = "";
       res.setEncoding("utf8");
@@ -123,8 +131,9 @@ function httpsPostJson(url, bodyObj){
         resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, json });
       });
     });
+
     req.on("error", () => resolve({ ok: false, status: 0, json: null }));
-    req.write(body);
+    if (body) req.write(body);
     req.end();
   });
 }
@@ -135,9 +144,15 @@ function httpGetBuffer(url, user, pass){
     try { u = new URL(url); } catch { return resolve({ ok: false, status: 0, buf: null }); }
 
     const lib = (u.protocol === "https:") ? https : http;
+
+    const userFromUrl = u.username ? decodeURIComponent(u.username) : "";
+    const passFromUrl = u.password ? decodeURIComponent(u.password) : "";
+    const finalUser = user || userFromUrl;
+    const finalPass = pass || passFromUrl;
+
     const headers = {};
-    if (user || pass){
-      const token = Buffer.from(`${user || ""}:${pass || ""}`).toString("base64");
+    if (finalUser || finalPass) {
+      const token = Buffer.from(`${finalUser}:${finalPass}`).toString("base64");
       headers["Authorization"] = `Basic ${token}`;
     }
 
@@ -165,13 +180,10 @@ function httpGetBuffer(url, user, pass){
 function httpPostBinary(url, buf, headers){
   return new Promise((resolve) => {
     let u;
-    try { u = new URL(url); } catch { return resolve({ ok: false, status: 0, json: null }); }
+    try { u = new URL(url); } catch { return resolve({ ok: false, status: 0, json: null, body: "" }); }
 
     const lib = (u.protocol === "https:") ? https : http;
-    const h = {
-      ...headers,
-      "Content-Length": Buffer.byteLength(buf)
-    };
+    const h = { ...headers, "Content-Length": Buffer.byteLength(buf) };
 
     const req = lib.request({
       protocol: u.protocol,
@@ -191,14 +203,18 @@ function httpPostBinary(url, buf, headers){
       });
     });
 
-    req.on("error", () => resolve({ ok: false, status: 0, json: null }));
+    req.on("error", () => resolve({ ok: false, status: 0, json: null, body: "" }));
     req.write(buf);
     req.end();
   });
 }
 
 function i2cSet(bus, addr, relay, value){
-  execFileSync("i2cset", ["-y", String(bus), String(addr), String(relay), String(value)], { stdio: "ignore" });
+  try {
+    execFileSync("i2cset", ["-y", String(bus), String(addr), String(relay), String(value)], { stdio: "ignore" });
+  } catch (e) {
+    console.error("[AGENT] i2cset FAIL", { bus, addr, relay, value, err: String(e?.message || e) });
+  }
 }
 
 function makeHw(hw){
@@ -206,14 +222,17 @@ function makeHw(hw){
   if (mode !== "i2c"){
     return { openOn(){}, closeOn(){}, motorsOff(){}, light(){} };
   }
+
   const bus = hw.i2cBus ?? 1;
   const addr = hw.i2cAddress ?? "0x10";
   if (hw.openRelay == null) throw new Error("hardware.openRelay ontbreekt");
   if (hw.closeRelay == null) throw new Error("hardware.closeRelay ontbreekt");
+
   const lightRelay = hw.lightRelay ?? 0;
   const activeHigh = hw.activeHigh !== false;
   const ON = activeHigh ? "0xFF" : "0x00";
   const OFF = activeHigh ? "0x00" : "0xFF";
+
   return {
     openOn(){ i2cSet(bus, addr, hw.openRelay, ON); },
     closeOn(){ i2cSet(bus, addr, hw.closeRelay, ON); },
@@ -230,8 +249,8 @@ function makeHw(hw){
 
 function phaseBucket(phase){
   const p = String(phase || "").toLowerCase();
-  if (p.includes("close")) return "close"; // closing, post-close, close
-  return "open"; // open, opening, ...
+  if (p.includes("close")) return "close";
+  return "open";
 }
 
 function dhashHexFromJpeg(buf, maskBottomPct = 0){
@@ -285,30 +304,65 @@ function hammingHex64(aHex, bHex){
 async function main(){
   const cfg = readCfg();
   const hw = makeHw(cfg.hardware);
-  const urlBox = `${cfg.apiBaseUrl}/api/boxes/${encodeURIComponent(cfg.boxId)}`;
 
+  const urlBox = `${cfg.apiBaseUrl}/api/boxes/${encodeURIComponent(cfg.boxId)}`;
   let { door } = loadState();
   let moving = false;
 
   function log(...a){ console.log(`[AGENT ${cfg.boxId}]`, ...a); }
 
   async function getDesired(){
-    const r = await httpsGetJson(urlBox);
+    const r = await requestJson(urlBox, "GET");
     if (!r.ok) return null;
     const d = r.json?.box?.desired;
     if (d === "open" || d === "close") return d;
     return null;
   }
 
-  function startMotor(dir){
-    hw.motorsOff();
-    if (dir === "open") hw.openOn();
-    if (dir === "close") hw.closeOn();
+  async function getCommand(){
+    const r = await requestJson(`${urlBox}/commands`, "GET");
+    if (!r.ok) return null;
+    if (!r.json) return null;
+    if (!r.json.type || !r.json.commandId) return null;
+    return r.json;
   }
 
-  function lightForState(){
-    if (door === "open") hw.light(true);
-    if (door === "closed") hw.light(false);
+  async function ackCommand(commandId){
+    const r = await requestJson(`${urlBox}/commands/${encodeURIComponent(commandId)}/ack`, "POST", {});
+    return r.ok;
+  }
+
+  async function getCaptureSession(sessionId){
+    const r = await requestJson(
+      `${cfg.apiBaseUrl}/api/boxes/${encodeURIComponent(cfg.boxId)}/capture/${encodeURIComponent(sessionId)}`,
+      "GET"
+    );
+    if (!r.ok) return null;
+    return r.json?.session || null;
+  }
+
+  async function startCaptureSession(intervalMs, postCloseMs){
+    const r = await requestJson(
+      `${cfg.apiBaseUrl}/api/boxes/${encodeURIComponent(cfg.boxId)}/capture/start`,
+      "POST",
+      { intervalMs, postCloseMs }
+    );
+    if (!r.ok) return null;
+    return r.json?.sessionId || null;
+  }
+
+  async function uploadFrame(sessionId, seq, phase, jpgBuf){
+    const frameUrl =
+      `${cfg.apiBaseUrl}/api/boxes/${encodeURIComponent(cfg.boxId)}/capture/${encodeURIComponent(sessionId)}/frame`;
+
+    const ts = new Date().toISOString();
+    return await httpPostBinary(frameUrl, jpgBuf, {
+      "Accept": "application/json",
+      "Content-Type": "image/jpeg",
+      "X-Seq": String(seq),
+      "X-Phase": String(phase || "unknown"),
+      "X-Timestamp": ts
+    });
   }
 
   const camEnabled = cfg.camera?.enabled === true;
@@ -316,7 +370,7 @@ async function main(){
   const postCloseMs = Math.max(0, Number(cfg.camera?.postCloseSec ?? 30) * 1000);
 
   const dedupeCfg = cfg.camera?.dedupe || {};
-  const dedupeEnabled = false;
+  const dedupeEnabled = (dedupeCfg.enabled === true);
   const dedupeThreshold = Math.max(0, Number(dedupeCfg.threshold ?? 3));
   const dedupeMinKeepMs = Math.max(0, Number(dedupeCfg.minKeepMs ?? 10000));
   const dedupeMaskBottomPct = Math.max(0, Math.min(90, Number(dedupeCfg.maskBottomPct ?? 0)));
@@ -368,7 +422,6 @@ async function main(){
       capture.stopTimer = null;
     }
   }
-
   function stopLoopTimer(){
     if (capture.timer){
       clearTimeout(capture.timer);
@@ -410,18 +463,8 @@ async function main(){
           return;
         }
 
-        const frameUrl = `${cfg.apiBaseUrl}/api/boxes/${encodeURIComponent(cfg.boxId)}/capture/${encodeURIComponent(capture.sessionId)}/frame`;
-        const ts = new Date().toISOString();
-
-        const r = await httpPostBinary(frameUrl, snap.buf, {
-          "Accept": "application/json",
-          "Content-Type": "image/jpeg",
-          "X-Seq": String(capture.seq),
-          "X-Phase": String(capture.phase),
-          "X-Timestamp": ts
-        });
-
-        if (r.ok) {
+        const r = await uploadFrame(capture.sessionId, capture.seq, capture.phase, snap.buf);
+        if (r.ok){
           log("OK: uploaded", { seq: capture.seq, phase: capture.phase, dist: d.dist ?? null });
           if (d.bucket && d.hash) markKept(d.bucket, d.hash);
         } else {
@@ -441,32 +484,30 @@ async function main(){
     if (!camEnabled) return;
     if (capture.running) return;
 
-    const startUrl = `${cfg.apiBaseUrl}/api/boxes/${encodeURIComponent(cfg.boxId)}/capture/start`;
-    const r = await httpsPostJson(startUrl, { intervalMs, postCloseMs });
-    if (!r.ok || !r.json?.sessionId){
-      log("capture start mislukt", r.status, r.json);
+    const sid = await startCaptureSession(intervalMs, postCloseMs);
+    if (!sid){
+      log("capture start mislukt");
       return;
     }
 
     capture.running = true;
-    capture.sessionId = r.json.sessionId;
+    capture.sessionId = sid;
     capture.seq = 1;
     capture.busy = false;
 
-    // reset dedupe per session
     lastHash = { open: null, close: null };
     lastKeepAt = { open: 0, close: 0 };
 
-    log("capture gestart", { sessionId: capture.sessionId, intervalMs, postCloseMs, dedupeEnabled, dedupeThreshold, dedupeMinKeepMs });
-
+    log("capture gestart", { sessionId: capture.sessionId, intervalMs, postCloseMs, dedupeEnabled });
     scheduleNextShot(0);
   }
 
   async function stopCaptureNow(){
     if (!capture.running) return;
 
-    const stopUrl = `${cfg.apiBaseUrl}/api/boxes/${encodeURIComponent(cfg.boxId)}/capture/${encodeURIComponent(capture.sessionId)}/stop`;
-    const r = await httpsPostJson(stopUrl, {});
+    const stopUrl =
+      `${cfg.apiBaseUrl}/api/boxes/${encodeURIComponent(cfg.boxId)}/capture/${encodeURIComponent(capture.sessionId)}/stop`;
+    const r = await requestJson(stopUrl, "POST", {});
     log("capture stop", r.ok ? "ok" : "fail", r.status, r.json);
 
     capture.running = false;
@@ -478,13 +519,69 @@ async function main(){
     clearStopTimer();
   }
 
+  function startMotor(dir){
+    hw.motorsOff();
+    if (dir === "open") hw.openOn();
+    if (dir === "close") hw.closeOn();
+  }
+
+  function lightForState(){
+    if (door === "open") hw.light(true);
+    if (door === "closed") hw.light(false);
+  }
+
   hw.motorsOff();
   lightForState();
-  log("boot", { cfgPath: cfg.__cfgPath, door, camEnabled, intervalMs, postCloseMs, dedupeEnabled, dedupeThreshold, dedupeMinKeepMs });
+  log("boot", { cfgPath: cfg.__cfgPath, door, camEnabled, intervalMs, postCloseMs });
 
-  if (door === "open") {
+  if (door === "open"){
     setPhase("open");
     await startCaptureIfNeeded();
+  }
+
+  async function handleTakePicture(cmd){
+    if (!camEnabled) {
+      log("take_picture genegeerd: camera.enabled = false");
+      return;
+    }
+
+    const camUrl = cfg.camera?.url || "";
+    if (!camUrl){
+      log("take_picture fail: camera url ontbreekt");
+      return;
+    }
+
+    let sessionId = cmd?.payload?.sessionId || null;
+    if (!sessionId){
+      sessionId = await startCaptureSession(500, 30000);
+      if (!sessionId){
+        log("take_picture fail: geen sessionId");
+        return;
+      }
+    }
+
+    const snap = await httpGetBuffer(camUrl, cfg.camera?.user || "", cfg.camera?.pass || "");
+    if (!snap.ok || !snap.buf || snap.buf.length < 100){
+      log("take_picture FAIL snapshot", { status: snap.status });
+      return;
+    }
+
+    let seq = 1;
+    const sess = await getCaptureSession(sessionId);
+    if (sess && typeof sess.lastSeq === "number") seq = sess.lastSeq + 1;
+    else if (sess && typeof sess.frameCount === "number") seq = sess.frameCount + 1;
+    else seq = Math.floor(Date.now() / 1000);
+
+    const phase = (door === "open") ? "open" : (door === "closed") ? "close" : "unknown";
+
+    const r = await uploadFrame(sessionId, seq, phase, snap.buf);
+    if (!r.ok){
+      log("take_picture FAIL upload", { status: r.status, body: (r.body || "").slice(0, 200) });
+      return;
+    }
+
+    const okAck = await ackCommand(cmd.commandId);
+    log("take_picture OK", { sessionId, seq, ack: okAck });
   }
 
   async function followDesired(initial){
@@ -566,8 +663,18 @@ async function main(){
     moving = false;
   }
 
+  let lastCmdId = null;
+
   while (true){
     await sleep(cfg.pollMs);
+
+    const cmd = await getCommand();
+    if (cmd?.type === "take_picture" && cmd.commandId && cmd.commandId !== lastCmdId){
+      lastCmdId = cmd.commandId;
+      log("📸 take_picture ontvangen", { commandId: cmd.commandId, sessionId: cmd?.payload?.sessionId || null });
+      await handleTakePicture(cmd);
+    }
+
     if (moving) continue;
 
     const d = await getDesired();
@@ -583,4 +690,31 @@ main().catch(e => {
   console.error("[AGENT] FATAAL", e);
   process.exit(1);
 });
+
+===== FILE: /opt/gridbox-agent/poller.mjs =====
+(bestaat niet)
+
+===== FILE: /etc/systemd/system/gridbox-agent.service =====
+[Unit]
+Description=Gridbox Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/node /opt/gridbox-agent/agent.mjs
+WorkingDirectory=/opt/gridbox-agent
+Restart=always
+RestartSec=2
+Environment=NODE_ENV=production
+Environment=BOX_ID=gbox-001
+Environment=API_BASE=https://gridbox-api-960191535038.europe-west1.run.app
+Environment=CAMERA_SNAPSHOT_URL=http://admin:victoria1@192.168.10.100/cgi-bin/snapshot.cgi
+
+
+[Install]
+WantedBy=multi-user.target
+
+===== FILE: /opt/gridbox-agent/desired.txt =====
+(bestaat niet)
 

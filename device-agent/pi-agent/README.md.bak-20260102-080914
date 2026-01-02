@@ -1,10 +1,13 @@
-﻿\# Gridbox Pi Agent
+\# Gridbox Pi Agent
 
 
 
 \## Bestanden
 
 \- agent.mjs
+
+\- take-picture.mjs
+
 \- gridbox-agent.service
 
 \- config.example.json (veilig)
@@ -36,7 +39,6 @@ chmod +x install.sh update.sh export.sh
 sudo nano /opt/gridbox-agent/config.json
 
 sudo systemctl restart gridbox-agent
-
 
 
 

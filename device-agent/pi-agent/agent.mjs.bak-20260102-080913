@@ -1,9 +1,11 @@
-﻿import fs from "fs";
+import fs from "fs";
 import jpeg from "jpeg-js";
 import os from "os";
 import https from "https";
 import http from "http";
 import { execFileSync } from "child_process";
+import "./take-picture.mjs";
+
 const CFG_PATHS = [
   "/opt/gridbox-agent/config.json",
   "/boot/firmware/gridbox-agent/config.json",
@@ -583,4 +585,3 @@ main().catch(e => {
   console.error("[AGENT] FATAAL", e);
   process.exit(1);
 });
-

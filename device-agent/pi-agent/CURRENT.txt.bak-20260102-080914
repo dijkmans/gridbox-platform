@@ -1,10 +1,10 @@
-﻿GRIDBOX AGENT - CURRENT SETUP
+GRIDBOX AGENT - CURRENT SETUP
 
 Service: gridbox-agent (systemd)
 Code: /opt/gridbox-agent/agent.mjs
+Camera helper: /opt/gridbox-agent/take-picture.mjs
 Config: /opt/gridbox-agent/config.json
 
 Backups:
 - /opt/gridbox-agent/backup-2025-12-30 is een volledige snapshot
 - oudere rommel staat in /opt/gridbox-agent/_archive/
-

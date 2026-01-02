@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 OUT="/tmp/gridbox-agent-export.txt"
@@ -26,9 +26,9 @@ add_file() {
 
 add_file /opt/gridbox-agent/CURRENT.txt
 add_file /opt/gridbox-agent/agent.mjs
+add_file /opt/gridbox-agent/take-picture.mjs
 add_file /opt/gridbox-agent/config.json
 add_file /etc/systemd/system/gridbox-agent.service
 
 ls -lh "$OUT"
 echo "Klaar: $OUT"
-
