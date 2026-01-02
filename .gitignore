@@ -114,3 +114,12 @@ local/
 *.bak
 
 
+# Next.js build output and logs
+.next/
+*.log
+
+# local workspace files
+_local/
+local/
+
+
