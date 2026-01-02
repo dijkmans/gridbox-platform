@@ -106,3 +106,11 @@ Thumbs.db
 # lokale exports (nooit committen)
 device-agent/pi-agent/*export*.txt
 
+# lokale exports en dumps
+gridbox-export*.txt
+local/
+
+# editor backups
+*.bak
+
+
