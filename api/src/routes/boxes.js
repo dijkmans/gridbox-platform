@@ -230,9 +230,37 @@ router.get("/:id/pictures", async (req, res) => {
       autoPaginate: false
     });
 
-    const jpgs = (files || [])
+    const jpgsAll = (files || [])
       .filter(f => f.name.endsWith(".jpg"))
       .sort((a, b) => b.name.localeCompare(a.name)); // nieuwste eerst
+
+    // Dubbels verbergen: hou enkel 1 foto per unieke inhoud (md5Hash + size)
+    const metas = await Promise.all(
+      jpgsAll.map(async f => {
+        try {
+          const [meta] = await f.getMetadata();
+          f.metadata = meta; // zodat ts later werkt
+          const md5 = meta?.md5Hash || null;
+          const sz  = meta?.size || null;
+          return { f, md5, sz };
+        } catch (e) {
+          return { f, md5: null, sz: null };
+        }
+      })
+    );
+
+    const seen = new Set();
+    const jpgs = [];
+    for (const x of metas) {
+      if (x.md5 && x.sz) {
+        const key = x.md5 + "|" + x.sz;
+        if (seen.has(key)) continue;
+        seen.add(key);
+      }
+      jpgs.push(x.f);
+    }
+
+    const hiddenDuplicates = jpgsAll.length - jpgs.length;
 
     // Signed URLs maken (10 min geldig)
     const expires = Date.now() + 10 * 60 * 1000;
@@ -299,6 +327,7 @@ router.get("/:id/pictures", async (req, res) => {
   <header>
     <h2 style="margin:0">Pictures</h2>
     <div class="muted">Box: ${esc(boxId)}</div>
+    <div class="muted">Uniek: ${jpgs.length} (verborgen dubbels: ${hiddenDuplicates})</div>
     <label>
       Session
       <select id="sess">${options}</select>
@@ -484,4 +513,5 @@ router.post("/:id/close", async (req, res) => {
 });
 
 export default router;
+
 
