@@ -124,12 +124,17 @@ router.get("/", async (req, res) => {
       const data = d.data();
       const dto = toBoxDto(d.id, data);
 
-      // desired expliciet in box zetten
+      // desired + captureNonce expliciet in box zetten
       dto.box = {
         ...dto.box,
         desired: data.box?.desired ?? null,
         desiredAt: data.box?.desiredAt ?? null,
-        desiredBy: data.box?.desiredBy ?? null
+        desiredBy: data.box?.desiredBy ?? null,
+
+        // NIEUW: nonce voor "take picture" (agent leest dit)
+        captureNonce: data.box?.captureNonce ?? 0,
+        captureRequestedAt: data.box?.captureRequestedAt ?? null,
+        captureRequestedBy: data.box?.captureRequestedBy ?? null
       };
 
       return withLegacyFields(dto);
@@ -157,12 +162,17 @@ router.get("/:id", async (req, res) => {
     const data = doc.data();
     const dto = toBoxDto(doc.id, data);
 
-    // desired expliciet in box zetten
+    // desired + captureNonce expliciet in box zetten
     dto.box = {
       ...dto.box,
       desired: data.box?.desired ?? null,
       desiredAt: data.box?.desiredAt ?? null,
-      desiredBy: data.box?.desiredBy ?? null
+      desiredBy: data.box?.desiredBy ?? null,
+
+      // NIEUW: nonce voor "take picture" (agent leest dit)
+      captureNonce: data.box?.captureNonce ?? 0,
+      captureRequestedAt: data.box?.captureRequestedAt ?? null,
+      captureRequestedBy: data.box?.captureRequestedBy ?? null
     };
 
     res.json(withLegacyFields(dto));
@@ -561,22 +571,21 @@ router.get("/:id/pictures", async (req, res) => {
     // Camera logica
     takePicBtn.onclick = async () => {
         if(!confirm("Wil je nu een foto nemen met de camera?")) return;
-        
+
         takePicBtn.disabled = true;
         takePicBtn.textContent = "⏳ Verzoek verstuurd...";
-        
+
         try {
             const res = await fetch('/api/boxes/' + boxId + '/capture', { method: 'POST' });
             if(!res.ok) throw new Error("Fout bij aanvraag");
-            
+
             takePicBtn.textContent = "📸 Foto wordt genomen... (Even geduld)";
-            
-            // Wacht 12 seconden (geef box tijd om te uploaden)
-            // en herlaad ZONDER sessie-parameter om de nieuwste te pakken
+
+            // Wacht 12 seconden en herlaad zonder sessie-parameter om de nieuwste te pakken
             setTimeout(() => {
                 window.location.href = window.location.pathname;
             }, 12000);
-            
+
         } catch(e) {
             alert("Er ging iets mis: " + e.message);
             takePicBtn.disabled = false;
@@ -974,24 +983,53 @@ router.post("/:id/close", async (req, res) => {
   }
 });
 
-// NIEUWE ROUTE VOOR DE CAMERA
+/*
+=====================================================
+TAKE PICTURE (NIEUW, via nonce in boxes doc)
+=====================================================
+*/
+
+/**
+ * POST /api/boxes/:id/capture
+ * Doel: NIET meer schrijven naar boxCommands (dat kan overschrijven).
+ * We verhogen een teller in het box document: box.captureNonce.
+ * De Pi agent ziet dit en neemt exact 1 foto.
+ */
 router.post("/:id/capture", async (req, res) => {
   try {
     const { id } = req.params;
+    const requestedBy = (req.body?.requestedBy || "portal").toString();
 
-    await db.collection("boxCommands").doc(id).set({
-      commandId: `cmd-${Date.now()}`,
-      type: "capture",
-      status: "pending",
-      createdAt: new Date()
+    const ref = db.collection("boxes").doc(id);
+
+    let newNonce = null;
+
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) {
+        const err = new Error("Box niet gevonden");
+        err.code = "notfound";
+        throw err;
+      }
+
+      const cur = Number(snap.get("box.captureNonce") ?? 0) || 0;
+      newNonce = cur + 1;
+
+      tx.update(ref, {
+        "box.captureNonce": newNonce,
+        "box.captureRequestedAt": new Date(),
+        "box.captureRequestedBy": requestedBy
+      });
     });
 
-    res.json({ ok: true, command: "capture", boxId: id });
+    res.json({ ok: true, command: "capture", boxId: id, captureNonce: newNonce });
   } catch (err) {
-    console.error("Capture command error:", err);
-    res.status(500).json({ error: "Interne serverfout" });
+    if (err?.code === "notfound") {
+      return res.status(404).json({ ok: false, error: "Box niet gevonden" });
+    }
+    console.error("Capture (nonce) error:", err);
+    res.status(500).json({ ok: false, error: "Interne serverfout" });
   }
 });
-
 
 export default router;
