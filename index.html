@@ -555,7 +555,173 @@ EINDE WERKAFSPRAKEN
       .gb-phones{display:none}
       .pill{padding:4px 9px}
     }
-  </style>
+  
+/* =========================================================
+   THEME UPGRADE (zelfde kleuren/gevoel als Pictures)
+   Toegevoegd zonder bestaande code te verwijderen
+   ========================================================= */
+
+:root{
+  --brand:#2563eb;
+  --brand2:#0ea5e9;
+
+  /* koppel aan bestaande variabelen als die bestaan */
+  --primary: var(--brand);
+  --bg: #f6f9ff;
+  --panel: #ffffff;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --border: #e5e7eb;
+
+  --shadow: 0 10px 24px rgba(15,23,42,.06);
+}
+
+body{
+  background: linear-gradient(180deg, var(--bg), #ffffff 60%);
+  color: var(--ink);
+}
+
+/* Toolbar: strak + sticky + accentlijn */
+.toolbar{
+  position: sticky;
+  top: 0;
+  z-index: 20;
+
+  background: rgba(255,255,255,.92);
+  backdrop-filter: saturate(150%) blur(6px);
+
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+
+.toolbar::before{
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: -1px;
+  height: 3px;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  background: linear-gradient(90deg, var(--brand), var(--brand2));
+}
+
+/* Brand: gradient tekst */
+.brand{
+  font-weight: 900;
+  background: linear-gradient(90deg, var(--brand), var(--brand2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Kleine badge achter de brand (werkt ook als .brand een div is) */
+.brand::after{
+  content: "index";
+  display: inline-block;
+  margin-left: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #1e3a8a;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  padding: 4px 8px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+/* Inputs: netter */
+select, input[type="text"], input[type="search"]{
+  border: 1px solid var(--border);
+  background: #fff;
+  box-shadow: 0 6px 14px rgba(15,23,42,.04);
+}
+
+select:focus, input[type="text"]:focus, input[type="search"]:focus{
+  outline: none;
+  border-color: rgba(37,99,235,.55);
+  box-shadow: 0 0 0 4px rgba(37,99,235,.12), 0 6px 14px rgba(15,23,42,.04);
+}
+
+/* Buttons: blauw gradient */
+.btn, .btn-small, .btn-primary, .primary{
+  background: linear-gradient(90deg, var(--brand), var(--brand2));
+  color: #fff;
+  border: 0;
+  box-shadow: 0 10px 18px rgba(37,99,235,.18);
+}
+
+.btn:hover, .btn-small:hover{
+  filter: brightness(1.02);
+  transform: translateY(-1px);
+}
+
+.btn:active, .btn-small:active{
+  transform: translateY(0);
+}
+
+/* Ghost buttons blijven wit */
+.btn-ghost, .btn-small.btn-ghost{
+  background: #fff;
+  border: 1px solid var(--border);
+  color: var(--ink);
+  box-shadow: 0 10px 18px rgba(15,23,42,.06);
+}
+
+/* Cards: wat meer diepte */
+.gb-card, .card, .tile{
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 22px rgba(15,23,42,.05);
+  transition: transform .08s ease, box-shadow .15s ease, background .15s ease, outline-color .15s ease;
+}
+
+.gb-card:hover, .card:hover, .tile:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 16px 34px rgba(15,23,42,.10);
+}
+
+/* Selected card: duidelijke focus */
+.gb-card.is-selected, .card.is-selected, .tile.is-selected{
+  outline: 3px solid rgba(37,99,235,.45);
+  outline-offset: 2px;
+  background: linear-gradient(180deg, rgba(37,99,235,.08), #fff 55%);
+  box-shadow: 0 16px 34px rgba(37,99,235,.18);
+}
+
+/* Chips: blauwer */
+.chip{
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  color: #1e3a8a;
+}
+
+/* Side header: glass effect */
+.side-header{
+  background: rgba(255,255,255,.92);
+  backdrop-filter: saturate(150%) blur(6px);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 22px rgba(15,23,42,.05);
+}
+
+/* Titels: klein accentlijntje (als die classes bestaan) */
+.gb-section__title, .section-title, h2{
+  position: relative;
+}
+
+.gb-section__title::after, .section-title::after{
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -6px;
+  width: 120px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand), var(--brand2));
+  opacity: .9;
+}
+
+</style>
 </head>
 
 <body>
