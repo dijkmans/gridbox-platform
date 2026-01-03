@@ -472,8 +472,6 @@ router.get("/:id/pictures", async (req, res) => {
       box-shadow:0 6px 18px rgba(16,185,129,.18);
     }
     button.ghost{background:#fff}
-    button.danger-ghost{background:transparent; color:#ef4444; border:1px solid #ef4444;}
-    button.danger-ghost:hover{background:#fef2f2;}
 
     .hint{
       margin-left:auto;
@@ -481,8 +479,6 @@ router.get("/:id/pictures", async (req, res) => {
       color:var(--muted);
       font-style:italic;
     }
-    
-    .spacer-auto { margin-left: auto; }
 
     .stats{
       display:grid;
@@ -535,8 +531,7 @@ router.get("/:id/pictures", async (req, res) => {
       user-select:none;
       box-shadow:0 10px 18px rgba(37,99,235,.2);
     }
-    /* Hidden classes */
-    .thumbwrap.hidden { display: none !important; }
+    .thumbwrap.is-dup-hidden{display:none}
 
     .lb.hidden{display:none}
     .lb{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center}
@@ -591,7 +586,7 @@ router.get("/:id/pictures", async (req, res) => {
 
       <label>
         <input type="checkbox" id="advTol">
-        Visuele instelling
+        Andere tolerantie
       </label>
 
       <label id="tolWrap" style="display:none">
@@ -609,18 +604,10 @@ router.get("/:id/pictures", async (req, res) => {
         <input type="checkbox" id="hideDup" checked>
         Verberg dubbels
       </label>
-      
-      <label>
-        <input type="checkbox" id="filter10s">
-        ⏱️ 10s Interval
-      </label>
 
       <button id="reset" class="ghost" type="button">Reset</button>
 
       <span id="scanStatus" class="muted"></span>
-      
-      <div class="spacer-auto"></div>
-      <button id="closePage" class="danger-ghost" type="button">✕ Sluiten</button>
     </div>
   </header>
 
@@ -657,16 +644,6 @@ router.get("/:id/pictures", async (req, res) => {
   <script>
     const boxId = "${esc(boxId)}";
     const takePicBtn = document.getElementById("takePic");
-    const closePageBtn = document.getElementById("closePage");
-
-    // Close button logic
-    closePageBtn.onclick = () => {
-        window.close(); 
-        // Fallback voor als window.close() geblokkeerd wordt
-        if(!window.closed) {
-             alert("Kan venster niet automatisch sluiten. Sluit dit tabblad handmatig.");
-        }
-    };
 
     async function getLatestPictureInfo(){
       try{
@@ -684,6 +661,7 @@ router.get("/:id/pictures", async (req, res) => {
         takePicBtn.disabled = true;
         takePicBtn.textContent = "⏳ Verzoek verstuurd...";
 
+        // neem een "before" snapshot zodat we kunnen zien wanneer er iets nieuws bijkomt
         const before = await getLatestPictureInfo();
 
         try {
@@ -713,6 +691,7 @@ router.get("/:id/pictures", async (req, res) => {
               const sessionChanged = beforeSession && now.sessionId && now.sessionId !== beforeSession;
               const objectChanged = beforeObj && now.lastObject && now.lastObject !== beforeObj;
 
+              // als er geen before was, is "nieuw" zodra we een lastObject zien
               const becameAvailable = (!before || !beforeObj) && !!now.lastObject;
 
               if (sessionChanged || objectChanged || becameAvailable) {
@@ -767,7 +746,6 @@ router.get("/:id/pictures", async (req, res) => {
     const scanBtn = document.getElementById("scan");
     const resetBtn = document.getElementById("reset");
     const hideDup = document.getElementById("hideDup");
-    const filter10s = document.getElementById("filter10s");
     const scanStatus = document.getElementById("scanStatus");
 
     const statUnique = document.getElementById("statUnique");
@@ -776,7 +754,7 @@ router.get("/:id/pictures", async (req, res) => {
 
     const allThumbsEls = Array.from(document.querySelectorAll("a.thumb"));
 
-    let lastGroups = null; // Map<hash, [indices]>
+    let lastGroups = null;
 
     function applyTolUi(){
       const on = !!advTol.checked;
@@ -833,6 +811,8 @@ router.get("/:id/pictures", async (req, res) => {
 
     function clearDupMarks(){
       allThumbsEls.forEach(a => {
+        const wrap = a.closest(".thumbwrap");
+        if (wrap) wrap.classList.remove("is-dup-hidden");
         a.removeAttribute("data-dup-hash");
         const badge = a.querySelector(".dup-badge");
         if (badge){
@@ -842,77 +822,27 @@ router.get("/:id/pictures", async (req, res) => {
       });
       lastGroups = null;
       scanStatus.textContent = "";
-      updateVisibility(); 
+      setStats(allThumbsEls.length, 0);
     }
 
-    // Gecombineerde functie die zowel Dubbels als 10s-filter checkt
-    function updateVisibility() {
-        const doHideDup = hideDup.checked;
-        const doFilter10s = filter10s.checked;
+    function applyHideSetting(){
+      if (!lastGroups) return;
 
-        // Maak eerst een map van index -> isDuplicateHidden
-        const dupHiddenIndices = new Set();
-        if (lastGroups && doHideDup) {
-            lastGroups.forEach(idxs => {
-                if (idxs.length > 1) {
-                    // alles behalve de eerste (index 0) verbergen
-                    for (let i = 1; i < idxs.length; i++) {
-                        dupHiddenIndices.add(idxs[i]);
-                    }
-                }
-            });
+      allThumbsEls.forEach(a => {
+        const w = a.closest(".thumbwrap");
+        if (w) w.classList.remove("is-dup-hidden");
+      });
+
+      if (!hideDup.checked) return;
+
+      lastGroups.forEach((idxs) => {
+        if (!idxs || idxs.length < 2) return;
+        for (let k = 1; k < idxs.length; k++){
+          const a = allThumbsEls[idxs[k]];
+          const w = a && a.closest(".thumbwrap");
+          if (w) w.classList.add("is-dup-hidden");
         }
-
-        let dupCount = dupHiddenIndices.size;
-        
-        // 10s filter logica
-        // We itereren over de lijst (die staat op datum, nieuw -> oud of andersom).
-        // De server stuurt "nieuwste eerst" (descending). 
-        // We willen alleen foto's tonen als het verschil met de *vorige getoonde* foto > 10s is.
-        
-        let lastVisibleTime = null; 
-
-        allThumbsEls.forEach((a, index) => {
-            const wrap = a.closest(".thumbwrap");
-            if (!wrap) return;
-
-            // 1. Check duplicate
-            const isDupHidden = dupHiddenIndices.has(index);
-
-            // 2. Check time
-            let isTimeHidden = false;
-            if (!isDupHidden && doFilter10s) {
-                // Alleen checken als hij niet al verborgen is door dubbels
-                const tsStr = a.getAttribute("data-ts");
-                if (tsStr) {
-                    const t = Date.parse(tsStr);
-                    if (!Number.isNaN(t)) {
-                         if (lastVisibleTime === null) {
-                             // Eerste foto: altijd tonen
-                             lastVisibleTime = t;
-                         } else {
-                             // Verschil berekenen (absoluut, want volgorde kan variëren)
-                             const diff = Math.abs(t - lastVisibleTime);
-                             if (diff < 10000) { // kleiner dan 10.000ms = 10s
-                                 isTimeHidden = true;
-                             } else {
-                                 // Groot genoeg verschil: tonen en tijd updaten
-                                 lastVisibleTime = t;
-                             }
-                         }
-                    }
-                }
-            }
-
-            // Pas CSS toe
-            if (isDupHidden || isTimeHidden) {
-                wrap.classList.add("hidden");
-            } else {
-                wrap.classList.remove("hidden");
-            }
-        });
-
-        setStats(allThumbsEls.length, dupCount);
+      });
     }
 
     async function runPool(tasks, limit){
@@ -972,11 +902,13 @@ router.get("/:id/pictures", async (req, res) => {
       });
 
       let dupGroups = 0;
-      // We tellen dupCount nu dynamisch in updateVisibility, maar voor badges doen we het hier
+      let dupCount = 0;
+
       groups.forEach((idxs) => {
         if (!idxs || idxs.length < 2) return;
         dupGroups += 1;
-        
+        dupCount += (idxs.length - 1);
+
         const keepA = allThumbsEls[idxs[0]];
         const badge = keepA && keepA.querySelector(".dup-badge");
         if (badge){
@@ -986,10 +918,11 @@ router.get("/:id/pictures", async (req, res) => {
       });
 
       lastGroups = groups;
-      updateVisibility();
+      applyHideSetting();
+      setStats(total, dupCount);
 
       scanStatus.textContent = dupGroups
-        ? ("Klaar. Groepen: " + dupGroups)
+        ? ("Klaar. Groepen: " + dupGroups + ", dubbels: " + dupCount)
         : "Klaar. Geen dubbels gevonden";
 
       scanBtn.disabled = false;
@@ -1001,14 +934,12 @@ router.get("/:id/pictures", async (req, res) => {
     resetBtn.addEventListener("click", () => {
       advTol.checked = false;
       hideDup.checked = true;
-      filter10s.checked = false;
       tolSel.value = "loose";
       applyTolUi();
       scanDuplicates();
     });
 
-    hideDup.addEventListener("change", updateVisibility);
-    filter10s.addEventListener("change", updateVisibility);
+    hideDup.addEventListener("change", applyHideSetting);
 
     advTol.addEventListener("change", () => {
       applyTolUi();
@@ -1030,10 +961,10 @@ router.get("/:id/pictures", async (req, res) => {
     let idx = -1;
 
     function getActiveThumbs(){
-      // Alleen thumbs die niet verborgen zijn
+      if (!hideDup.checked) return allThumbsEls;
       return allThumbsEls.filter(a => {
         const w = a.closest(".thumbwrap");
-        return !w || !w.classList.contains("hidden");
+        return !w || !w.classList.contains("is-dup-hidden");
       });
     }
 
