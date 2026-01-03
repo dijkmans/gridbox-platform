@@ -721,10 +721,12 @@ router.get("/:id/pictures", async (req, res) => {
   }
 });
 
+/*
 =====================================================
 DESIRED (nieuwe, correcte route)
 =====================================================
 */
+
 
 /**
  * POST /api/boxes/:id/desired
