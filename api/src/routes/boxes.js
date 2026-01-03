@@ -1,4 +1,4 @@
-﻿import { Router } from "express";
+import { Router } from "express";
 import { Storage } from "@google-cloud/storage";
 import { db } from "../firebase.js";
 import { toBoxDto } from "../dto/boxDto.js";
@@ -313,7 +313,7 @@ router.get("/:id/pictures", async (req, res) => {
   <title>Pictures ${esc(boxId)}</title>
   <style>
     body{font-family:system-ui,Arial;margin:16px}
-    header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+    header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
     .grid img{width:100%;height:140px;object-fit:cover;border-radius:10px;background:#eee}
     .thumbwrap{display:flex;flex-direction:column;gap:6px}
@@ -368,9 +368,14 @@ router.get("/:id/pictures", async (req, res) => {
     </label>
     <button id="go" type="button">Open</button>
 
-    <label>
+    <label style="display:flex;gap:6px;align-items:center">
+      <input type="checkbox" id="advTol">
+      Andere tolerantie
+    </label>
+
+    <label id="tolWrap" style="display:none">
       Tolerantie
-      <select id="tol">
+      <select id="tol" disabled>
         <option value="strict">Streng (32x32)</option>
         <option value="normal" selected>Normaal (16x16)</option>
         <option value="loose">Los (8x8)</option>
@@ -389,7 +394,9 @@ router.get("/:id/pictures", async (req, res) => {
     <span id="scanStatus" class="muted"></span>
   </header>
 
-  <details id="dupDetails" class="muted" style="margin:8px 0 14px">
+  <div class="grid">${thumbs}</div>
+
+  <details id="dupDetails" class="muted" style="margin:14px 0 14px">
     <summary>Overzicht dubbels</summary>
     <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <button id="copyDup" type="button">Kopieer lijst</button>
@@ -397,8 +404,6 @@ router.get("/:id/pictures", async (req, res) => {
     </div>
     <pre id="dupOut"></pre>
   </details>
-
-  <div class="grid">${thumbs}</div>
 
   <div id="lb" class="lb hidden">
     <div id="lbBack" class="lb-backdrop"></div>
@@ -443,6 +448,9 @@ router.get("/:id/pictures", async (req, res) => {
     // =========================================================
 
     const tolSel = document.getElementById("tol");
+    const advTol = document.getElementById("advTol");
+    const tolWrap = document.getElementById("tolWrap");
+
     const scanBtn = document.getElementById("scan");
     const resetBtn = document.getElementById("reset");
     const hideDup = document.getElementById("hideDup");
@@ -456,6 +464,13 @@ router.get("/:id/pictures", async (req, res) => {
     const allThumbsEls = Array.from(document.querySelectorAll("a.thumb"));
 
     let lastGroups = null; // Map hash -> index[]
+
+    function applyTolUi(){
+      const on = !!advTol.checked;
+      tolWrap.style.display = on ? "" : "none";
+      tolSel.disabled = !on;
+      if (!on) tolSel.value = "normal";
+    }
 
     function tolConfig(){
       const v = tolSel.value;
@@ -579,8 +594,11 @@ router.get("/:id/pictures", async (req, res) => {
         return;
       }
 
+      const tolWasDisabled = tolSel.disabled;
+
       scanBtn.disabled = true;
       tolSel.disabled = true;
+
       scanStatus.textContent = "Scannen: 0/" + total;
 
       const groups = new Map();
@@ -617,7 +635,7 @@ router.get("/:id/pictures", async (req, res) => {
       let dupGroups = 0;
       let dupCount = 0;
 
-      groups.forEach((idxs, h) => {
+      groups.forEach((idxs) => {
         if (!idxs || idxs.length < 2) return;
         dupGroups += 1;
         dupCount += (idxs.length - 1);
@@ -633,20 +651,38 @@ router.get("/:id/pictures", async (req, res) => {
       lastGroups = groups;
       applyHideSetting();
       buildDupOutput();
-      dupDetails.open = true;
 
       scanStatus.textContent = dupGroups
         ? ("Klaar. Groepen: " + dupGroups + ", dubbels: " + dupCount)
         : "Klaar. Geen dubbels gevonden";
 
       scanBtn.disabled = false;
-      tolSel.disabled = false;
+      tolSel.disabled = tolWasDisabled;
     }
 
     scanBtn.addEventListener("click", scanDuplicates);
-    resetBtn.addEventListener("click", clearDupMarks);
+
+    resetBtn.addEventListener("click", () => {
+      advTol.checked = false;
+      hideDup.checked = true;
+      tolSel.value = "normal";
+      applyTolUi();
+      scanDuplicates();
+    });
+
     hideDup.addEventListener("change", () => {
       applyHideSetting();
+    });
+
+    advTol.addEventListener("change", () => {
+      applyTolUi();
+      // Als je terug uitzet, meteen terug naar normaal en her-scan
+      if (!advTol.checked) scanDuplicates();
+    });
+
+    tolSel.addEventListener("change", () => {
+      // Alleen relevant als "Andere tolerantie" aan staat
+      if (advTol.checked) scanDuplicates();
     });
 
     copyDup.addEventListener("click", async () => {
@@ -712,6 +748,15 @@ router.get("/:id/pictures", async (req, res) => {
       if (e.key === "ArrowLeft") show(idx - 1);
       if (e.key === "ArrowRight") show(idx + 1);
     });
+
+    // init: standaard normal 16x16, dropdown verborgen
+    applyTolUi();
+
+    window.addEventListener("load", () => {
+      tolSel.value = "normal";
+      hideDup.checked = true;
+      scanDuplicates();
+    });
   </script>
 </body>
 </html>`);
@@ -726,7 +771,6 @@ router.get("/:id/pictures", async (req, res) => {
 DESIRED (nieuwe, correcte route)
 =====================================================
 */
-
 
 /**
  * POST /api/boxes/:id/desired
@@ -803,5 +847,3 @@ router.post("/:id/close", async (req, res) => {
 });
 
 export default router;
-
-
