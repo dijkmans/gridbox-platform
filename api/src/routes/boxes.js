@@ -181,10 +181,6 @@ PICTURES VIEWER (Portal)
 /**
  * GET /api/boxes/:id/pictures/file?object=...
  * Proxy voor GCS images (zelfde origin) zodat canvas-getImageData werkt.
- *
- * Veiligheid:
- * - object moet beginnen met: boxes/<boxId>/sessions/
- * - en eindigen op .jpg
  */
 router.get("/:id/pictures/file", async (req, res) => {
   try {
@@ -220,10 +216,6 @@ router.get("/:id/pictures/file", async (req, res) => {
 
 /**
  * GET /api/boxes/:id/pictures
- * - Foto's groter
- * - Standaard Los (8x8)
- * - Overzicht dubbels weg
- * - Meer kleur
  */
 router.get("/:id/pictures", async (req, res) => {
   try {
@@ -372,6 +364,12 @@ router.get("/:id/pictures", async (req, res) => {
       border:0;
       box-shadow:0 6px 18px rgba(37,99,235,.18);
     }
+    button.camera{
+      background:linear-gradient(90deg,#10b981,#059669);
+      color:#fff;
+      border:0;
+      box-shadow:0 6px 18px rgba(16,185,129,.18);
+    }
     button.ghost{background:#fff}
 
     .hint{
@@ -477,7 +475,9 @@ router.get("/:id/pictures", async (req, res) => {
         <div class="muted">Box: ${esc(boxId)}</div>
       </div>
 
-      <label>
+      <button id="takePic" class="camera" type="button">📸 Neem foto</button>
+
+      <label style="margin-left:12px">
         Session
         <select id="sess">${options}</select>
       </label>
@@ -507,7 +507,6 @@ router.get("/:id/pictures", async (req, res) => {
       <button id="reset" class="ghost" type="button">Reset</button>
 
       <span id="scanStatus" class="muted"></span>
-      <div class="hint">Pas aan om meer of minder dubbels te vinden.</div>
     </div>
   </header>
 
@@ -542,6 +541,34 @@ router.get("/:id/pictures", async (req, res) => {
   </div>
 
   <script>
+    const boxId = "${esc(boxId)}";
+    const takePicBtn = document.getElementById("takePic");
+
+    // Camera logica
+    takePicBtn.onclick = async () => {
+        if(!confirm("Wil je nu een foto nemen met de camera?")) return;
+        
+        takePicBtn.disabled = true;
+        takePicBtn.textContent = "⏳ Verzoek verstuurd...";
+        
+        try {
+            const res = await fetch('/api/boxes/' + boxId + '/capture', { method: 'POST' });
+            if(!res.ok) throw new Error("Fout bij aanvraag");
+            
+            takePicBtn.textContent = "📸 Foto wordt genomen... (Even geduld)";
+            
+            // Wacht 8 seconden (geef box tijd om te uploaden) en herlaad
+            setTimeout(() => {
+                location.reload();
+            }, 8000);
+            
+        } catch(e) {
+            alert("Er ging iets mis: " + e.message);
+            takePicBtn.disabled = false;
+            takePicBtn.textContent = "📸 Neem foto";
+        }
+    };
+
     const sel = document.getElementById("sess");
     document.getElementById("go").onclick = () => {
       const s = encodeURIComponent(sel.value);
@@ -931,5 +958,25 @@ router.post("/:id/close", async (req, res) => {
     res.status(500).json({ error: "Interne serverfout" });
   }
 });
+
+// NIEUWE ROUTE VOOR DE CAMERA
+router.post("/:id/capture", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await db.collection("boxCommands").doc(id).set({
+      commandId: `cmd-${Date.now()}`,
+      type: "capture",
+      status: "pending",
+      createdAt: new Date()
+    });
+
+    res.json({ ok: true, command: "capture", boxId: id });
+  } catch (err) {
+    console.error("Capture command error:", err);
+    res.status(500).json({ error: "Interne serverfout" });
+  }
+});
+
 
 export default router;
