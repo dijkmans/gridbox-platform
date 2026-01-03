@@ -220,17 +220,6 @@ router.get("/:id/pictures/file", async (req, res) => {
 
 /**
  * GET /api/boxes/:id/pictures
- * Doel: de portal knop "PICTURES" laten werken zonder dat je de portal moet aanpassen.
- *
- * Verwacht bestanden in GCS:
- * boxes/<boxId>/sessions/<sessionId>/raw/*.jpg
- *
- * Vereist env var:
- * CAPTURE_BUCKET (aanbevolen) of GCS_BUCKET/BUCKET_NAME
- *
- * Extra:
- * - Dubbels detecteren in de browser via canvas downsampling + kleur-quantisatie.
- * - Hiermee worden bijna-identieke foto's (bv compressie) toch gegroepeerd.
  */
 router.get("/:id/pictures", async (req, res) => {
   try {
@@ -242,7 +231,6 @@ router.get("/:id/pictures", async (req, res) => {
 
     const sessionsPrefix = `boxes/${boxId}/sessions/`;
 
-    // sessies ophalen via "delimiter" zodat we enkel de mappen krijgen
     const [, , apiResp] = await bucket.getFiles({
       prefix: sessionsPrefix,
       delimiter: "/",
@@ -266,7 +254,6 @@ router.get("/:id/pictures", async (req, res) => {
     const requested = (req.query.sessionId || "").toString().trim();
     const sessionId = requested && sessions.includes(requested) ? requested : sessions[0];
 
-    // Foto's zoeken in gekozen session
     const rawPrefix = `boxes/${boxId}/sessions/${sessionId}/raw/`;
     const [files] = await bucket.getFiles({
       prefix: rawPrefix,
@@ -282,8 +269,6 @@ router.get("/:id/pictures", async (req, res) => {
       const object = f.name;
       const name = f.name.split("/").pop();
       const ts = f.metadata?.metadata?.ts || f.metadata?.timeCreated || f.metadata?.updated || null;
-
-      // same-origin proxy url
       const url = `/api/boxes/${encodeURIComponent(boxId)}/pictures/file?object=${encodeURIComponent(object)}`;
       return { name, url, ts, object };
     });
@@ -312,44 +297,169 @@ router.get("/:id/pictures", async (req, res) => {
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Pictures ${esc(boxId)}</title>
   <style>
-    body{font-family:system-ui,Arial;margin:16px}
-    header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
-    .grid img{width:100%;height:140px;object-fit:cover;border-radius:10px;background:#eee}
-    .thumbwrap{display:flex;flex-direction:column;gap:6px}
-    .thumb-meta{font-size:12px;opacity:.75}
-    select,button{padding:8px 10px;font-size:14px}
-    .muted{opacity:.7}
+    :root{
+      --brand:#2563eb;
+      --brand2:#0ea5e9;
+      --bg:#f6f9ff;
+      --card:#ffffff;
+      --line:#e5e7eb;
+      --txt:#0f172a;
+      --muted:#64748b;
+    }
+
+    *{box-sizing:border-box}
+    body{
+      font-family:system-ui,Arial;
+      margin:0;
+      color:var(--txt);
+      background:linear-gradient(180deg,var(--bg),#ffffff 60%);
+    }
+
+    .container{max-width:1200px;margin:0 auto;padding:14px 16px 28px}
+
+    header{
+      position:sticky;
+      top:0;
+      z-index:50;
+      background:rgba(255,255,255,.9);
+      backdrop-filter:saturate(150%) blur(6px);
+      border-bottom:1px solid var(--line);
+    }
+
+    .topbar{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      padding:12px 16px;
+      max-width:1200px;
+      margin:0 auto;
+    }
+
+    .title{
+      display:flex;
+      gap:10px;
+      align-items:baseline;
+      margin-right:6px;
+    }
+
+    h2{margin:0;font-size:20px}
+    .muted{color:var(--muted)}
+
+    label{display:flex;gap:6px;align-items:center}
+    select,button{
+      padding:8px 10px;
+      font-size:14px;
+      border-radius:10px;
+      border:1px solid var(--line);
+      background:#fff;
+    }
+
+    input[type="checkbox"]{accent-color:var(--brand)}
+
+    button{
+      cursor:pointer;
+      transition:transform .05s ease, box-shadow .15s ease, background .15s ease;
+    }
+    button:active{transform:scale(.98)}
+    button.primary{
+      background:linear-gradient(90deg,var(--brand),var(--brand2));
+      color:#fff;
+      border:0;
+      box-shadow:0 6px 18px rgba(37,99,235,.18);
+    }
+    button.ghost{
+      background:#fff;
+    }
+
+    .hint{
+      margin-left:auto;
+      font-size:12px;
+      color:var(--muted);
+      font-style:italic;
+    }
+
+    .stats{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:12px;
+      margin:14px 0 12px;
+    }
+    .stat{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:14px 14px;
+      box-shadow:0 10px 24px rgba(15,23,42,.05);
+    }
+    .stat .k{font-size:12px;color:var(--muted)}
+    .stat .v{font-size:28px;font-weight:700;margin-top:4px}
+    .stat.u{border-color:rgba(16,185,129,.25);background:linear-gradient(180deg,rgba(16,185,129,.12),#fff)}
+    .stat.d{border-color:rgba(245,158,11,.25);background:linear-gradient(180deg,rgba(245,158,11,.12),#fff)}
+    .stat.t{border-color:rgba(59,130,246,.25);background:linear-gradient(180deg,rgba(59,130,246,.12),#fff)}
+
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(360px,1fr));
+      gap:16px;
+    }
+    .grid img{
+      width:100%;
+      height:280px;
+      object-fit:cover;
+      border-radius:16px;
+      background:#e5e7eb;
+      border:1px solid rgba(0,0,0,.06);
+      box-shadow:0 10px 22px rgba(15,23,42,.08);
+    }
+
+    .thumbwrap{display:flex;flex-direction:column;gap:8px}
+    .thumb-meta{font-size:13px;color:var(--muted)}
 
     .thumb{display:block;position:relative}
     .dup-badge{
       position:absolute;
-      top:8px;
-      left:8px;
-      background:rgba(0,0,0,.55);
+      top:10px;
+      left:10px;
+      background:rgba(37,99,235,.85);
       color:#fff;
       font-size:12px;
-      padding:4px 8px;
+      padding:4px 10px;
       border-radius:999px;
       z-index:2;
       user-select:none;
+      box-shadow:0 10px 18px rgba(37,99,235,.2);
     }
     .thumbwrap.is-dup-hidden{display:none}
 
-    details{border:1px solid #e5e7eb;border-radius:12px;padding:10px;background:#fafafa}
-    details summary{cursor:pointer;font-weight:600}
-    #dupOut{white-space:pre-wrap;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;max-height:240px;overflow:auto;margin-top:10px}
-
     .lb.hidden{display:none}
     .lb{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center}
-    .lb-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.75)}
+    .lb-backdrop{position:absolute;inset:0;background:rgba(2,6,23,.78)}
     .lb-panel{position:relative;max-width:min(1200px,95vw);max-height:92vh;z-index:1}
-    .lb-img{max-width:95vw;max-height:82vh;display:block;border-radius:12px;background:#111}
-    .lb-caption{color:#fff;opacity:.85;margin-top:8px;font-size:14px}
-    .lb-btn{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.55);color:#fff;border:0;border-radius:10px;padding:10px 14px;cursor:pointer;font-size:18px}
+    .lb-img{max-width:95vw;max-height:82vh;display:block;border-radius:16px;background:#111}
+    .lb-caption{color:#fff;opacity:.88;margin-top:10px;font-size:14px}
+    .lb-btn{
+      position:absolute;
+      top:50%;
+      transform:translateY(-50%);
+      background:rgba(0,0,0,.55);
+      color:#fff;
+      border:0;
+      border-radius:12px;
+      padding:10px 14px;
+      cursor:pointer;
+      font-size:18px
+    }
     .lb-prev{left:-52px}
     .lb-next{right:-52px}
     .lb-close{top:-46px;right:0;transform:none}
+
+    @media (max-width:900px){
+      .stats{grid-template-columns:1fr}
+      .grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+      .grid img{height:220px}
+      .hint{width:100%;margin-left:0}
+    }
     @media (max-width:700px){
       .lb-prev{left:6px}
       .lb-next{right:6px}
@@ -359,51 +469,64 @@ router.get("/:id/pictures", async (req, res) => {
 </head>
 <body>
   <header>
-    <h2 style="margin:0">Pictures</h2>
-    <div class="muted">Box: ${esc(boxId)}</div>
+    <div class="topbar">
+      <div class="title">
+        <h2>Pictures</h2>
+        <div class="muted">Box: ${esc(boxId)}</div>
+      </div>
 
-    <label>
-      Session
-      <select id="sess">${options}</select>
-    </label>
-    <button id="go" type="button">Open</button>
+      <label>
+        Session
+        <select id="sess">${options}</select>
+      </label>
+      <button id="go" class="ghost" type="button">Open</button>
 
-    <label style="display:flex;gap:6px;align-items:center">
-      <input type="checkbox" id="advTol">
-      Andere tolerantie
-    </label>
+      <label style="display:flex;gap:6px;align-items:center">
+        <input type="checkbox" id="advTol">
+        Andere tolerantie
+      </label>
 
-    <label id="tolWrap" style="display:none">
-      Tolerantie
-      <select id="tol" disabled>
-        <option value="strict">Streng (32x32)</option>
-        <option value="normal" selected>Normaal (16x16)</option>
-        <option value="loose">Los (8x8)</option>
-      </select>
-    </label>
+      <label id="tolWrap" style="display:none">
+        Tolerantie
+        <select id="tol" disabled>
+          <option value="strict">Streng (32x32)</option>
+          <option value="normal">Normaal (16x16)</option>
+          <option value="loose" selected>Los (8x8)</option>
+        </select>
+      </label>
 
-    <button id="scan" type="button">Zoek dubbels</button>
+      <button id="scan" class="primary" type="button">Zoek dubbels</button>
 
-    <label style="display:flex;gap:6px;align-items:center">
-      <input type="checkbox" id="hideDup" checked>
-      Verberg dubbels
-    </label>
+      <label style="display:flex;gap:6px;align-items:center">
+        <input type="checkbox" id="hideDup" checked>
+        Verberg dubbels
+      </label>
 
-    <button id="reset" type="button">Reset</button>
+      <button id="reset" class="ghost" type="button">Reset</button>
 
-    <span id="scanStatus" class="muted"></span>
+      <span id="scanStatus" class="muted"></span>
+      <div class="hint">Pas aan om meer of minder dubbels te vinden.</div>
+    </div>
   </header>
 
-  <div class="grid">${thumbs}</div>
-
-  <details id="dupDetails" class="muted" style="margin:14px 0 14px">
-    <summary>Overzicht dubbels</summary>
-    <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <button id="copyDup" type="button">Kopieer lijst</button>
-      <div id="dupCounts"></div>
+  <div class="container">
+    <div class="stats">
+      <div class="stat u">
+        <div class="k">Visueel uniek</div>
+        <div class="v" id="statUnique">0</div>
+      </div>
+      <div class="stat d">
+        <div class="k">Dubbels (visueel)</div>
+        <div class="v" id="statDup">0</div>
+      </div>
+      <div class="stat t">
+        <div class="k">Totaal verwerkt</div>
+        <div class="v" id="statTotal">0</div>
+      </div>
     </div>
-    <pre id="dupOut"></pre>
-  </details>
+
+    <div class="grid">${thumbs}</div>
+  </div>
 
   <div id="lb" class="lb hidden">
     <div id="lbBack" class="lb-backdrop"></div>
@@ -437,11 +560,295 @@ router.get("/:id/pictures", async (req, res) => {
       }).format(new Date(t));
     }
 
-    // timestamps onder thumbnails
     document.querySelectorAll(".thumb-meta").forEach(el => {
       const ts = el.getAttribute("data-ts") || "";
       el.textContent = fmtTs(ts);
     });
+
+    const tolSel = document.getElementById("tol");
+    const advTol = document.getElementById("advTol");
+    const tolWrap = document.getElementById("tolWrap");
+
+    const scanBtn = document.getElementById("scan");
+    const resetBtn = document.getElementById("reset");
+    const hideDup = document.getElementById("hideDup");
+    const scanStatus = document.getElementById("scanStatus");
+
+    const statUnique = document.getElementById("statUnique");
+    const statDup = document.getElementById("statDup");
+    const statTotal = document.getElementById("statTotal");
+
+    const allThumbsEls = Array.from(document.querySelectorAll("a.thumb"));
+
+    let lastGroups = null; // Map hash -> index[]
+
+    function applyTolUi(){
+      const on = !!advTol.checked;
+      tolWrap.style.display = on ? "" : "none";
+      tolSel.disabled = !on;
+      if (!on) tolSel.value = "loose";
+    }
+
+    function tolConfig(){
+      const v = tolSel.value;
+      if (v === "strict") return { size: 32, step: 32 };
+      if (v === "normal") return { size: 16, step: 64 };
+      return { size: 8, step: 128 };
+    }
+
+    async function loadImage(src){
+      const img = new Image();
+      img.decoding = "async";
+      img.src = src;
+      if (img.decode) {
+        await img.decode();
+      } else {
+        await new Promise((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error("load fail"));
+        });
+      }
+      return img;
+    }
+
+    function visualHash(img, size, step){
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, size, size);
+      const data = ctx.getImageData(0, 0, size, size).data;
+      let out = "";
+      for (let i = 0; i < data.length; i += 4){
+        const r = Math.floor((data[i] || 0) / step);
+        const g = Math.floor((data[i + 1] || 0) / step);
+        const b = Math.floor((data[i + 2] || 0) / step);
+        out += r.toString(16) + g.toString(16) + b.toString(16);
+      }
+      return out;
+    }
+
+    function setStats(total, dupCount){
+      const unique = Math.max(0, total - dupCount);
+      statTotal.textContent = String(total);
+      statDup.textContent = String(dupCount);
+      statUnique.textContent = String(unique);
+    }
+
+    function clearDupMarks(){
+      allThumbsEls.forEach(a => {
+        const wrap = a.closest(".thumbwrap");
+        wrap && wrap.classList.remove("is-dup-hidden");
+        a.removeAttribute("data-dup-hash");
+        const badge = a.querySelector(".dup-badge");
+        if (badge){
+          badge.hidden = true;
+          badge.textContent = "";
+        }
+      });
+      lastGroups = null;
+      scanStatus.textContent = "";
+      setStats(allThumbsEls.length, 0);
+    }
+
+    function applyHideSetting(){
+      if (!lastGroups) return;
+
+      allThumbsEls.forEach(a => {
+        const w = a.closest(".thumbwrap");
+        w && w.classList.remove("is-dup-hidden");
+      });
+
+      if (!hideDup.checked) return;
+
+      lastGroups.forEach((idxs) => {
+        if (!idxs || idxs.length < 2) return;
+        for (let k = 1; k < idxs.length; k++){
+          const a = allThumbsEls[idxs[k]];
+          const w = a && a.closest(".thumbwrap");
+          w && w.classList.add("is-dup-hidden");
+        }
+      });
+    }
+
+    async function runPool(tasks, limit){
+      let i = 0;
+      const workers = Array.from({ length: limit }, async () => {
+        while (i < tasks.length){
+          const cur = i++;
+          await tasks[cur]();
+        }
+      });
+      await Promise.all(workers);
+    }
+
+    async function scanDuplicates(){
+      clearDupMarks();
+
+      const cfg = tolConfig();
+      const total = allThumbsEls.length;
+      if (!total){
+        scanStatus.textContent = "Geen foto's";
+        setStats(0, 0);
+        return;
+      }
+
+      scanBtn.disabled = true;
+      tolSel.disabled = true;
+
+      scanStatus.textContent = "Scannen: 0/" + total;
+      setStats(total, 0);
+
+      const groups = new Map();
+      let done = 0;
+
+      const tasks = allThumbsEls.map((a, index) => async () => {
+        try{
+          const img = await loadImage(a.href);
+          const h = visualHash(img, cfg.size, cfg.step);
+          a.setAttribute("data-dup-hash", h);
+
+          if (!groups.has(h)) groups.set(h, []);
+          groups.get(h).push(index);
+        } catch {
+          // negeer
+        }
+
+        done += 1;
+        if (done % 6 === 0 || done === total){
+          scanStatus.textContent = "Scannen: " + done + "/" + total;
+          await new Promise(r => setTimeout(r, 0));
+        }
+      });
+
+      await runPool(tasks, 4);
+
+      groups.forEach((idxs, h) => {
+        idxs.sort((a, b) => a - b);
+        groups.set(h, idxs);
+      });
+
+      let dupGroups = 0;
+      let dupCount = 0;
+
+      groups.forEach((idxs) => {
+        if (!idxs || idxs.length < 2) return;
+        dupGroups += 1;
+        dupCount += (idxs.length - 1);
+
+        const keepA = allThumbsEls[idxs[0]];
+        const badge = keepA && keepA.querySelector(".dup-badge");
+        if (badge){
+          badge.hidden = false;
+          badge.textContent = "+" + (idxs.length - 1);
+        }
+      });
+
+      lastGroups = groups;
+      applyHideSetting();
+      setStats(total, dupCount);
+
+      scanStatus.textContent = dupGroups
+        ? ("Klaar. Groepen: " + dupGroups + ", dubbels: " + dupCount)
+        : "Klaar. Geen dubbels gevonden";
+
+      scanBtn.disabled = false;
+      tolSel.disabled = !advTol.checked;
+    }
+
+    scanBtn.addEventListener("click", scanDuplicates);
+
+    resetBtn.addEventListener("click", () => {
+      advTol.checked = false;
+      hideDup.checked = true;
+      tolSel.value = "loose";
+      applyTolUi();
+      scanDuplicates();
+    });
+
+    hideDup.addEventListener("change", applyHideSetting);
+
+    advTol.addEventListener("change", () => {
+      applyTolUi();
+      if (!advTol.checked) scanDuplicates();
+    });
+
+    tolSel.addEventListener("change", () => {
+      if (advTol.checked) scanDuplicates();
+    });
+
+    // Lightbox
+    const lb = document.getElementById("lb");
+    const lbImg = document.getElementById("lbImg");
+    const lbCap = document.getElementById("lbCaption");
+    const lbBack = document.getElementById("lbBack");
+    const lbClose = document.getElementById("lbClose");
+    const lbPrev = document.getElementById("lbPrev");
+    const lbNext = document.getElementById("lbNext");
+
+    let idx = -1;
+
+    function getActiveThumbs(){
+      if (!hideDup.checked) return allThumbsEls;
+      return allThumbsEls.filter(a => {
+        const w = a.closest(".thumbwrap");
+        return !w || !w.classList.contains("is-dup-hidden");
+      });
+    }
+
+    function show(i){
+      const list = getActiveThumbs();
+      if (!list.length) return;
+      idx = (i + list.length) % list.length;
+      const a = list[idx];
+      lbImg.src = a.href;
+      lbCap.textContent = (a.dataset.name || "") + (a.dataset.ts ? ("  " + fmtTs(a.dataset.ts)) : "");
+      lb.classList.remove("hidden");
+    }
+
+    function hide(){
+      lb.classList.add("hidden");
+      lbImg.src = "";
+      idx = -1;
+    }
+
+    allThumbsEls.forEach((a) => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const list = getActiveThumbs();
+        const i = Math.max(0, list.indexOf(a));
+        show(i);
+      });
+    });
+
+    lbBack.addEventListener("click", hide);
+    lbClose.addEventListener("click", hide);
+    lbPrev.addEventListener("click", () => show(idx - 1));
+    lbNext.addEventListener("click", () => show(idx + 1));
+
+    window.addEventListener("keydown", (e) => {
+      if (lb.classList.contains("hidden")) return;
+      if (e.key === "Escape") hide();
+      if (e.key === "ArrowLeft") show(idx - 1);
+      if (e.key === "ArrowRight") show(idx + 1);
+    });
+
+    // init: standaard loose 8x8
+    tolSel.value = "loose";
+    applyTolUi();
+
+    window.addEventListener("load", () => {
+      hideDup.checked = true;
+      scanDuplicates();
+    });
+  </script>
+</body>
+</html>`);
+  } catch (e) {
+    console.error("pictures viewer error", e);
+    return res.status(500).send(String(e?.message || e));
+  }
+});
 
     // =========================================================
     // DUBBELS (Perceptual-ish hashing via canvas)
