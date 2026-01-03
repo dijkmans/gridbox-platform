@@ -131,7 +131,7 @@ router.get("/", async (req, res) => {
         desiredAt: data.box?.desiredAt ?? null,
         desiredBy: data.box?.desiredBy ?? null,
 
-        // NIEUW: nonce voor "take picture" (agent leest dit)
+        // nonce voor "take picture" (agent leest dit)
         captureNonce: data.box?.captureNonce ?? 0,
         captureRequestedAt: data.box?.captureRequestedAt ?? null,
         captureRequestedBy: data.box?.captureRequestedBy ?? null
@@ -162,14 +162,12 @@ router.get("/:id", async (req, res) => {
     const data = doc.data();
     const dto = toBoxDto(doc.id, data);
 
-    // desired + captureNonce expliciet in box zetten
     dto.box = {
       ...dto.box,
       desired: data.box?.desired ?? null,
       desiredAt: data.box?.desiredAt ?? null,
       desiredBy: data.box?.desiredBy ?? null,
 
-      // NIEUW: nonce voor "take picture" (agent leest dit)
       captureNonce: data.box?.captureNonce ?? 0,
       captureRequestedAt: data.box?.captureRequestedAt ?? null,
       captureRequestedBy: data.box?.captureRequestedBy ?? null
@@ -221,6 +219,85 @@ router.get("/:id/pictures/file", async (req, res) => {
   } catch (e) {
     console.error("pictures/file error", e);
     return res.status(500).send(String(e?.message || e));
+  }
+});
+
+/**
+ * GET /api/boxes/:id/pictures/latest
+ * Kleine helper voor de portal: geeft de nieuwste session + nieuwste foto terug.
+ * Handig om "Neem foto" te laten wachten tot er echt een nieuwe foto is.
+ */
+router.get("/:id/pictures/latest", async (req, res) => {
+  try {
+    const boxId = req.params.id;
+
+    const storage = new Storage();
+    const bucketName = requireCaptureBucket();
+    const bucket = storage.bucket(bucketName);
+
+    const sessionsPrefix = `boxes/${boxId}/sessions/`;
+
+    const [, , apiResp] = await bucket.getFiles({
+      prefix: sessionsPrefix,
+      delimiter: "/",
+      autoPaginate: false,
+      maxResults: 500
+    });
+
+    const prefixes = apiResp?.prefixes || [];
+    const sessions = prefixes
+      .map(p => p.slice(sessionsPrefix.length).replace(/\/$/, ""))
+      .filter(Boolean)
+      .sort((a, b) => b.localeCompare(a)); // newest eerst
+
+    if (!sessions.length) {
+      return res.json({
+        ok: false,
+        boxId,
+        reason: "no_sessions"
+      });
+    }
+
+    const requested = (req.query.sessionId || "").toString().trim();
+    const sessionId = requested && sessions.includes(requested) ? requested : sessions[0];
+
+    const rawPrefix = `boxes/${boxId}/sessions/${sessionId}/raw/`;
+    const [files] = await bucket.getFiles({
+      prefix: rawPrefix,
+      maxResults: 500,
+      autoPaginate: false
+    });
+
+    const jpgs = (files || []).filter(f => f.name.endsWith(".jpg"));
+    if (!jpgs.length) {
+      return res.json({
+        ok: true,
+        boxId,
+        sessionId,
+        lastObject: null,
+        lastName: null,
+        lastTs: null
+      });
+    }
+
+    jpgs.sort((a, b) => b.name.localeCompare(a.name));
+    const f = jpgs[0];
+
+    const object = f.name;
+    const name = object.split("/").pop();
+    const ts = f.metadata?.metadata?.ts || f.metadata?.timeCreated || f.metadata?.updated || null;
+
+    return res.json({
+      ok: true,
+      boxId,
+      sessionId,
+      lastObject: object,
+      lastName: name,
+      lastTs: ts
+    });
+  } catch (e) {
+    console.error("pictures/latest error", e);
+    return res.status(500).json({ ok: false, error: "Interne serverfout" });
   }
 });
 
@@ -568,26 +645,70 @@ router.get("/:id/pictures", async (req, res) => {
     const boxId = "${esc(boxId)}";
     const takePicBtn = document.getElementById("takePic");
 
-    // Camera logica
+    async function getLatestPictureInfo(){
+      try{
+        const r = await fetch('/api/boxes/' + boxId + '/pictures/latest', { cache: 'no-store' });
+        if(!r.ok) return null;
+        return await r.json();
+      } catch {
+        return null;
+      }
+    }
+
     takePicBtn.onclick = async () => {
         if(!confirm("Wil je nu een foto nemen met de camera?")) return;
 
         takePicBtn.disabled = true;
         takePicBtn.textContent = "⏳ Verzoek verstuurd...";
 
+        // neem een "before" snapshot zodat we kunnen zien wanneer er iets nieuws bijkomt
+        const before = await getLatestPictureInfo();
+
         try {
-            const res = await fetch('/api/boxes/' + boxId + '/capture', { method: 'POST' });
+            const res = await fetch('/api/boxes/' + boxId + '/capture', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ requestedBy: 'portal' })
+            });
             if(!res.ok) throw new Error("Fout bij aanvraag");
 
-            takePicBtn.textContent = "📸 Foto wordt genomen... (Even geduld)";
+            const timeoutMs = 25000;
+            const t0 = Date.now();
+            takePicBtn.textContent = "📸 Wachten op foto... (0s)";
 
-            // Wacht 12 seconden en herlaad zonder sessie-parameter om de nieuwste te pakken
-            setTimeout(() => {
-                window.location.href = window.location.pathname;
-            }, 12000);
+            while (Date.now() - t0 < timeoutMs) {
+              await new Promise(r => setTimeout(r, 1000));
 
+              const now = await getLatestPictureInfo();
+              const secs = Math.ceil((Date.now() - t0) / 1000);
+              takePicBtn.textContent = "📸 Wachten op foto... (" + secs + "s)";
+
+              if (!now || !now.ok) continue;
+
+              const beforeSession = before?.sessionId || null;
+              const beforeObj = before?.lastObject || null;
+
+              const sessionChanged = beforeSession && now.sessionId && now.sessionId !== beforeSession;
+              const objectChanged = beforeObj && now.lastObject && now.lastObject !== beforeObj;
+
+              // als er geen before was, is "nieuw" zodra we een lastObject zien
+              const becameAvailable = (!before || !beforeObj) && !!now.lastObject;
+
+              if (sessionChanged || objectChanged || becameAvailable) {
+                const sid = now.sessionId ? encodeURIComponent(now.sessionId) : "";
+                if (sid) {
+                  window.location.href = window.location.pathname + "?sessionId=" + sid;
+                } else {
+                  window.location.href = window.location.pathname;
+                }
+                return;
+              }
+            }
+
+            alert("Geen nieuwe foto gezien binnen 25 seconden. Probeer opnieuw of kijk naar de logs van de Pi.");
         } catch(e) {
             alert("Er ging iets mis: " + e.message);
+        } finally {
             takePicBtn.disabled = false;
             takePicBtn.textContent = "📸 Neem foto";
         }
@@ -764,7 +885,6 @@ router.get("/:id/pictures", async (req, res) => {
           if (!groups.has(h)) groups.set(h, []);
           groups.get(h).push(index);
         } catch {
-          // negeer
         }
 
         done += 1;
@@ -830,7 +950,6 @@ router.get("/:id/pictures", async (req, res) => {
       if (advTol.checked) scanDuplicates();
     });
 
-    // Lightbox
     const lb = document.getElementById("lb");
     const lbImg = document.getElementById("lbImg");
     const lbCap = document.getElementById("lbCaption");
@@ -886,7 +1005,6 @@ router.get("/:id/pictures", async (req, res) => {
       if (e.key === "ArrowRight") show(idx + 1);
     });
 
-    // init: standaard Los (8x8), dropdown verborgen
     tolSel.value = "loose";
     applyTolUi();
 
@@ -985,14 +1103,13 @@ router.post("/:id/close", async (req, res) => {
 
 /*
 =====================================================
-TAKE PICTURE (NIEUW, via nonce in boxes doc)
+TAKE PICTURE (via nonce in boxes doc)
 =====================================================
 */
 
 /**
  * POST /api/boxes/:id/capture
- * Doel: NIET meer schrijven naar boxCommands (dat kan overschrijven).
- * We verhogen een teller in het box document: box.captureNonce.
+ * We verhogen box.captureNonce in Firestore.
  * De Pi agent ziet dit en neemt exact 1 foto.
  */
 router.post("/:id/capture", async (req, res) => {
