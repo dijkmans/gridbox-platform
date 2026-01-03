@@ -221,6 +221,12 @@ router.get("/:id/pictures", async (req, res) => {
   try {
     const boxId = req.params.id;
 
+    // 1. Haal de box-status op uit Firestore
+    const boxSnap = await db.collection("boxes").doc(boxId).get();
+    const boxData = boxSnap.exists ? boxSnap.data() : null;
+    const currentState = boxData?.status?.state || "onbekend";
+
+    // 2. Setup Storage
     const storage = new Storage();
     const bucketName = requireCaptureBucket();
     const bucket = storage.bucket(bucketName);
@@ -341,6 +347,14 @@ router.get("/:id/pictures", async (req, res) => {
 
     h2{margin:0;font-size:20px}
     .muted{color:var(--muted)}
+    .status-badge {
+        font-size: 13px;
+        font-weight: 500;
+        padding: 2px 8px;
+        background: #e2e8f0;
+        border-radius: 99px;
+        color: #475569;
+    }
 
     label{display:flex;gap:6px;align-items:center}
     select,button{
@@ -472,7 +486,7 @@ router.get("/:id/pictures", async (req, res) => {
     <div class="topbar">
       <div class="title">
         <h2>Pictures</h2>
-        <div class="muted">Box: ${esc(boxId)}</div>
+        <div class="muted">Box: ${esc(boxId)} <span class="status-badge">${esc(currentState)}</span></div>
       </div>
 
       <button id="takePic" class="camera" type="button">📸 Neem foto</button>
@@ -557,10 +571,11 @@ router.get("/:id/pictures", async (req, res) => {
             
             takePicBtn.textContent = "📸 Foto wordt genomen... (Even geduld)";
             
-            // Wacht 8 seconden (geef box tijd om te uploaden) en herlaad
+            // Wacht 12 seconden (geef box tijd om te uploaden)
+            // en herlaad ZONDER sessie-parameter om de nieuwste te pakken
             setTimeout(() => {
-                location.reload();
-            }, 8000);
+                window.location.href = window.location.pathname;
+            }, 12000);
             
         } catch(e) {
             alert("Er ging iets mis: " + e.message);
