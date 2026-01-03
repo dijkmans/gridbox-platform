@@ -220,6 +220,10 @@ router.get("/:id/pictures/file", async (req, res) => {
 
 /**
  * GET /api/boxes/:id/pictures
+ * - Foto's groter
+ * - Standaard Los (8x8)
+ * - Overzicht dubbels weg
+ * - Meer kleur
  */
 router.get("/:id/pictures", async (req, res) => {
   try {
@@ -321,7 +325,7 @@ router.get("/:id/pictures", async (req, res) => {
       position:sticky;
       top:0;
       z-index:50;
-      background:rgba(255,255,255,.9);
+      background:rgba(255,255,255,.92);
       backdrop-filter:saturate(150%) blur(6px);
       border-bottom:1px solid var(--line);
     }
@@ -368,9 +372,7 @@ router.get("/:id/pictures", async (req, res) => {
       border:0;
       box-shadow:0 6px 18px rgba(37,99,235,.18);
     }
-    button.ghost{
-      background:#fff;
-    }
+    button.ghost{background:#fff}
 
     .hint{
       margin-left:auto;
@@ -421,7 +423,7 @@ router.get("/:id/pictures", async (req, res) => {
       position:absolute;
       top:10px;
       left:10px;
-      background:rgba(37,99,235,.85);
+      background:rgba(37,99,235,.88);
       color:#fff;
       font-size:12px;
       padding:4px 10px;
@@ -481,7 +483,7 @@ router.get("/:id/pictures", async (req, res) => {
       </label>
       <button id="go" class="ghost" type="button">Open</button>
 
-      <label style="display:flex;gap:6px;align-items:center">
+      <label>
         <input type="checkbox" id="advTol">
         Andere tolerantie
       </label>
@@ -497,7 +499,7 @@ router.get("/:id/pictures", async (req, res) => {
 
       <button id="scan" class="primary" type="button">Zoek dubbels</button>
 
-      <label style="display:flex;gap:6px;align-items:center">
+      <label>
         <input type="checkbox" id="hideDup" checked>
         Verberg dubbels
       </label>
@@ -580,7 +582,7 @@ router.get("/:id/pictures", async (req, res) => {
 
     const allThumbsEls = Array.from(document.querySelectorAll("a.thumb"));
 
-    let lastGroups = null; // Map hash -> index[]
+    let lastGroups = null;
 
     function applyTolUi(){
       const on = !!advTol.checked;
@@ -638,7 +640,7 @@ router.get("/:id/pictures", async (req, res) => {
     function clearDupMarks(){
       allThumbsEls.forEach(a => {
         const wrap = a.closest(".thumbwrap");
-        wrap && wrap.classList.remove("is-dup-hidden");
+        if (wrap) wrap.classList.remove("is-dup-hidden");
         a.removeAttribute("data-dup-hash");
         const badge = a.querySelector(".dup-badge");
         if (badge){
@@ -656,7 +658,7 @@ router.get("/:id/pictures", async (req, res) => {
 
       allThumbsEls.forEach(a => {
         const w = a.closest(".thumbwrap");
-        w && w.classList.remove("is-dup-hidden");
+        if (w) w.classList.remove("is-dup-hidden");
       });
 
       if (!hideDup.checked) return;
@@ -666,7 +668,7 @@ router.get("/:id/pictures", async (req, res) => {
         for (let k = 1; k < idxs.length; k++){
           const a = allThumbsEls[idxs[k]];
           const w = a && a.closest(".thumbwrap");
-          w && w.classList.add("is-dup-hidden");
+          if (w) w.classList.add("is-dup-hidden");
         }
       });
     }
@@ -833,334 +835,11 @@ router.get("/:id/pictures", async (req, res) => {
       if (e.key === "ArrowRight") show(idx + 1);
     });
 
-    // init: standaard loose 8x8
+    // init: standaard Los (8x8), dropdown verborgen
     tolSel.value = "loose";
     applyTolUi();
 
     window.addEventListener("load", () => {
-      hideDup.checked = true;
-      scanDuplicates();
-    });
-  </script>
-</body>
-</html>`);
-  } catch (e) {
-    console.error("pictures viewer error", e);
-    return res.status(500).send(String(e?.message || e));
-  }
-});
-
-    // =========================================================
-    // DUBBELS (Perceptual-ish hashing via canvas)
-    // =========================================================
-
-    const tolSel = document.getElementById("tol");
-    const advTol = document.getElementById("advTol");
-    const tolWrap = document.getElementById("tolWrap");
-
-    const scanBtn = document.getElementById("scan");
-    const resetBtn = document.getElementById("reset");
-    const hideDup = document.getElementById("hideDup");
-    const scanStatus = document.getElementById("scanStatus");
-
-    const dupDetails = document.getElementById("dupDetails");
-    const dupOut = document.getElementById("dupOut");
-    const dupCounts = document.getElementById("dupCounts");
-    const copyDup = document.getElementById("copyDup");
-
-    const allThumbsEls = Array.from(document.querySelectorAll("a.thumb"));
-
-    let lastGroups = null; // Map hash -> index[]
-
-    function applyTolUi(){
-      const on = !!advTol.checked;
-      tolWrap.style.display = on ? "" : "none";
-      tolSel.disabled = !on;
-      if (!on) tolSel.value = "normal";
-    }
-
-    function tolConfig(){
-      const v = tolSel.value;
-      if (v === "strict") return { size: 32, step: 32 };
-      if (v === "loose") return { size: 8, step: 128 };
-      return { size: 16, step: 64 };
-    }
-
-    async function loadImage(src){
-      const img = new Image();
-      img.decoding = "async";
-      img.src = src;
-      if (img.decode) {
-        await img.decode();
-      } else {
-        await new Promise((resolve, reject) => {
-          img.onload = () => resolve();
-          img.onerror = () => reject(new Error("load fail"));
-        });
-      }
-      return img;
-    }
-
-    function visualHash(img, size, step){
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      ctx.drawImage(img, 0, 0, size, size);
-      const data = ctx.getImageData(0, 0, size, size).data;
-      let out = "";
-      for (let i = 0; i < data.length; i += 4){
-        const r = Math.floor((data[i] || 0) / step);
-        const g = Math.floor((data[i + 1] || 0) / step);
-        const b = Math.floor((data[i + 2] || 0) / step);
-        out += r.toString(16) + g.toString(16) + b.toString(16);
-      }
-      return out;
-    }
-
-    function clearDupMarks(){
-      allThumbsEls.forEach(a => {
-        const wrap = a.closest(".thumbwrap");
-        wrap?.classList.remove("is-dup-hidden");
-        a.removeAttribute("data-dup-hash");
-        const badge = a.querySelector(".dup-badge");
-        if (badge){
-          badge.hidden = true;
-          badge.textContent = "";
-        }
-      });
-      dupOut.textContent = "";
-      dupCounts.textContent = "";
-      lastGroups = null;
-      scanStatus.textContent = "";
-    }
-
-    function applyHideSetting(){
-      if (!lastGroups) return;
-
-      // eerst alles terug zichtbaar
-      allThumbsEls.forEach(a => a.closest(".thumbwrap")?.classList.remove("is-dup-hidden"));
-
-      if (!hideDup.checked) return;
-
-      lastGroups.forEach((idxs) => {
-        if (!idxs || idxs.length < 2) return;
-        // keep = eerste in DOM volgorde (pagina is al newest eerst)
-        for (let k = 1; k < idxs.length; k++){
-          const a = allThumbsEls[idxs[k]];
-          a?.closest(".thumbwrap")?.classList.add("is-dup-hidden");
-        }
-      });
-    }
-
-    function buildDupOutput(){
-      if (!lastGroups) return;
-      const lines = [];
-      let groups = 0;
-      let dups = 0;
-
-      lastGroups.forEach((idxs, h) => {
-        if (!idxs || idxs.length < 2) return;
-        groups += 1;
-        dups += (idxs.length - 1);
-
-        const keepA = allThumbsEls[idxs[0]];
-        const keepObj = keepA?.dataset?.object || "";
-        lines.push("# groep " + h);
-        lines.push("# keep: " + keepObj);
-        for (let k = 1; k < idxs.length; k++){
-          const a = allThumbsEls[idxs[k]];
-          const obj = a?.dataset?.object || "";
-          if (obj) lines.push(obj);
-        }
-        lines.push("");
-      });
-
-      dupCounts.textContent = "Groepen: " + groups + "  Dubbels: " + dups;
-      dupOut.textContent = lines.join("\\n");
-    }
-
-    async function runPool(tasks, limit){
-      let i = 0;
-      const workers = Array.from({ length: limit }, async () => {
-        while (i < tasks.length){
-          const cur = i++;
-          await tasks[cur]();
-        }
-      });
-      await Promise.all(workers);
-    }
-
-    async function scanDuplicates(){
-      clearDupMarks();
-
-      const cfg = tolConfig();
-      const total = allThumbsEls.length;
-      if (!total){
-        scanStatus.textContent = "Geen foto's";
-        return;
-      }
-
-      const tolWasDisabled = tolSel.disabled;
-
-      scanBtn.disabled = true;
-      tolSel.disabled = true;
-
-      scanStatus.textContent = "Scannen: 0/" + total;
-
-      const groups = new Map();
-      let done = 0;
-
-      const tasks = allThumbsEls.map((a, index) => async () => {
-        try{
-          const img = await loadImage(a.href);
-          const h = visualHash(img, cfg.size, cfg.step);
-          a.setAttribute("data-dup-hash", h);
-
-          if (!groups.has(h)) groups.set(h, []);
-          groups.get(h).push(index);
-        } catch {
-          // negeer fouten
-        }
-
-        done += 1;
-        if (done % 5 === 0 || done === total){
-          scanStatus.textContent = "Scannen: " + done + "/" + total;
-          await new Promise(r => setTimeout(r, 0));
-        }
-      });
-
-      await runPool(tasks, 4);
-
-      // sort indices per hash op DOM volgorde (veiligheid)
-      groups.forEach((idxs, h) => {
-        idxs.sort((a, b) => a - b);
-        groups.set(h, idxs);
-      });
-
-      // badges + tellers
-      let dupGroups = 0;
-      let dupCount = 0;
-
-      groups.forEach((idxs) => {
-        if (!idxs || idxs.length < 2) return;
-        dupGroups += 1;
-        dupCount += (idxs.length - 1);
-
-        const keepA = allThumbsEls[idxs[0]];
-        const badge = keepA?.querySelector(".dup-badge");
-        if (badge){
-          badge.hidden = false;
-          badge.textContent = "+" + (idxs.length - 1);
-        }
-      });
-
-      lastGroups = groups;
-      applyHideSetting();
-      buildDupOutput();
-
-      scanStatus.textContent = dupGroups
-        ? ("Klaar. Groepen: " + dupGroups + ", dubbels: " + dupCount)
-        : "Klaar. Geen dubbels gevonden";
-
-      scanBtn.disabled = false;
-      tolSel.disabled = tolWasDisabled;
-    }
-
-    scanBtn.addEventListener("click", scanDuplicates);
-
-    resetBtn.addEventListener("click", () => {
-      advTol.checked = false;
-      hideDup.checked = true;
-      tolSel.value = "normal";
-      applyTolUi();
-      scanDuplicates();
-    });
-
-    hideDup.addEventListener("change", () => {
-      applyHideSetting();
-    });
-
-    advTol.addEventListener("change", () => {
-      applyTolUi();
-      // Als je terug uitzet, meteen terug naar normaal en her-scan
-      if (!advTol.checked) scanDuplicates();
-    });
-
-    tolSel.addEventListener("change", () => {
-      // Alleen relevant als "Andere tolerantie" aan staat
-      if (advTol.checked) scanDuplicates();
-    });
-
-    copyDup.addEventListener("click", async () => {
-      try{
-        await navigator.clipboard.writeText(dupOut.textContent || "");
-        scanStatus.textContent = "Lijst gekopieerd";
-      } catch {
-        scanStatus.textContent = "Kopiëren lukt niet in deze browser";
-      }
-    });
-
-    // =========================================================
-    // Lightbox (werkt ook als dubbels verborgen zijn)
-    // =========================================================
-    const lb = document.getElementById("lb");
-    const lbImg = document.getElementById("lbImg");
-    const lbCap = document.getElementById("lbCaption");
-    const lbBack = document.getElementById("lbBack");
-    const lbClose = document.getElementById("lbClose");
-    const lbPrev = document.getElementById("lbPrev");
-    const lbNext = document.getElementById("lbNext");
-
-    let idx = -1;
-
-    function getActiveThumbs(){
-      if (!hideDup.checked) return allThumbsEls;
-      return allThumbsEls.filter(a => !a.closest(".thumbwrap")?.classList.contains("is-dup-hidden"));
-    }
-
-    function show(i){
-      const list = getActiveThumbs();
-      if (!list.length) return;
-      idx = (i + list.length) % list.length;
-      const a = list[idx];
-      lbImg.src = a.href;
-      lbCap.textContent = (a.dataset.name || "") + (a.dataset.ts ? ("  " + fmtTs(a.dataset.ts)) : "");
-      lb.classList.remove("hidden");
-    }
-
-    function hide(){
-      lb.classList.add("hidden");
-      lbImg.src = "";
-      idx = -1;
-    }
-
-    allThumbsEls.forEach((a) => {
-      a.addEventListener("click", (e) => {
-        e.preventDefault();
-        const list = getActiveThumbs();
-        const i = Math.max(0, list.indexOf(a));
-        show(i);
-      });
-    });
-
-    lbBack.addEventListener("click", hide);
-    lbClose.addEventListener("click", hide);
-    lbPrev.addEventListener("click", () => show(idx - 1));
-    lbNext.addEventListener("click", () => show(idx + 1));
-
-    window.addEventListener("keydown", (e) => {
-      if (lb.classList.contains("hidden")) return;
-      if (e.key === "Escape") hide();
-      if (e.key === "ArrowLeft") show(idx - 1);
-      if (e.key === "ArrowRight") show(idx + 1);
-    });
-
-    // init: standaard normal 16x16, dropdown verborgen
-    applyTolUi();
-
-    window.addEventListener("load", () => {
-      tolSel.value = "normal";
       hideDup.checked = true;
       scanDuplicates();
     });
