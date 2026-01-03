@@ -174,9 +174,51 @@ router.get("/:id", async (req, res) => {
 
 /*
 =====================================================
+/*
+=====================================================
 PICTURES VIEWER (Portal)
 =====================================================
 */
+
+/**
+ * GET /api/boxes/:id/pictures/file?object=...
+ * Proxy voor GCS images (zelfde origin) zodat canvas-getImageData werkt.
+ *
+ * Veiligheid:
+ * - object moet beginnen met: boxes/<boxId>/sessions/
+ * - en eindigen op .jpg
+ */
+router.get("/:id/pictures/file", async (req, res) => {
+  try {
+    const boxId = req.params.id;
+    const object = (req.query.object || "").toString();
+
+    const mustStart = `boxes/${boxId}/sessions/`;
+    if (!object || !object.startsWith(mustStart) || !object.endsWith(".jpg")) {
+      return res.status(400).send("Ongeldig object");
+    }
+
+    const storage = new Storage();
+    const bucketName = requireCaptureBucket();
+    const bucket = storage.bucket(bucketName);
+
+    res.setHeader("content-type", "image/jpeg");
+    res.setHeader("cache-control", "private, max-age=600");
+
+    const file = bucket.file(object);
+    file
+      .createReadStream()
+      .on("error", (e) => {
+        console.error("pictures/file stream error", e);
+        if (!res.headersSent) res.status(404);
+        res.end();
+      })
+      .pipe(res);
+  } catch (e) {
+    console.error("pictures/file error", e);
+    return res.status(500).send(String(e?.message || e));
+  }
+});
 
 /**
  * GET /api/boxes/:id/pictures
@@ -187,6 +229,10 @@ PICTURES VIEWER (Portal)
  *
  * Vereist env var:
  * CAPTURE_BUCKET (aanbevolen) of GCS_BUCKET/BUCKET_NAME
+ *
+ * Extra:
+ * - Dubbels detecteren in de browser via canvas downsampling + kleur-quantisatie.
+ * - Hiermee worden bijna-identieke foto's (bv compressie) toch gegroepeerd.
  */
 router.get("/:id/pictures", async (req, res) => {
   try {
@@ -230,48 +276,19 @@ router.get("/:id/pictures", async (req, res) => {
       autoPaginate: false
     });
 
-    const jpgsAll = (files || [])
+    const jpgs = (files || [])
       .filter(f => f.name.endsWith(".jpg"))
       .sort((a, b) => b.name.localeCompare(a.name)); // nieuwste eerst
 
-    // Dubbels verbergen: hou enkel 1 foto per unieke inhoud (md5Hash + size)
-    const metas = await Promise.all(
-      jpgsAll.map(async f => {
-        try {
-          const [meta] = await f.getMetadata();
-          f.metadata = meta; // zodat ts later werkt
-          const md5 = meta?.md5Hash || null;
-          const sz  = meta?.size || null;
-          return { f, md5, sz };
-        } catch (e) {
-          return { f, md5: null, sz: null };
-        }
-      })
-    );
+    const items = jpgs.map(f => {
+      const object = f.name;
+      const name = f.name.split("/").pop();
+      const ts = f.metadata?.metadata?.ts || f.metadata?.timeCreated || f.metadata?.updated || null;
 
-    const seen = new Set();
-    const jpgs = [];
-    for (const x of metas) {
-      if (x.md5 && x.sz) {
-        const key = x.md5 + "|" + x.sz;
-        if (seen.has(key)) continue;
-        seen.add(key);
-      }
-      jpgs.push(x.f);
-    }
-
-    const hiddenDuplicates = jpgsAll.length - jpgs.length;
-
-    // Signed URLs maken (10 min geldig)
-    const expires = Date.now() + 10 * 60 * 1000;
-    const items = await Promise.all(
-      jpgs.map(async f => {
-        const name = f.name.split("/").pop();
-        const [url] = await f.getSignedUrl({ action: "read", expires });
-        const ts = f.metadata?.metadata?.ts || f.metadata?.timeCreated || f.metadata?.updated || null;
-        return { name, url, ts };
-      })
-    );
+      // same-origin proxy url
+      const url = `/api/boxes/${encodeURIComponent(boxId)}/pictures/file?object=${encodeURIComponent(object)}`;
+      return { name, url, ts, object };
+    });
 
     const options = sessions
       .map(s => `<option value="${esc(s)}"${s === sessionId ? " selected" : ""}>${esc(s)}</option>`)
@@ -280,8 +297,9 @@ router.get("/:id/pictures", async (req, res) => {
     const thumbs = items
       .map(i => `
         <div class="thumbwrap">
-          <a href="${i.url}" class="thumb" data-name="${esc(i.name)}" data-ts="${esc(i.ts || "")}" rel="noopener">
-            <img src="${i.url}" alt="${esc(i.name)}" loading="lazy">
+          <a href="${i.url}" class="thumb" data-name="${esc(i.name)}" data-ts="${esc(i.ts || "")}" data-object="${esc(i.object)}" rel="noopener">
+            <span class="dup-badge" hidden></span>
+            <img src="${i.url}" alt="${esc(i.name)}" loading="lazy" decoding="async">
           </a>
           <div class="thumb-meta" data-ts="${esc(i.ts || "")}"></div>
         </div>
@@ -305,7 +323,25 @@ router.get("/:id/pictures", async (req, res) => {
     select,button{padding:8px 10px;font-size:14px}
     .muted{opacity:.7}
 
-    .thumb{display:block}
+    .thumb{display:block;position:relative}
+    .dup-badge{
+      position:absolute;
+      top:8px;
+      left:8px;
+      background:rgba(0,0,0,.55);
+      color:#fff;
+      font-size:12px;
+      padding:4px 8px;
+      border-radius:999px;
+      z-index:2;
+      user-select:none;
+    }
+    .thumbwrap.is-dup-hidden{display:none}
+
+    details{border:1px solid #e5e7eb;border-radius:12px;padding:10px;background:#fafafa}
+    details summary{cursor:pointer;font-weight:600}
+    #dupOut{white-space:pre-wrap;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;max-height:240px;overflow:auto;margin-top:10px}
+
     .lb.hidden{display:none}
     .lb{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center}
     .lb-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.75)}
@@ -327,13 +363,42 @@ router.get("/:id/pictures", async (req, res) => {
   <header>
     <h2 style="margin:0">Pictures</h2>
     <div class="muted">Box: ${esc(boxId)}</div>
-    <div class="muted">Uniek: ${jpgs.length} (verborgen dubbels: ${hiddenDuplicates})</div>
+
     <label>
       Session
       <select id="sess">${options}</select>
     </label>
-    <button id="go">Open</button>
+    <button id="go" type="button">Open</button>
+
+    <label>
+      Tolerantie
+      <select id="tol">
+        <option value="strict">Streng (32x32)</option>
+        <option value="normal" selected>Normaal (16x16)</option>
+        <option value="loose">Los (8x8)</option>
+      </select>
+    </label>
+
+    <button id="scan" type="button">Zoek dubbels</button>
+
+    <label style="display:flex;gap:6px;align-items:center">
+      <input type="checkbox" id="hideDup" checked>
+      Verberg dubbels
+    </label>
+
+    <button id="reset" type="button">Reset</button>
+
+    <span id="scanStatus" class="muted"></span>
   </header>
+
+  <details id="dupDetails" class="muted" style="margin:8px 0 14px">
+    <summary>Overzicht dubbels</summary>
+    <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button id="copyDup" type="button">Kopieer lijst</button>
+      <div id="dupCounts"></div>
+    </div>
+    <pre id="dupOut"></pre>
+  </details>
 
   <div class="grid">${thumbs}</div>
 
@@ -375,39 +440,265 @@ router.get("/:id/pictures", async (req, res) => {
       el.textContent = fmtTs(ts);
     });
 
+    // =========================================================
+    // DUBBELS (Perceptual-ish hashing via canvas)
+    // =========================================================
+
+    const tolSel = document.getElementById("tol");
+    const scanBtn = document.getElementById("scan");
+    const resetBtn = document.getElementById("reset");
+    const hideDup = document.getElementById("hideDup");
+    const scanStatus = document.getElementById("scanStatus");
+
+    const dupDetails = document.getElementById("dupDetails");
+    const dupOut = document.getElementById("dupOut");
+    const dupCounts = document.getElementById("dupCounts");
+    const copyDup = document.getElementById("copyDup");
+
+    const allThumbsEls = Array.from(document.querySelectorAll("a.thumb"));
+
+    let lastGroups = null; // Map hash -> index[]
+
+    function tolConfig(){
+      const v = tolSel.value;
+      if (v === "strict") return { size: 32, step: 32 };
+      if (v === "loose") return { size: 8, step: 128 };
+      return { size: 16, step: 64 };
+    }
+
+    async function loadImage(src){
+      const img = new Image();
+      img.decoding = "async";
+      img.src = src;
+      if (img.decode) {
+        await img.decode();
+      } else {
+        await new Promise((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error("load fail"));
+        });
+      }
+      return img;
+    }
+
+    function visualHash(img, size, step){
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, size, size);
+      const data = ctx.getImageData(0, 0, size, size).data;
+      let out = "";
+      for (let i = 0; i < data.length; i += 4){
+        const r = Math.floor((data[i] || 0) / step);
+        const g = Math.floor((data[i + 1] || 0) / step);
+        const b = Math.floor((data[i + 2] || 0) / step);
+        out += r.toString(16) + g.toString(16) + b.toString(16);
+      }
+      return out;
+    }
+
+    function clearDupMarks(){
+      allThumbsEls.forEach(a => {
+        const wrap = a.closest(".thumbwrap");
+        wrap?.classList.remove("is-dup-hidden");
+        a.removeAttribute("data-dup-hash");
+        const badge = a.querySelector(".dup-badge");
+        if (badge){
+          badge.hidden = true;
+          badge.textContent = "";
+        }
+      });
+      dupOut.textContent = "";
+      dupCounts.textContent = "";
+      lastGroups = null;
+      scanStatus.textContent = "";
+    }
+
+    function applyHideSetting(){
+      if (!lastGroups) return;
+
+      // eerst alles terug zichtbaar
+      allThumbsEls.forEach(a => a.closest(".thumbwrap")?.classList.remove("is-dup-hidden"));
+
+      if (!hideDup.checked) return;
+
+      lastGroups.forEach((idxs) => {
+        if (!idxs || idxs.length < 2) return;
+        // keep = eerste in DOM volgorde (pagina is al newest eerst)
+        for (let k = 1; k < idxs.length; k++){
+          const a = allThumbsEls[idxs[k]];
+          a?.closest(".thumbwrap")?.classList.add("is-dup-hidden");
+        }
+      });
+    }
+
+    function buildDupOutput(){
+      if (!lastGroups) return;
+      const lines = [];
+      let groups = 0;
+      let dups = 0;
+
+      lastGroups.forEach((idxs, h) => {
+        if (!idxs || idxs.length < 2) return;
+        groups += 1;
+        dups += (idxs.length - 1);
+
+        const keepA = allThumbsEls[idxs[0]];
+        const keepObj = keepA?.dataset?.object || "";
+        lines.push("# groep " + h);
+        lines.push("# keep: " + keepObj);
+        for (let k = 1; k < idxs.length; k++){
+          const a = allThumbsEls[idxs[k]];
+          const obj = a?.dataset?.object || "";
+          if (obj) lines.push(obj);
+        }
+        lines.push("");
+      });
+
+      dupCounts.textContent = "Groepen: " + groups + "  Dubbels: " + dups;
+      dupOut.textContent = lines.join("\\n");
+    }
+
+    async function runPool(tasks, limit){
+      let i = 0;
+      const workers = Array.from({ length: limit }, async () => {
+        while (i < tasks.length){
+          const cur = i++;
+          await tasks[cur]();
+        }
+      });
+      await Promise.all(workers);
+    }
+
+    async function scanDuplicates(){
+      clearDupMarks();
+
+      const cfg = tolConfig();
+      const total = allThumbsEls.length;
+      if (!total){
+        scanStatus.textContent = "Geen foto's";
+        return;
+      }
+
+      scanBtn.disabled = true;
+      tolSel.disabled = true;
+      scanStatus.textContent = "Scannen: 0/" + total;
+
+      const groups = new Map();
+      let done = 0;
+
+      const tasks = allThumbsEls.map((a, index) => async () => {
+        try{
+          const img = await loadImage(a.href);
+          const h = visualHash(img, cfg.size, cfg.step);
+          a.setAttribute("data-dup-hash", h);
+
+          if (!groups.has(h)) groups.set(h, []);
+          groups.get(h).push(index);
+        } catch {
+          // negeer fouten
+        }
+
+        done += 1;
+        if (done % 5 === 0 || done === total){
+          scanStatus.textContent = "Scannen: " + done + "/" + total;
+          await new Promise(r => setTimeout(r, 0));
+        }
+      });
+
+      await runPool(tasks, 4);
+
+      // sort indices per hash op DOM volgorde (veiligheid)
+      groups.forEach((idxs, h) => {
+        idxs.sort((a, b) => a - b);
+        groups.set(h, idxs);
+      });
+
+      // badges + tellers
+      let dupGroups = 0;
+      let dupCount = 0;
+
+      groups.forEach((idxs, h) => {
+        if (!idxs || idxs.length < 2) return;
+        dupGroups += 1;
+        dupCount += (idxs.length - 1);
+
+        const keepA = allThumbsEls[idxs[0]];
+        const badge = keepA?.querySelector(".dup-badge");
+        if (badge){
+          badge.hidden = false;
+          badge.textContent = "+" + (idxs.length - 1);
+        }
+      });
+
+      lastGroups = groups;
+      applyHideSetting();
+      buildDupOutput();
+      dupDetails.open = true;
+
+      scanStatus.textContent = dupGroups
+        ? ("Klaar. Groepen: " + dupGroups + ", dubbels: " + dupCount)
+        : "Klaar. Geen dubbels gevonden";
+
+      scanBtn.disabled = false;
+      tolSel.disabled = false;
+    }
+
+    scanBtn.addEventListener("click", scanDuplicates);
+    resetBtn.addEventListener("click", clearDupMarks);
+    hideDup.addEventListener("change", () => {
+      applyHideSetting();
+    });
+
+    copyDup.addEventListener("click", async () => {
+      try{
+        await navigator.clipboard.writeText(dupOut.textContent || "");
+        scanStatus.textContent = "Lijst gekopieerd";
+      } catch {
+        scanStatus.textContent = "Kopiëren lukt niet in deze browser";
+      }
+    });
+
+    // =========================================================
+    // Lightbox (werkt ook als dubbels verborgen zijn)
+    // =========================================================
     const lb = document.getElementById("lb");
     const lbImg = document.getElementById("lbImg");
-    const lbCaption = document.getElementById("lbCaption");
+    const lbCap = document.getElementById("lbCaption");
     const lbBack = document.getElementById("lbBack");
     const lbClose = document.getElementById("lbClose");
     const lbPrev = document.getElementById("lbPrev");
     const lbNext = document.getElementById("lbNext");
 
-    const thumbsEls = Array.from(document.querySelectorAll("a.thumb"));
     let idx = -1;
 
-    function show(i) {
-      if (!thumbsEls.length) return;
-      idx = (i + thumbsEls.length) % thumbsEls.length;
-      const a = thumbsEls[idx];
+    function getActiveThumbs(){
+      if (!hideDup.checked) return allThumbsEls;
+      return allThumbsEls.filter(a => !a.closest(".thumbwrap")?.classList.contains("is-dup-hidden"));
+    }
+
+    function show(i){
+      const list = getActiveThumbs();
+      if (!list.length) return;
+      idx = (i + list.length) % list.length;
+      const a = list[idx];
       lbImg.src = a.href;
-      const name = a.dataset.name || "";
-      const ts = a.dataset.ts || "";
-      const fts = fmtTs(ts);
-      lbCaption.textContent = fts ? (name + "  " + fts) : name;
+      lbCap.textContent = (a.dataset.name || "") + (a.dataset.ts ? ("  " + fmtTs(a.dataset.ts)) : "");
       lb.classList.remove("hidden");
     }
 
-    function hide() {
+    function hide(){
       lb.classList.add("hidden");
       lbImg.src = "";
       idx = -1;
     }
 
-    thumbsEls.forEach((a, i) => {
+    allThumbsEls.forEach((a) => {
       a.addEventListener("click", (e) => {
-        if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
         e.preventDefault();
+        const list = getActiveThumbs();
+        const i = Math.max(0, list.indexOf(a));
         show(i);
       });
     });
@@ -417,7 +708,7 @@ router.get("/:id/pictures", async (req, res) => {
     lbPrev.addEventListener("click", () => show(idx - 1));
     lbNext.addEventListener("click", () => show(idx + 1));
 
-    document.addEventListener("keydown", (e) => {
+    window.addEventListener("keydown", (e) => {
       if (lb.classList.contains("hidden")) return;
       if (e.key === "Escape") hide();
       if (e.key === "ArrowLeft") show(idx - 1);
@@ -432,7 +723,6 @@ router.get("/:id/pictures", async (req, res) => {
   }
 });
 
-/*
 =====================================================
 DESIRED (nieuwe, correcte route)
 =====================================================
