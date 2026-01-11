@@ -26,8 +26,9 @@ EINDE WERKAFSPRAKEN
   Deze versie bevat:
   1. Fix voor "Last Action" tijdsaanduiding.
   2. Fix voor Syntax Error.
-  3. NIEUW: Live update van de tekst ("zojuist") bij openen/sluiten.
-  Datum: 2026-01-11
+  3. Live update van tekst ("zojuist").
+  4. NIEUW: LocalStorage geheugen zodat 'zojuist' blijft staan na refresh.
+  Datum: 2026-01-11 (Versie 2)
 -->
 </script>
 <html lang="nl">
@@ -1376,18 +1377,37 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           const diffMin = Math.floor((Date.now() - maxTs) / 60000);
           const timeStr = fmtTimeAgo(diffMin);
 
-          // 3. Kies het label op basis van welke timestamp 'won'
           if (maxTs === tOpen) {
             lastActionText = 'Geopend ' + timeStr;
           } else if (maxTs === tClose) {
             lastActionText = 'Gesloten ' + timeStr;
           } else if (maxTs === tSeen) {
-            // Als fallback, als connection nieuwer is dan laatste open/close
             lastActionText = 'Gezien ' + timeStr;
           } else {
             lastActionText = timeStr; 
           }
         }
+
+        // ============================================================
+        // NIEUW: Check LocalStorage voor een recentere actie dan de server!
+        // ============================================================
+        const localKey = 'gb_action_' + id;
+        const localRaw = localStorage.getItem(localKey);
+        if (localRaw) {
+            try {
+                const localData = JSON.parse(localRaw);
+                // Alleen gebruiken als de actie minder dan 5 minuten geleden was (300000ms)
+                if (Date.now() - localData.ts < 300000) {
+                    // Is lokale data nieuwer dan wat de server zegt?
+                    if (localData.ts > maxTs) {
+                        const diffMin = Math.floor((Date.now() - localData.ts) / 60000);
+                        const timeStr = fmtTimeAgo(diffMin);
+                        lastActionText = (localData.state === 'open' ? 'Geopend ' : 'Gesloten ') + timeStr;
+                    }
+                }
+            } catch(e){}
+        }
+        // ============================================================
 
         const sharesCountRaw = pick(box, ['sharesCount','shares_count']) ?? null;
         const sharesCount = (sharesCountRaw === null || sharesCountRaw === undefined) ? null : Number(sharesCountRaw);
@@ -2030,6 +2050,15 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
               if(side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
               card.setAttribute('data-desired', next);
               await setDesired(boxId, next);
+
+              // =========================================================
+              // NIEUW: Sla actie lokaal op (persist)
+              // =========================================================
+              localStorage.setItem('gb_action_' + boxId, JSON.stringify({
+                  state: next, // 'open' or 'close'
+                  ts: Date.now()
+              }));
+
             } catch(err){
               if(prevIsOpen) card.classList.add('is-open'); else card.classList.remove('is-open');
               card.setAttribute('data-door-state', prevDoor);
@@ -2118,6 +2147,12 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           currentCard.setAttribute('data-desired','open');
           await setDesired(boxId, 'open');
 
+          // SAVE LOKAAL
+          localStorage.setItem('gb_action_' + boxId, JSON.stringify({
+              state: 'open',
+              ts: Date.now()
+          }));
+
           updateSideFromCard(currentCard, 'Beheer en overzicht');
         } catch(err){
           if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
@@ -2173,6 +2208,12 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
           currentCard.setAttribute('data-desired','close');
           await setDesired(boxId, 'close');
+
+          // SAVE LOKAAL
+          localStorage.setItem('gb_action_' + boxId, JSON.stringify({
+              state: 'close',
+              ts: Date.now()
+          }));
 
           updateSideFromCard(currentCard, 'Beheer en overzicht');
         } catch(err){
