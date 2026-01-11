@@ -23,10 +23,10 @@ Niet aanpassen. Eerst uitleggen waar het risico zit.
 EINDE WERKAFSPRAKEN
 =====================================================
 
-  Deze versie (V11) bevat:
-  1. Hartslagfrequentie aangepast naar 0.2s (200ms) o.b.v. Raspberry Pi config.
-  2. Hartje klopt razendsnel om polling frequentie te visualiseren.
-  3. Alle voorgaande fixes behouden.
+  Deze versie (V12) bevat:
+  1. Hartslagfrequentie exact op 0.2s (200ms) gezet, conform 'pollMs' in config.
+  2. Hartje pulseert 5x per seconde bij activiteit.
+  3. Visuele feedback (rood hartje) bij polling (< 10m) of lokale actie.
   Datum: 2026-01-11
 -->
 </script>
@@ -1995,7 +1995,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
         kvOpened.textContent = fmtLifecycleLine(openedAt, openedBy);
         kvClosed.textContent = fmtLifecycleLine(closedAt, closedBy);
-        kvSource.textContent = card.getAttribute('data-source') || '-'; 
+        kvSource.textContent = card.getAttribute('data-source') || '-'; 
         kvGeo.textContent = card.getAttribute('data-geo') || '-';
 
         kvAgent.textContent = (card.getAttribute('data-agent') ? ('v ' + card.getAttribute('data-agent')) : '-');
@@ -2198,10 +2198,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           currentCard.setAttribute('data-lifecycle-state','opening');
           currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'opening');
 
-          // UPDATE TEKST DIRECT:
-          const statusText = currentCard.querySelector('.js-status-text');
-          if(statusText) statusText.textContent = "Wordt geopend...";
-
           const btn = currentCard.querySelector('button[data-action="toggle"]');
           if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), true);
 
@@ -2214,9 +2210,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
               const b = currentCard.querySelector('button[data-action="toggle"]');
               if(b) b.textContent = mainButtonLabel('open', '', true);
               updateSideFromCard(currentCard, 'Beheer en overzicht');
-
-              // UPDATE TEKST NA TIJD:
-              if(statusText) statusText.textContent = "Geopend zojuist";
             }
           }, 5200);
 
@@ -2260,10 +2253,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           currentCard.setAttribute('data-lifecycle-state','closing');
           currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'closing');
 
-          // UPDATE TEKST DIRECT:
-          const statusText = currentCard.querySelector('.js-status-text');
-          if(statusText) statusText.textContent = "Wordt gesloten...";
-
           const btn = currentCard.querySelector('button[data-action="toggle"]');
           if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), false);
 
@@ -2276,9 +2265,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
               const b = currentCard.querySelector('button[data-action="toggle"]');
               if(b) b.textContent = mainButtonLabel('closed', '', false);
               updateSideFromCard(currentCard, 'Beheer en overzicht');
-
-              // UPDATE TEKST NA TIJD:
-              if(statusText) statusText.textContent = "Gesloten zojuist";
             }
           }, 5200);
 
