@@ -23,12 +23,11 @@ Niet aanpassen. Eerst uitleggen waar het risico zit.
 EINDE WERKAFSPRAKEN
 =====================================================
 
-  Deze versie bevat:
-  1. Fix voor "Laatste handeling" tijdsaanduiding (Pill).
-  2. Fix voor "Laatst gezien" header (kijkt nu ook naar acties).
-  3. Live update van tekst ("zojuist").
-  4. LocalStorage geheugen voor directe feedback na refresh.
-  Datum: 2026-01-11 (Versie 3 - Final Fix)
+  Deze versie (V5) bevat:
+  1. Header ("Laatst gezien"): Toont ALLEEN server-bevestigde 'lastSeen' (geen fake updates).
+  2. Pill ("Status"): Toont 'Open/Dicht' inclusief live lokale updates ("zojuist").
+  3. LocalStorage geheugen voor de Pill status.
+  Datum: 2026-01-11
 -->
 </script>
 <html lang="nl">
@@ -1416,10 +1415,13 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
                  lastActionText = timeStr;
              }
           }
-
-          // Voor de Header (Laatst gezien)
-          // Als er enige activiteit was (maxTs > 0), is hij "gezien"
-          lastSeenHeader = timeStr;
+        }
+        
+        // Voor de Header (Laatst gezien)
+        // Alleen de ECHTE lastSeen gebruiken (geen open/close/local)
+        if (tSeen > 0) {
+             const diffMinSeen = Math.floor((Date.now() - tSeen) / 60000);
+             lastSeenHeader = fmtTimeAgo(diffMinSeen);
         }
 
         const sharesCountRaw = pick(box, ['sharesCount','shares_count']) ?? null;
@@ -1507,7 +1509,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
             <div class="gb-head">
               <div class="gb-site">${escapeHtml(site)}</div>
               <div class="gb-box"># ${escapeHtml(boxNumber)}</div>
-              <div class="gb-time">Laatst gezien ${escapeHtml(lastSeenHeader)}</div>
+              <div class="gb-time js-header-time">Laatst gezien ${escapeHtml(lastSeenHeader)}</div>
             </div>
 
             <div class="gb-meta">
@@ -2013,6 +2015,8 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
                 // UPDATE TEKST DIRECT:
                 const statusText = card.querySelector('.js-status-text');
                 if(statusText) statusText.textContent = "Wordt geopend...";
+
+                // NOTE: We updaten de Header NIET lokaal, want dat moet de echte poller zijn.
 
               } else {
                 if(!card.classList.contains('is-open')){
