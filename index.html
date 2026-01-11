@@ -23,11 +23,11 @@ Niet aanpassen. Eerst uitleggen waar het risico zit.
 EINDE WERKAFSPRAKEN
 =====================================================
 
-  Deze versie (V13) bevat:
-  1. "Optimistische" Hartslag: Hartje klopt STANDAARD (rood), ook als data '-' is.
-  2. Hartje stopt alleen als lastSeen > 10 min is.
-  3. Frequentie: 0.2s (200ms) conform Raspberry Pi config.
-  4. Alle voorgaande fixes behouden.
+  Deze versie (V14) bevat:
+  1. Logica omgedraaid: Standaard DOOD (grijs), tenzij bewijs van leven.
+  2. Bewijs van leven = Server polling < 10min OF Lokale actie < 10min.
+  3. Dit voorkomt dat losgekoppelde boxen een kloppend hartje krijgen.
+  4. Hartslagfrequentie blijft 0.2s (5Hz).
   Datum: 2026-01-11
 -->
 </script>
@@ -1459,16 +1459,22 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         }
 
         // ===========================================================
-        // HEADER HEARTBEAT (Kloppend hartje) - OPTIMISTISCHE LOGICA
+        // HEADER HEARTBEAT (Kloppend hartje) - REALISTISCHE LOGICA
         // ===========================================================
-        // STANDAARD: ALIVE (true).
-        // Pas op 'false' zetten als we ECHT zeker weten dat hij dood is.
-        // Als data 'unknown' (-) is, gaan we uit van 'Alive' omdat de gebruiker zegt dat het werkt.
-        let isAlive = true;
+        // STANDAARD: DOOD (false).
+        // Wordt ALLEEN 'true' als we bewijs van leven hebben.
+        let isAlive = false;
 
-        // Als lastSeenNum bekend is EN groter dan 10 minuten, dan pas is hij dood.
-        if (lastSeenNum !== null && !isNaN(lastSeenNum) && lastSeenNum > 10) {
-            isAlive = false;
+        // 1. Check Server Heartbeat (lastSeen)
+        if (lastSeenNum !== null && !isNaN(lastSeenNum) && lastSeenNum <= 10) {
+            isAlive = true;
+        }
+
+        // 2. Check Recent Local Activity (als fallback)
+        // Als maxTs bekend is en minder dan 10 min geleden
+        // maxTs wordt berekend op basis van open/close timestamps én local storage
+        if (maxTs > 0 && (Date.now() - maxTs) < 600000) { // 600.000ms = 10 min
+             isAlive = true;
         }
         
         const heartClass = isAlive ? 'alive' : '';
@@ -1994,7 +2000,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
         kvOpened.textContent = fmtLifecycleLine(openedAt, openedBy);
         kvClosed.textContent = fmtLifecycleLine(closedAt, closedBy);
-        kvSource.textContent = card.getAttribute('data-source') || '-'; 
+        kvSource.textContent = card.getAttribute('data-source') || '-'; 
         kvGeo.textContent = card.getAttribute('data-geo') || '-';
 
         kvAgent.textContent = (card.getAttribute('data-agent') ? ('v ' + card.getAttribute('data-agent')) : '-');
@@ -2060,7 +2066,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
             try{
 
               if(next === 'open'){
-                // forceer animatie ook als de class al eens gezet was
                 card.classList.remove('is-open');
                 void card.offsetWidth;
                 card.classList.add('is-open');
@@ -2074,7 +2079,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
                 // NOTE: We updaten de Header NIET lokaal, want dat moet de echte poller zijn.
 
               } else {
-                // forceer animatie ook als de UI even uit sync was
                 if(!card.classList.contains('is-open')){
                   card.classList.add('is-open');
                   void card.offsetWidth;
@@ -2100,7 +2104,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'open');
                   card.setAttribute('data-lifecycle-state', 'open');
-                  // label already follows desired
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
                   
                   // UPDATE TEKST NA TIJD:
@@ -2113,7 +2116,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'closed');
                   card.setAttribute('data-lifecycle-state', 'closed');
-                  // label already follows desired
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
 
                   // UPDATE TEKST NA TIJD:
