@@ -23,7 +23,8 @@ Niet aanpassen. Eerst uitleggen waar het risico zit.
 EINDE WERKAFSPRAKEN
 =====================================================
 
-  Deze versie bevat de definitieve fix voor de tijdsaanduiding (Last Action) op de kaarten.
+  Deze versie bevat de definitieve fix voor de tijdsaanduiding (Last Action) op de kaarten
+  en de herstelde syntaxfout.
   Datum: 2026-01-11
 -->
 </script>
@@ -1015,15 +1016,18 @@ select:focus, input[type="text"]:focus, input[type="search"]:focus{
       }, { passive:true });
 
       function computeOnlineStateFromMinutes(min){
-        if (min === null || Number.isNaN(min)) return { label:'Onbekend', cls:'' };
+        // Als we geen lastSeen hebben, is de status niet per se 'slecht', 
+        // maar we weten het gewoon niet live. We geven 'unknown' terug (grijs).
+        if (min === null || Number.isNaN(min)) return { label:'-', cls:'' };
         if (min <= 2) return { label:'Online', cls:'ok' };
         if (min <= 10) return { label:'Opgelet', cls:'warn' };
         return { label:'Offline', cls:'bad' };
       }
 
-      // Helper om tijdsverloop tekstueel te maken
-      function fmtLastAction(min) {
-        if (min === null || Number.isNaN(min)) return 'Onbekend';
+      // Helper om tijdsverloop tekstueel te maken (bv "2 dagen geleden")
+      function fmtTimeAgo(min) {
+        if (min === null || Number.isNaN(min)) return '';
+        if (min < 1) return 'zojuist';
         if (min < 60) return min + ' min. geleden';
         const uren = Math.floor(min / 60);
         if (uren < 24) return uren + ' uur geleden';
@@ -1081,8 +1085,6 @@ select:focus, input[type="text"]:focus, input[type="search"]:focus{
         return 'UNKNOWN';
       }
 
-
-      // Hoofdknop op de kaart: toont actie (OPEN/CLOSE) of overgang (OPENING/CLOSING)
       
       // Tijd parsing voor "since/timestamp/updatedAt" velden (Firestore/ISO/ms)
       function parseAnyTime(v){
@@ -1093,6 +1095,7 @@ select:focus, input[type="text"]:focus, input[type="search"]:focus{
             return v > 1e12 ? v : Math.round(v * 1000);
           }
           if (typeof v === 'string'){
+            // Probeer ISO string
             const t = Date.parse(v);
             return isNaN(t) ? null : t;
           }
@@ -1355,8 +1358,34 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         const lastSeenNum = (lastSeen === null || lastSeen === undefined) ? NaN : Number(lastSeen);
         const s = computeOnlineStateFromMinutes(lastSeenNum);
 
-        // NIEUW: bereken de tekst voor de tijdsaanduiding op de kaart
-        const lastActionText = fmtLastAction(lastSeenNum);
+        // NIEUWE LOGICA: Bepaal de meest recente activiteit (Action)
+        // 1. Haal timestamps op
+        const tOpen = parseAnyTime(pickLifecycleOpenedAt(box)) || 0;
+        const tClose = parseAnyTime(pickLifecycleClosedAt(box)) || 0;
+        // Als lastSeenNum geldig is, rekenen we dat om naar een timestamp (ongeveer)
+        const tSeen = (!isNaN(lastSeenNum) && lastSeenNum !== null) ? (Date.now() - lastSeenNum*60000) : 0;
+
+        // 2. Zoek de grootste (meest recente)
+        const maxTs = Math.max(tOpen, tClose, tSeen);
+        
+        let lastActionText = 'Geen info';
+        
+        if (maxTs > 0) {
+          const diffMin = Math.floor((Date.now() - maxTs) / 60000);
+          const timeStr = fmtTimeAgo(diffMin);
+
+          // 3. Kies het label op basis van welke timestamp 'won'
+          if (maxTs === tOpen) {
+            lastActionText = 'Geopend ' + timeStr;
+          } else if (maxTs === tClose) {
+            lastActionText = 'Gesloten ' + timeStr;
+          } else if (maxTs === tSeen) {
+            // Als fallback, als connection nieuwer is dan laatste open/close
+            lastActionText = 'Gezien ' + timeStr;
+          } else {
+            lastActionText = timeStr; 
+          }
+        }
 
         const sharesCountRaw = pick(box, ['sharesCount','shares_count']) ?? null;
         const sharesCount = (sharesCountRaw === null || sharesCountRaw === undefined) ? null : Number(sharesCountRaw);
@@ -1453,7 +1482,7 @@ card.setAttribute('data-id', id);
 
             <div class="gb-meta">
               <span class="pill ghost" title="Klant"><span class="dot"></span><span>${escapeHtml(customerText)}</span></span>
-              <span class="pill ${s.cls}" title="Tijd sinds laatste handeling"><span class="dot"></span><span>${escapeHtml(lastActionText)}</span></span>
+              <span class="pill ${s.cls}" title="Laatste handeling"><span class="dot"></span><span>${escapeHtml(lastActionText)}</span></span>
               <span class="pill ghost" title="Portal.active">active ${escapeHtml(active || '-')}</span>
               <span class="pill ghost" title="box.access24h">24/7 ${escapeHtml(access24h || '-')}</span>
               <span class="pill ghost" title="box.type">${escapeHtml(bType || '-')}</span>
@@ -1880,7 +1909,7 @@ async function sendCommand(boxId, type){
 
         kvOpened.textContent = fmtLifecycleLine(openedAt, openedBy);
         kvClosed.textContent = fmtLifecycleLine(closedAt, closedBy);
-        kvSource.textContent = card.getAttribute('data-source') || '-'; 
+        kvSource.textContent = card.getAttribute('data-source') || '-';
         kvGeo.textContent = card.getAttribute('data-geo') || '-';
 
         kvAgent.textContent = (card.getAttribute('data-agent') ? ('v ' + card.getAttribute('data-agent')) : '-');
