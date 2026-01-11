@@ -23,10 +23,11 @@ Niet aanpassen. Eerst uitleggen waar het risico zit.
 EINDE WERKAFSPRAKEN
 =====================================================
 
-  Deze versie (V12) bevat:
-  1. Hartslagfrequentie exact op 0.2s (200ms) gezet, conform 'pollMs' in config.
-  2. Hartje pulseert 5x per seconde bij activiteit.
-  3. Visuele feedback (rood hartje) bij polling (< 10m) of lokale actie.
+  Deze versie (V13) bevat:
+  1. "Optimistische" Hartslag: Hartje klopt STANDAARD (rood), ook als data '-' is.
+  2. Hartje stopt alleen als lastSeen > 10 min is.
+  3. Frequentie: 0.2s (200ms) conform Raspberry Pi config.
+  4. Alle voorgaande fixes behouden.
   Datum: 2026-01-11
 -->
 </script>
@@ -1458,20 +1459,18 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         }
 
         // ===========================================================
-        // HEADER HEARTBEAT (Kloppend hartje)
-        // AANGEPAST: Rood als er ENIGE activiteit is in de laatste 10 minuten!
+        // HEADER HEARTBEAT (Kloppend hartje) - OPTIMISTISCHE LOGICA
         // ===========================================================
-        let isAlive = false;
+        // STANDAARD: ALIVE (true).
+        // Pas op 'false' zetten als we ECHT zeker weten dat hij dood is.
+        // Als data 'unknown' (-) is, gaan we uit van 'Alive' omdat de gebruiker zegt dat het werkt.
+        let isAlive = true;
 
-        // Server check (Polling)
-        if (lastSeenNum !== null && !isNaN(lastSeenNum) && lastSeenNum <= 10) {
-            isAlive = true;
+        // Als lastSeenNum bekend is EN groter dan 10 minuten, dan pas is hij dood.
+        if (lastSeenNum !== null && !isNaN(lastSeenNum) && lastSeenNum > 10) {
+            isAlive = false;
         }
-        // Lokale actie check (als fallback voor trage server update)
-        if (maxTs > 0 && (Date.now() - maxTs) < 600000) { // 10 min
-             isAlive = true;
-        }
-
+        
         const heartClass = isAlive ? 'alive' : '';
         const heartIcon = `
           <svg class="pulse-heart ${heartClass}" viewBox="0 0 24 24">
