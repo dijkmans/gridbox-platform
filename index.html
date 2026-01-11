@@ -23,11 +23,12 @@ Niet aanpassen. Eerst uitleggen waar het risico zit.
 EINDE WERKAFSPRAKEN
 =====================================================
 
-  Deze versie (V5) bevat:
-  1. Header ("Laatst gezien"): Toont ALLEEN server-bevestigde 'lastSeen' (geen fake updates).
-  2. Pill ("Status"): Toont 'Open/Dicht' inclusief live lokale updates ("zojuist").
-  3. LocalStorage geheugen voor de Pill status.
-  Datum: 2026-01-11
+  Deze versie bevat:
+  1. Fix voor "Last Action" tijdsaanduiding.
+  2. Fix voor Syntax Error.
+  3. Live update van tekst ("zojuist").
+  4. NIEUW: LocalStorage geheugen zodat 'zojuist' blijft staan na refresh.
+  Datum: 2026-01-11 (Versie 2)
 -->
 </script>
 <html lang="nl">
@@ -1368,11 +1369,25 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         const tSeen = (!isNaN(lastSeenNum) && lastSeenNum !== null) ? (Date.now() - lastSeenNum*60000) : 0;
 
         // 2. Zoek de grootste (meest recente)
-        let maxTs = Math.max(tOpen, tClose, tSeen);
+        const maxTs = Math.max(tOpen, tClose, tSeen);
         
         let lastActionText = 'Geen info';
-        let lastSeenHeader = '-';
         
+        if (maxTs > 0) {
+          const diffMin = Math.floor((Date.now() - maxTs) / 60000);
+          const timeStr = fmtTimeAgo(diffMin);
+
+          if (maxTs === tOpen) {
+            lastActionText = 'Geopend ' + timeStr;
+          } else if (maxTs === tClose) {
+            lastActionText = 'Gesloten ' + timeStr;
+          } else if (maxTs === tSeen) {
+            lastActionText = 'Gezien ' + timeStr;
+          } else {
+            lastActionText = timeStr; 
+          }
+        }
+
         // ============================================================
         // NIEUW: Check LocalStorage voor een recentere actie dan de server!
         // ============================================================
@@ -1385,43 +1400,14 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
                 if (Date.now() - localData.ts < 300000) {
                     // Is lokale data nieuwer dan wat de server zegt?
                     if (localData.ts > maxTs) {
-                        maxTs = localData.ts; // Update maxTs voor beide berekeningen
+                        const diffMin = Math.floor((Date.now() - localData.ts) / 60000);
+                        const timeStr = fmtTimeAgo(diffMin);
+                        lastActionText = (localData.state === 'open' ? 'Geopend ' : 'Gesloten ') + timeStr;
                     }
                 }
             } catch(e){}
         }
         // ============================================================
-
-        if (maxTs > 0) {
-          const diffMin = Math.floor((Date.now() - maxTs) / 60000);
-          const timeStr = fmtTimeAgo(diffMin);
-
-          // Voor de Pill (Actie)
-          if (maxTs === tOpen) {
-            lastActionText = 'Geopend ' + timeStr;
-          } else if (maxTs === tClose) {
-            lastActionText = 'Gesloten ' + timeStr;
-          } else if (maxTs === tSeen) {
-            lastActionText = 'Gezien ' + timeStr;
-          } else {
-            // Fallback (bv lokale actie of maxTs was updated)
-            // Als we lokaal hebben geupdate, is het meestal Open of Close
-            // Maar we weten de state niet 100% zeker hier zonder complexere logica
-            // We gebruiken de timeStr
-             if (localRaw && JSON.parse(localRaw).ts === maxTs) {
-                 const state = JSON.parse(localRaw).state;
-                 lastActionText = (state === 'open' ? 'Geopend ' : 'Gesloten ') + timeStr;
-             } else {
-                 lastActionText = timeStr;
-             }
-          }
-        }
-        
-        // Voor de Header (Laatst gezien)
-        // Alleen de ECHTE lastSeen gebruiken (geen open/close/local)
-        if (lastSeenNum !== null && !isNaN(lastSeenNum)) {
-             lastSeenHeader = fmtLastSeen(lastSeenNum);
-        }
 
         const sharesCountRaw = pick(box, ['sharesCount','shares_count']) ?? null;
         const sharesCount = (sharesCountRaw === null || sharesCountRaw === undefined) ? null : Number(sharesCountRaw);
@@ -1508,7 +1494,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
             <div class="gb-head">
               <div class="gb-site">${escapeHtml(site)}</div>
               <div class="gb-box"># ${escapeHtml(boxNumber)}</div>
-              <div class="gb-time js-header-time">Laatst gezien ${escapeHtml(lastSeenHeader)}</div>
+              <div class="gb-time">Last seen ${escapeHtml(fmtLastSeen(lastSeen))}</div>
             </div>
 
             <div class="gb-meta">
@@ -1987,8 +1973,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
             const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
             const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || card.getAttribute('data-shutter-state') || '');
 
-            // desired mag altijd wijzigen, ook tijdens opening/closing
-
             const currentDesired = (card.getAttribute('data-desired') === 'open') ? 'open' : 'close';
             const next = currentDesired === 'open' ? 'close' : 'open';
 
@@ -2007,7 +1991,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
             try{
 
               if(next === 'open'){
-                // forceer animatie ook als de class al eens gezet was
                 card.classList.remove('is-open');
                 void card.offsetWidth;
                 card.classList.add('is-open');
@@ -2018,10 +2001,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
                 const statusText = card.querySelector('.js-status-text');
                 if(statusText) statusText.textContent = "Wordt geopend...";
 
-                // NOTE: We updaten de Header NIET lokaal, want dat moet de echte poller zijn.
-
               } else {
-                // forceer animatie ook als de UI even uit sync was
                 if(!card.classList.contains('is-open')){
                   card.classList.add('is-open');
                   void card.offsetWidth;
@@ -2047,7 +2027,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'open');
                   card.setAttribute('data-lifecycle-state', 'open');
-                  // label already follows desired
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
                   
                   // UPDATE TEKST NA TIJD:
@@ -2060,7 +2039,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'closed');
                   card.setAttribute('data-lifecycle-state', 'closed');
-                  // label already follows desired
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
 
                   // UPDATE TEKST NA TIJD:
