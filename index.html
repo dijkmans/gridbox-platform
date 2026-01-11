@@ -23,11 +23,11 @@ Niet aanpassen. Eerst uitleggen waar het risico zit.
 EINDE WERKAFSPRAKEN
 =====================================================
 
-  Deze versie (V8) bevat:
-  1. Hartje logica versoepeld: Klopt nu als er ENIGE activiteit of polling is (< 10 min).
-  2. Visueel: Hartje is rood en pulseert bij activiteit.
-  3. Tekst: "Laatst gezien" tekst is weg, alleen tijd + icoon.
-  4. LocalStorage en Live updates behouden.
+  Deze versie (V9) bevat:
+  1. Hartje logica STRICT: Klopt alleen als er gepolled wordt (lastSeen < 5 min).
+  2. Geen invloed van lokale acties op het hartje.
+  3. Hartje is groot (24px).
+  4. Pill ("Status") blijft wel slim (lokale feedback).
   Datum: 2026-01-11
 -->
 </script>
@@ -1460,17 +1460,10 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
         // ===========================================================
         // HEADER HEARTBEAT (Kloppend hartje)
-        // AANGEPAST: Rood als er ENIGE activiteit is in de laatste 10 minuten!
+        // STRICT LOGICA: Alleen polling (lastSeen) telt.
         // ===========================================================
-        let isAlive = false;
-        if (maxTs > 0) {
-            const diffMin = (Date.now() - maxTs) / 60000;
-            // Als er in de laatste 10 minuten IETS gebeurd is (ping, open, close, lokaal) -> Alive
-            if (diffMin < 10) isAlive = true; 
-        }
-        // Fallback: Als lastSeenNum strikt OK is (volgens server)
-        if (lastSeenNum !== null && lastSeenNum <= 10) isAlive = true;
-
+        const isAlive = (lastSeenNum !== null && !isNaN(lastSeenNum) && lastSeenNum <= 5);
+        
         const heartClass = isAlive ? 'alive' : '';
         const heartIcon = `
           <svg class="pulse-heart ${heartClass}" viewBox="0 0 24 24">
@@ -2041,8 +2034,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
             const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
             const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || card.getAttribute('data-shutter-state') || '');
-
-            // desired mag altijd wijzigen, ook tijdens opening/closing
 
             const currentDesired = (card.getAttribute('data-desired') === 'open') ? 'open' : 'close';
             const next = currentDesired === 'open' ? 'close' : 'open';
