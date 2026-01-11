@@ -23,10 +23,11 @@ Niet aanpassen. Eerst uitleggen waar het risico zit.
 EINDE WERKAFSPRAKEN
 =====================================================
 
-  Deze versie (V7) bevat:
-  1. Hartje is groter (24px).
-  2. Tekst "Laatst gezien" is verwijderd uit header.
-  3. Hartje wordt rood/klopt nu ook bij acties (openen/sluiten), niet alleen bij pings.
+  Deze versie (V8) bevat:
+  1. Hartje logica versoepeld: Klopt nu als er ENIGE activiteit of polling is (< 10 min).
+  2. Visueel: Hartje is rood en pulseert bij activiteit.
+  3. Tekst: "Laatst gezien" tekst is weg, alleen tijd + icoon.
+  4. LocalStorage en Live updates behouden.
   Datum: 2026-01-11
 -->
 </script>
@@ -203,6 +204,7 @@ EINDE WERKAFSPRAKEN
       display:flex;
       align-items:center;
       gap:6px;
+      margin-left: auto; /* Duwt tijd naar rechts */
     }
 
     .gb-meta{
@@ -1458,16 +1460,16 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
         // ===========================================================
         // HEADER HEARTBEAT (Kloppend hartje)
-        // AANGEPAST: Rood als er ENIGE activiteit is in de laatste 5 minuten!
+        // AANGEPAST: Rood als er ENIGE activiteit is in de laatste 10 minuten!
         // ===========================================================
         let isAlive = false;
         if (maxTs > 0) {
             const diffMin = (Date.now() - maxTs) / 60000;
-            // Als er in de laatste 5 minuten IETS gebeurd is (ping, open, close, lokaal) -> Alive
-            if (diffMin < 5) isAlive = true; 
+            // Als er in de laatste 10 minuten IETS gebeurd is (ping, open, close, lokaal) -> Alive
+            if (diffMin < 10) isAlive = true; 
         }
-        // Fallback: Als lastSeenNum strikt OK is
-        if (lastSeenNum !== null && lastSeenNum <= 2) isAlive = true;
+        // Fallback: Als lastSeenNum strikt OK is (volgens server)
+        if (lastSeenNum !== null && lastSeenNum <= 10) isAlive = true;
 
         const heartClass = isAlive ? 'alive' : '';
         const heartIcon = `
@@ -2039,6 +2041,8 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
             const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
             const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || card.getAttribute('data-shutter-state') || '');
+
+            // desired mag altijd wijzigen, ook tijdens opening/closing
 
             const currentDesired = (card.getAttribute('data-desired') === 'open') ? 'open' : 'close';
             const next = currentDesired === 'open' ? 'close' : 'open';
