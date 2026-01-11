@@ -1419,9 +1419,8 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         
         // Voor de Header (Laatst gezien)
         // Alleen de ECHTE lastSeen gebruiken (geen open/close/local)
-        if (tSeen > 0) {
-             const diffMinSeen = Math.floor((Date.now() - tSeen) / 60000);
-             lastSeenHeader = fmtTimeAgo(diffMinSeen);
+        if (lastSeenNum !== null && !isNaN(lastSeenNum)) {
+             lastSeenHeader = fmtLastSeen(lastSeenNum);
         }
 
         const sharesCountRaw = pick(box, ['sharesCount','shares_count']) ?? null;
@@ -1988,6 +1987,8 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
             const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
             const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || card.getAttribute('data-shutter-state') || '');
 
+            // desired mag altijd wijzigen, ook tijdens opening/closing
+
             const currentDesired = (card.getAttribute('data-desired') === 'open') ? 'open' : 'close';
             const next = currentDesired === 'open' ? 'close' : 'open';
 
@@ -2006,6 +2007,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
             try{
 
               if(next === 'open'){
+                // forceer animatie ook als de class al eens gezet was
                 card.classList.remove('is-open');
                 void card.offsetWidth;
                 card.classList.add('is-open');
@@ -2019,6 +2021,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
                 // NOTE: We updaten de Header NIET lokaal, want dat moet de echte poller zijn.
 
               } else {
+                // forceer animatie ook als de UI even uit sync was
                 if(!card.classList.contains('is-open')){
                   card.classList.add('is-open');
                   void card.offsetWidth;
@@ -2044,6 +2047,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'open');
                   card.setAttribute('data-lifecycle-state', 'open');
+                  // label already follows desired
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
                   
                   // UPDATE TEKST NA TIJD:
@@ -2056,6 +2060,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'closed');
                   card.setAttribute('data-lifecycle-state', 'closed');
+                  // label already follows desired
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
 
                   // UPDATE TEKST NA TIJD:
