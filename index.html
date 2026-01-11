@@ -23,7 +23,7 @@ Niet aanpassen. Eerst uitleggen waar het risico zit.
 EINDE WERKAFSPRAKEN
 =====================================================
 
-  Deze versie bevat de herstelde "Last Action" weergave op de kaarten.
+  Deze versie bevat de herstelde "Last Action" weergave en de fix voor de syntaxfout.
   Datum: 2026-01-11
 -->
 </script>
@@ -1880,7 +1880,7 @@ async function sendCommand(boxId, type){
 
         kvOpened.textContent = fmtLifecycleLine(openedAt, openedBy);
         kvClosed.textContent = fmtLifecycleLine(closedAt, closedBy);
-        kvSource.textContent = card.getAttribute('data-source) || '-';
+        kvSource.textContent = card.getAttribute('data-source') || '-'; // Syntax hersteld
         kvGeo.textContent = card.getAttribute('data-geo') || '-';
 
         kvAgent.textContent = (card.getAttribute('data-agent') ? ('v ' + card.getAttribute('data-agent')) : '-');
@@ -2142,7 +2142,7 @@ async function sendCommand(boxId, type){
 
       document.getElementById('btnEvents').addEventListener('click', ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
-        const boxId = currentCard.getAttribute('data-id');
+        const boxId = card.getAttribute('data-id');
         if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/events`);
       });
 
