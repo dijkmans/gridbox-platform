@@ -1,37 +1,5 @@
 <!DOCTYPE html>
 
-<!--
-=====================================================
-HTML WERKAFSPRAKEN – LEES DIT VOOR JE IETS WIJZIGT
-=====================================================
-
-DOEL
-Dit bestand bevat HTML, CSS en JavaScript die samen één werkend geheel vormen.
-Aanpassingen mogen NOOIT bestaande functionaliteit breken.
-
-ALGEMENE REGELS
-- Wijzig alleen wat expliciet gevraagd wordt
-- Raak bestaande id’s, class-namen en data-attributes niet aan
-- Verwijder geen code tenzij dit expliciet gevraagd wordt
-- Herschrijf geen JavaScript-logica zonder duidelijke reden
-- Verander geen volgorde van elementen als dit impact kan hebben
-
-WERKWIJZE BIJ AANPASSINGEN
-1. Eerst analyseren, nog geen code aanpassen
-   - Welke onderdelen zijn afhankelijk van elkaar?
-   - Welke elementen worden gebruikt door JavaScript?
-   - Waar zit risico op breuk?
-
-2. Pas daarna aanpassen
-   - Enkel binnen het aangeduide blok
-   - Zo lokaal mogelijk
-   - Geen onnodige refactors
-
-BLOKSTRUCTUUR
-HTML is opgedeeld in duidelijke blokken met:
-<!-- START BLOKNAAM -->
-<!-- END BLOKNAAM -->
-
 <script type="text/plain" id="worknotes">
 Aanpassingen gebeuren altijd binnen zo’n blok.
 
@@ -55,10 +23,8 @@ Niet aanpassen. Eerst uitleggen waar het risico zit.
 EINDE WERKAFSPRAKEN
 =====================================================
 
-  Deze versie is dezelfde functionaliteit als je origineel,
-  maar beter gegroepeerd met duidelijke blokken en secties.
-  Bronbestand: index (19).html
-  Datum: 2025-12-22
+  Deze versie bevat de herstelde "Last Action" weergave op de kaarten.
+  Datum: 2026-01-11
 -->
 </script>
 <html lang="nl">
@@ -725,12 +691,7 @@ select:focus, input[type="text"]:focus, input[type="search"]:focus{
 </head>
 
 <body>
-    <!-- =========================================================
-  APP
-  Left: overzicht
-  Right: detail (side panel)
-  ========================================================= -->
-<div id="app" class="app is-collapsed">
+    <div id="app" class="app is-collapsed">
     <main class="main">
       <div class="toolbar">
         <div class="brand">Gridbox</div>
@@ -766,7 +727,6 @@ select:focus, input[type="text"]:focus, input[type="search"]:focus{
 
       <div class="side-body">
 
-        <!-- Toegang bovenaan -->
         <div class="block" id="blockAccess">
           <h4>Toegang</h4>
           <div class="access-row">
@@ -781,7 +741,6 @@ select:focus, input[type="text"]:focus, input[type="search"]:focus{
           </div>
         </div>
 
-        <!-- Shares direct onder Toegang (hoger dan Status) -->
         <div class="block" id="blockShares">
           <h4>Shares</h4>
 
@@ -1060,6 +1019,18 @@ select:focus, input[type="text"]:focus, input[type="search"]:focus{
         if (min <= 2) return { label:'Online', cls:'ok' };
         if (min <= 10) return { label:'Opgelet', cls:'warn' };
         return { label:'Offline', cls:'bad' };
+      }
+
+      // Helper om tijdsverloop tekstueel te maken
+      function fmtLastAction(min) {
+        if (min === null || Number.isNaN(min)) return 'Onbekend';
+        if (min < 60) return min + ' min. geleden';
+        const uren = Math.floor(min / 60);
+        if (uren < 24) return uren + ' uur geleden';
+        const dagen = Math.floor(uren / 24);
+        if (dagen < 30) return dagen + ' dagen geleden';
+        const maanden = Math.floor(dagen / 30);
+        return maanden + ' maanden geleden';
       }
 
       function fmtMaybe(v){
@@ -1384,6 +1355,9 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         const lastSeenNum = (lastSeen === null || lastSeen === undefined) ? NaN : Number(lastSeen);
         const s = computeOnlineStateFromMinutes(lastSeenNum);
 
+        // NIEUW: bereken de tekst voor de tijdsaanduiding op de kaart
+        const lastActionText = fmtLastAction(lastSeenNum);
+
         const sharesCountRaw = pick(box, ['sharesCount','shares_count']) ?? null;
         const sharesCount = (sharesCountRaw === null || sharesCountRaw === undefined) ? null : Number(sharesCountRaw);
 
@@ -1479,7 +1453,7 @@ card.setAttribute('data-id', id);
 
             <div class="gb-meta">
               <span class="pill ghost" title="Klant"><span class="dot"></span><span>${escapeHtml(customerText)}</span></span>
-              <span class="pill ${s.cls}" title="Op basis van last seen"><span class="dot"></span><span>${escapeHtml(s.label)}</span></span>
+              <span class="pill ${s.cls}" title="Tijd sinds laatste handeling"><span class="dot"></span><span>${escapeHtml(lastActionText)}</span></span>
               <span class="pill ghost" title="Portal.active">active ${escapeHtml(active || '-')}</span>
               <span class="pill ghost" title="box.access24h">24/7 ${escapeHtml(access24h || '-')}</span>
               <span class="pill ghost" title="box.type">${escapeHtml(bType || '-')}</span>
@@ -1906,7 +1880,7 @@ async function sendCommand(boxId, type){
 
         kvOpened.textContent = fmtLifecycleLine(openedAt, openedBy);
         kvClosed.textContent = fmtLifecycleLine(closedAt, closedBy);
-        kvSource.textContent = card.getAttribute('data-source') || '-';
+        kvSource.textContent = card.getAttribute('data-source) || '-';
         kvGeo.textContent = card.getAttribute('data-geo') || '-';
 
         kvAgent.textContent = (card.getAttribute('data-agent') ? ('v ' + card.getAttribute('data-agent')) : '-');
