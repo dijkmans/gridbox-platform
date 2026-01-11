@@ -23,8 +23,10 @@ Niet aanpassen. Eerst uitleggen waar het risico zit.
 EINDE WERKAFSPRAKEN
 =====================================================
 
-  Deze versie bevat de definitieve fix voor de tijdsaanduiding (Last Action) op de kaarten
-  en de herstelde syntaxfout.
+  Deze versie bevat:
+  1. Fix voor "Last Action" tijdsaanduiding.
+  2. Fix voor Syntax Error.
+  3. NIEUW: Live update van de tekst ("zojuist") bij openen/sluiten.
   Datum: 2026-01-11
 -->
 </script>
@@ -1416,13 +1418,9 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
         const motionStateAll = normalizeShutterStateDetailed(rawMotionState);
         const motionSince = pickMotionSince(box);
-        // Voorkom 'stale' opening/closing die dagen blijft hangen: enkel gebruiken als recent
         const motionState = (motionStateAll && isRecent(motionSince, 20000)) ? motionStateAll : '';
         const doorState = normalizeShutterStateDetailed(rawDoorState);
-// Visuele toestand:
-        // - opening: direct omhoog
-        // - closing: direct omlaag
-        // - anders: volg de deurstatus
+
         if (motionState === 'opening') {
           card.classList.add('is-open');
         } else if (motionState === 'closing') {
@@ -1433,13 +1431,11 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           card.classList.remove('is-open');
         }
 
-        // Voor de rest van de UI houden we beide bij
         card.setAttribute('data-motion-state', motionState);
         card.setAttribute('data-door-state', doorState);
-
-        // data-shutter-state blijft bestaan voor compatibiliteit (we gebruiken vooral doorState)
         card.setAttribute('data-shutter-state', doorState || motionState);
-card.setAttribute('data-id', id);
+        
+        card.setAttribute('data-id', id);
         card.setAttribute('data-site', site === '-' ? '' : site);
         card.setAttribute('data-box', boxNumber === '-' ? '' : boxNumber);
         card.setAttribute('data-agent', agent ?? '');
@@ -1470,6 +1466,7 @@ card.setAttribute('data-id', id);
           ? `<span class="pill ghost" title="sharesCount">shares -</span>`
           : `<span class="pill ghost" title="sharesCount">shares ${escapeHtml(String(sharesCount))}</span>`;
 
+        // UPDATE: We voegen een unieke class toe (js-status-text) aan de text-span
         card.innerHTML = `
           <div class="gb-shutter" aria-hidden="true"><div class="gb-shutter__door"></div></div>
 
@@ -1482,7 +1479,7 @@ card.setAttribute('data-id', id);
 
             <div class="gb-meta">
               <span class="pill ghost" title="Klant"><span class="dot"></span><span>${escapeHtml(customerText)}</span></span>
-              <span class="pill ${s.cls}" title="Laatste handeling"><span class="dot"></span><span>${escapeHtml(lastActionText)}</span></span>
+              <span class="pill ${s.cls}" title="Laatste handeling"><span class="dot"></span><span class="js-status-text">${escapeHtml(lastActionText)}</span></span>
               <span class="pill ghost" title="Portal.active">active ${escapeHtml(active || '-')}</span>
               <span class="pill ghost" title="box.access24h">24/7 ${escapeHtml(access24h || '-')}</span>
               <span class="pill ghost" title="box.type">${escapeHtml(bType || '-')}</span>
@@ -1572,7 +1569,6 @@ card.setAttribute('data-id', id);
         return Array.isArray(data) ? data : [];
       }
 
-      
       async function setDesired(boxId, desired){
         const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/desired`), {
           method:'POST',
@@ -1589,7 +1585,7 @@ card.setAttribute('data-id', id);
         }
       }
 
-async function sendCommand(boxId, type){
+      async function sendCommand(boxId, type){
         const url = apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/${type}`);
         const res = await fetch(url, { method:'POST' });
         const payload = await res.json().catch(()=> ({}));
@@ -1909,7 +1905,7 @@ async function sendCommand(boxId, type){
 
         kvOpened.textContent = fmtLifecycleLine(openedAt, openedBy);
         kvClosed.textContent = fmtLifecycleLine(closedAt, closedBy);
-        kvSource.textContent = card.getAttribute('data-source') || '-';
+        kvSource.textContent = card.getAttribute('data-source') || '-'; 
         kvGeo.textContent = card.getAttribute('data-geo') || '-';
 
         kvAgent.textContent = (card.getAttribute('data-agent') ? ('v ' + card.getAttribute('data-agent')) : '-');
@@ -1957,8 +1953,6 @@ async function sendCommand(boxId, type){
             const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
             const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || card.getAttribute('data-shutter-state') || '');
 
-            // desired mag altijd wijzigen, ook tijdens opening/closing
-
             const currentDesired = (card.getAttribute('data-desired') === 'open') ? 'open' : 'close';
             const next = currentDesired === 'open' ? 'close' : 'open';
 
@@ -1977,14 +1971,17 @@ async function sendCommand(boxId, type){
             try{
 
               if(next === 'open'){
-                // forceer animatie ook als de class al eens gezet was
                 card.classList.remove('is-open');
                 void card.offsetWidth;
                 card.classList.add('is-open');
                 card.setAttribute('data-motion-state', 'opening');
                 card.setAttribute('data-lifecycle-state', 'opening');
+                
+                // UPDATE TEKST DIRECT:
+                const statusText = card.querySelector('.js-status-text');
+                if(statusText) statusText.textContent = "Wordt geopend...";
+
               } else {
-                // forceer animatie ook als de UI even uit sync was
                 if(!card.classList.contains('is-open')){
                   card.classList.add('is-open');
                   void card.offsetWidth;
@@ -1992,9 +1989,12 @@ async function sendCommand(boxId, type){
                 card.classList.remove('is-open');
                 card.setAttribute('data-motion-state', 'closing');
                 card.setAttribute('data-lifecycle-state', 'closing');
+
+                // UPDATE TEKST DIRECT:
+                const statusText = card.querySelector('.js-status-text');
+                if(statusText) statusText.textContent = "Wordt gesloten...";
               }
 
-              // compat
               card.setAttribute('data-shutter-state', card.getAttribute('data-door-state') || card.getAttribute('data-motion-state') || '');
 
               btn.textContent = (next === 'open') ? 'CLOSE' : 'OPEN';
@@ -2007,8 +2007,11 @@ async function sendCommand(boxId, type){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'open');
                   card.setAttribute('data-lifecycle-state', 'open');
-                  // label already follows desired
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
+                  
+                  // UPDATE TEKST NA TIJD:
+                  const statusText = card.querySelector('.js-status-text');
+                  if(statusText) statusText.textContent = "Geopend zojuist";
                 }
 
                 if(next === 'close' && motionNow === 'closing'){
@@ -2016,8 +2019,11 @@ async function sendCommand(boxId, type){
                   card.setAttribute('data-motion-state', '');
                   card.setAttribute('data-shutter-state', 'closed');
                   card.setAttribute('data-lifecycle-state', 'closed');
-                  // label already follows desired
                   if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
+
+                  // UPDATE TEKST NA TIJD:
+                  const statusText = card.querySelector('.js-status-text');
+                  if(statusText) statusText.textContent = "Gesloten zojuist";
                 }
               }, 5100);
 
@@ -2087,6 +2093,10 @@ async function sendCommand(boxId, type){
           currentCard.setAttribute('data-lifecycle-state','opening');
           currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'opening');
 
+          // UPDATE TEKST DIRECT:
+          const statusText = currentCard.querySelector('.js-status-text');
+          if(statusText) statusText.textContent = "Wordt geopend...";
+
           const btn = currentCard.querySelector('button[data-action="toggle"]');
           if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), true);
 
@@ -2099,6 +2109,9 @@ async function sendCommand(boxId, type){
               const b = currentCard.querySelector('button[data-action="toggle"]');
               if(b) b.textContent = mainButtonLabel('open', '', true);
               updateSideFromCard(currentCard, 'Beheer en overzicht');
+
+              // UPDATE TEKST NA TIJD:
+              if(statusText) statusText.textContent = "Geopend zojuist";
             }
           }, 5200);
 
@@ -2136,6 +2149,10 @@ async function sendCommand(boxId, type){
           currentCard.setAttribute('data-lifecycle-state','closing');
           currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'closing');
 
+          // UPDATE TEKST DIRECT:
+          const statusText = currentCard.querySelector('.js-status-text');
+          if(statusText) statusText.textContent = "Wordt gesloten...";
+
           const btn = currentCard.querySelector('button[data-action="toggle"]');
           if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), false);
 
@@ -2148,6 +2165,9 @@ async function sendCommand(boxId, type){
               const b = currentCard.querySelector('button[data-action="toggle"]');
               if(b) b.textContent = mainButtonLabel('closed', '', false);
               updateSideFromCard(currentCard, 'Beheer en overzicht');
+
+              // UPDATE TEKST NA TIJD:
+              if(statusText) statusText.textContent = "Gesloten zojuist";
             }
           }, 5200);
 
