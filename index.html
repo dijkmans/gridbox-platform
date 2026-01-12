@@ -1872,7 +1872,33 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
       // =========================================================
       // 8) Shares UI
       // =========================================================
-
+// NIEUW: Haal shares op van de server
+      async function fetchShares(boxId) {
+        try {
+          // Haal de echte data van de API
+          const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/shares`));
+          if (!res.ok) return; // Geen ramp als het mislukt
+          
+          const data = await res.json();
+          // Als de server een array teruggeeft, slaan we die op
+          if (Array.isArray(data)) {
+             // We mappen de server-data naar het formaat van jouw tabel
+             sharesStore[boxId] = data.map(s => ({
+                 ts: s.createdAt ? new Date(s.createdAt).toLocaleString() : '-',
+                 phone: s.phone,
+                 comment: s.comment,
+                 expires: s.expiresAt,
+                 auth: s.type === 'authorized',
+                 // Bewaar ID voor delete acties
+                 id: s.id 
+             }));
+             renderShares(boxId);
+             updateSharesCountUiFromLocal(boxId);
+          }
+        } catch (e) {
+          console.error("Kon shares niet ophalen", e);
+        }
+      }
       function renderShares(boxId){
         const rows = (sharesStore[boxId]||[]);
         sharesBody.innerHTML = '';
