@@ -2077,7 +2077,15 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         renderShares(boxId);
 
         updateSharesCountUiFromCard(card);
+// ... (bestaande code) ...
+        const boxId = card.getAttribute('data-id');
+        renderShares(boxId); // Dit toont wat er al lokaal was (vaak niks)
+        
+        fetchShares(boxId); // NIEUW: Haal nu de echte lijst van de server! <--- TOEVOEGEN
 
+        updateSharesCountUiFromLocal(boxId);
+        openSide();
+      }
         openSide();
       }
 
