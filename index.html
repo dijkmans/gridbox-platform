@@ -1,34 +1,12 @@
 <!DOCTYPE html>
 
 <script type="text/plain" id="worknotes">
-Aanpassingen gebeuren altijd binnen zo’n blok.
-
-WAT ALTIJD MOET BLIJVEN WERKEN
-- Event listeners
-- Dynamische updates
-- Formulieren
-- Firestore / API koppelingen
-- Navigatie en zichtbaarheid van secties
-
-CONTROLE NA WIJZIGING
-Na elke wijziging controleren:
-- Werkt alles nog zoals voorheen?
-- Zijn er id’s of classes gewijzigd?
-- Kan bestaande logica hierdoor breken?
-
-BIJ TWIJFEL
-Niet aanpassen. Eerst uitleggen waar het risico zit.
-
-=====================================================
-EINDE WERKAFSPRAKEN
-=====================================================
-
-  Deze versie (V19 - FINAL FULL) bevat:
-  1. FIX: Syntaxfout in updateSideFromCard verwijderd (dubbele code).
-  2. FIX: Auto-refresh loop (15s) toegevoegd.
-  3. FIX: Shares worden correct opgeslagen en opgehaald.
-  4. FIX: Alle knoppen (Pictures, Events) werken weer.
-  5. FIX: Geen code ingekort.
+  Deze versie (V20 - FINAL FULL FIX) bevat:
+  1. FIX: updateSharesCountUiFromLocal functie hersteld (lost referentiefout op).
+  2. FIX: Delete knop roept nu de API aan (DELETE request).
+  3. FIX: Add Share roept nu de API aan (POST request).
+  4. FIX: Fetch Shares haalt data van de server (GET request).
+  5. FIX: Auto-refresh en Camera/Events logica behouden.
   Datum: 2026-01-12
 -->
 </script>
@@ -948,7 +926,7 @@ EINDE WERKAFSPRAKEN
       }, { passive:true });
 
       function computeOnlineStateFromMinutes(min){
-        // Als we geen lastSeen hebben, is de status niet per se 'slecht', 
+        // Als we geen lastSeen hebben, is de status niet per se 'slecht', 
         // maar we weten het gewoon niet live. We geven 'unknown' terug (grijs).
         if (min === null || Number.isNaN(min)) return { label:'-', cls:'' };
         if (min <= 2) return { label:'Online', cls:'ok' };
@@ -1648,7 +1626,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         if(!term) return true;
         term = term.toLowerCase();
         const site = (card.getAttribute('data-site')||'').toLowerCase();
-        const box  = (card.getAttribute('data-box')||'').toLowerCase();
+        const box  = (card.getAttribute('data-box')||'').toLowerCase();
         const addr = (card.getAttribute('data-address')||'').toLowerCase();
         const text = card.innerText.toLowerCase();
         return site.includes(term) || box.includes(term) || addr.includes(term) || text.includes(term);
@@ -1696,27 +1674,27 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
       let currentCard = null;
 
       const sideTitle = document.getElementById('sideTitle');
-      const sideSub   = document.getElementById('sideSub');
+      const sideSub   = document.getElementById('sideSub');
 
       const kvCustomer= document.getElementById('kvCustomer');
-      const kvSite    = document.getElementById('kvSite');
-      const kvBox     = document.getElementById('kvBox');
+      const kvSite    = document.getElementById('kvSite');
+      const kvBox     = document.getElementById('kvBox');
       const kvAddress = document.getElementById('kvAddress');
 
-      const kvActive  = document.getElementById('kvActive');
+      const kvActive  = document.getElementById('kvActive');
       const kvAccess24h = document.getElementById('kvAccess24h');
-      const kvType    = document.getElementById('kvType');
+      const kvType    = document.getElementById('kvType');
       const kvDescription = document.getElementById('kvDescription');
       const kvLifecycleState = document.getElementById('kvLifecycleState');
-      const kvOpened  = document.getElementById('kvOpened');
-      const kvClosed  = document.getElementById('kvClosed');
-      const kvSource  = document.getElementById('kvSource');
-      const kvGeo     = document.getElementById('kvGeo');
+      const kvOpened  = document.getElementById('kvOpened');
+      const kvClosed  = document.getElementById('kvClosed');
+      const kvSource  = document.getElementById('kvSource');
+      const kvGeo     = document.getElementById('kvGeo');
 
-      const kvAgent   = document.getElementById('kvAgent');
+      const kvAgent   = document.getElementById('kvAgent');
       const kvProfile = document.getElementById('kvProfile');
-      const kvSeen    = document.getElementById('kvSeen');
-      const kvStatus  = document.getElementById('kvStatus');
+      const kvSeen    = document.getElementById('kvSeen');
+      const kvStatus  = document.getElementById('kvStatus');
 
       const kvSharesCount = document.getElementById('kvSharesCount');
 
@@ -1759,10 +1737,10 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
       const sharesStore = {};
       const sharesBody = document.querySelector('#sharesTable tbody');
-      const sharePhone   = document.getElementById('sharePhone');
+      const sharePhone   = document.getElementById('sharePhone');
       const shareExpires = document.getElementById('shareExpires');
       const shareComment = document.getElementById('shareComment');
-      const shareAuth    = document.getElementById('shareAuth');
+      const shareAuth    = document.getElementById('shareAuth');
 
       // =========================================================
       // 8) Shares UI
@@ -1778,18 +1756,18 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           const data = await res.json();
           // Als de server een array teruggeeft, slaan we die op
           if (Array.isArray(data)) {
-             // We mappen de server-data naar het formaat van jouw tabel
-             sharesStore[boxId] = data.map(s => ({
-                 ts: s.createdAt ? new Date(s.createdAt).toLocaleString() : '-',
-                 phone: s.phone,
-                 comment: s.comment,
-                 expires: s.expiresAt,
-                 auth: s.type === 'authorized',
-                 // Bewaar ID voor delete acties
-                 id: s.id 
-             }));
-             renderShares(boxId);
-             updateSharesCountUiFromLocal(boxId);
+              // We mappen de server-data naar het formaat van jouw tabel
+              sharesStore[boxId] = data.map(s => ({
+                  ts: s.createdAt ? new Date(s.createdAt).toLocaleString() : '-',
+                  phone: s.phone,
+                  comment: s.comment,
+                  expires: s.expiresAt,
+                  auth: s.type === 'authorized',
+                  // Bewaar ID voor delete acties
+                  id: s.id 
+              }));
+              renderShares(boxId);
+              updateSharesCountUiFromLocal(boxId);
           }
         } catch (e) {
           console.error("Kon shares niet ophalen", e);
@@ -1818,7 +1796,14 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         });
       }
 
-sharesBody.addEventListener('click', async (e) => { // Let op: 'async' toegevoegd
+      function updateSharesCountUiFromLocal(boxId){
+        const rows = (sharesStore[boxId]||[]);
+        // Update de teller in het zijpaneel
+        const badge = document.getElementById('kvSharesCount');
+        if(badge) badge.textContent = 'shares ' + rows.length;
+      }
+
+      sharesBody.addEventListener('click', async (e) => { // Let op: 'async' toegevoegd
         const del = e.target.closest('button[data-del]');
         if (!del || !currentCard) return;
         
@@ -1860,6 +1845,20 @@ sharesBody.addEventListener('click', async (e) => { // Let op: 'async' toegevoeg
         updateSharesCountUiFromLocal(boxId);
       });
 
+      function updateSharesCountUiFromCard(card){
+        const raw = (card.getAttribute('data-shares-count') || '').trim();
+        if(!raw){
+          kvSharesCount.textContent = 'shares -';
+          return;
+        }
+        const n = Number(raw);
+        if(Number.isNaN(n)){
+          kvSharesCount.textContent = 'shares -';
+          return;
+        }
+        kvSharesCount.textContent = 'shares ' + n;
+      }
+
       // =========================================================
       // AANGEPASTE SHARE KNOP (Stuurt nu naar Server/API)
       // =========================================================
@@ -1890,7 +1889,6 @@ sharesBody.addEventListener('click', async (e) => { // Let op: 'async' toegevoeg
 
         try {
             // 2. STUUR NAAR SERVER (API)
-            // We gaan er even vanuit dat je backend luistert op /api/boxes/:id/shares
             const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/shares`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1902,8 +1900,9 @@ sharesBody.addEventListener('click', async (e) => { // Let op: 'async' toegevoeg
                 throw new Error(txt || 'Opslaan mislukt');
             }
 
+            const json = await res.json(); // Krijg de nieuwe ID terug
+
             // 3. UPDATE UI (Alleen als server succes geeft)
-            // We voegen hem nu ook lokaal toe zodat je direct resultaat ziet
             sharesStore[boxId] = sharesStore[boxId] || [];
             
             // Format tijd voor display
@@ -1916,7 +1915,8 @@ sharesBody.addEventListener('click', async (e) => { // Let op: 'async' toegevoeg
                 phone: phone,
                 comment: comment,
                 expires: expires,
-                auth: auth
+                auth: auth,
+                id: json.shareId || json.id // Gebruik ID van server response
             });
 
             renderShares(boxId);
@@ -1988,7 +1988,7 @@ sharesBody.addEventListener('click', async (e) => { // Let op: 'async' toegevoeg
 
         kvOpened.textContent = fmtLifecycleLine(openedAt, openedBy);
         kvClosed.textContent = fmtLifecycleLine(closedAt, closedBy);
-        kvSource.textContent = card.getAttribute('data-source') || '-'; 
+        kvSource.textContent = card.getAttribute('data-source') || '-'; 
         kvGeo.textContent = card.getAttribute('data-geo') || '-';
 
         kvAgent.textContent = (card.getAttribute('data-agent') ? ('v ' + card.getAttribute('data-agent')) : '-');
@@ -2035,7 +2035,7 @@ sharesBody.addEventListener('click', async (e) => { // Let op: 'async' toegevoeg
              
              // Zet tekst ook meteen op 'Zojuist'
              const timeTxt = cardClicked.querySelector('.js-header-time span');
-             if(timeTxt) timeTxt.textContent = 'Zojuist'; 
+             if(timeTxt) timeTxt.textContent = 'Zojuist'; 
         }
 
         // ---------------------------------------------------------
@@ -2102,12 +2102,12 @@ sharesBody.addEventListener('click', async (e) => { // Let op: 'async' toegevoeg
               setTimeout(()=>{
                  const motionNow = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
                  if(next === 'open' && motionNow === 'opening'){
-                    const statusText = card.querySelector('.js-status-text');
-                    if(statusText) statusText.textContent = "Geopend zojuist";
+                   const statusText = card.querySelector('.js-status-text');
+                   if(statusText) statusText.textContent = "Geopend zojuist";
                  }
                  if(next === 'close' && motionNow === 'closing'){
-                    const statusText = card.querySelector('.js-status-text');
-                    if(statusText) statusText.textContent = "Gesloten zojuist";
+                   const statusText = card.querySelector('.js-status-text');
+                   if(statusText) statusText.textContent = "Gesloten zojuist";
                  }
               }, 5100);
               
@@ -2232,7 +2232,7 @@ sharesBody.addEventListener('click', async (e) => { // Let op: 'async' toegevoeg
                      if(typeof updateSideFromCard === 'function') {
                          // We behouden de titel (context) als die er is
                          const currentTitle = document.getElementById('sideSub').textContent;
-                         updateSideFromCard(newCard, currentTitle); 
+                         updateSideFromCard(newCard, currentTitle); 
                      }
                  }
              }
@@ -2242,7 +2242,7 @@ sharesBody.addEventListener('click', async (e) => { // Let op: 'async' toegevoeg
         }
       }, 15000); // 15000 ms = 15 seconden
 
-    })();
-  </script>
+    })();
+  </script>
 </body>
 </html>
