@@ -1818,35 +1818,47 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         });
       }
 
-      sharesBody.addEventListener('click',(e)=>{
+sharesBody.addEventListener('click', async (e) => { // Let op: 'async' toegevoegd
         const del = e.target.closest('button[data-del]');
-        if(!del || !currentCard) return;
+        if (!del || !currentCard) return;
+        
         const boxId = currentCard.getAttribute('data-id');
         const idx = Number(del.getAttribute('data-del'));
-        if (!sharesStore[boxId]) return;
-        sharesStore[boxId].splice(idx,1);
+        
+        // Haal het juiste share-object op uit het geheugen om het ID te vinden
+        const shareObj = sharesStore[boxId] && sharesStore[boxId][idx];
+
+        // Veiligheidscheck
+        if (!shareObj || !shareObj.id) {
+            // Als er geen ID is (bv net lokaal aangemaakt), verwijder dan alleen lokaal
+            if(sharesStore[boxId]) sharesStore[boxId].splice(idx, 1);
+            renderShares(boxId);
+            updateSharesCountUiFromLocal(boxId);
+            return;
+        }
+
+        // 1. Roep de server aan om te verwijderen (Soft delete)
+        try {
+            const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/shares/${shareObj.id}`), {
+                method: 'DELETE'
+            });
+            
+            if (!res.ok) {
+                console.error("Server fout bij delete", res.status);
+                alert("Kon share niet verwijderen op de server.");
+                return; 
+            }
+        } catch (err) {
+            console.error("Netwerk fout", err);
+            alert("Kon server niet bereiken.");
+            return;
+        }
+
+        // 2. Als de server OK zegt, verwijder dan ook uit het scherm
+        sharesStore[boxId].splice(idx, 1);
         renderShares(boxId);
         updateSharesCountUiFromLocal(boxId);
       });
-
-      function updateSharesCountUiFromCard(card){
-        const raw = (card.getAttribute('data-shares-count') || '').trim();
-        if(!raw){
-          kvSharesCount.textContent = 'shares -';
-          return;
-        }
-        const n = Number(raw);
-        if(Number.isNaN(n)){
-          kvSharesCount.textContent = 'shares -';
-          return;
-        }
-        kvSharesCount.textContent = 'shares ' + n;
-      }
-
-      function updateSharesCountUiFromLocal(boxId){
-        const rows = (sharesStore[boxId]||[]);
-        kvSharesCount.textContent = 'shares ' + rows.length;
-      }
 
       // =========================================================
       // AANGEPASTE SHARE KNOP (Stuurt nu naar Server/API)
