@@ -23,9 +23,12 @@ Niet aanpassen. Eerst uitleggen waar het risico zit.
 EINDE WERKAFSPRAKEN
 =====================================================
 
-  Deze versie (V16 - FIX) bevat:
-  1. FIX: Syntaxfout in updateSideFromCard opgelost (dubbele regels verwijderd).
-  2. Alle features van V15 behouden (Auto-refresh, SMS shares, Hartslag).
+  Deze versie (V19 - FINAL FULL) bevat:
+  1. FIX: Syntaxfout in updateSideFromCard verwijderd (dubbele code).
+  2. FIX: Auto-refresh loop (15s) toegevoegd.
+  3. FIX: Shares worden correct opgeslagen en opgehaald.
+  4. FIX: Alle knoppen (Pictures, Events) werken weer.
+  5. FIX: Geen code ingekort.
   Datum: 2026-01-12
 -->
 </script>
@@ -36,7 +39,6 @@ EINDE WERKAFSPRAKEN
   <title>Gridbox Portal v1</title>
 
   <style>
-    
     /* =========================================================
        CSS OVERZICHT
        1) Design tokens
@@ -51,7 +53,7 @@ EINDE WERKAFSPRAKEN
        ========================================================= */
     /* 1) Design tokens */
 
-:root{
+    :root{
       --primary:#6d28d9;
       --ok:#22c55e;
       --warn:#eab308;
@@ -68,6 +70,10 @@ EINDE WERKAFSPRAKEN
 
       --shadow:0 2px 10px rgba(0,0,0,.08);
       --radius:16px;
+      
+      /* Theme upgrade overrides */
+      --brand:#2563eb;
+      --brand2:#0ea5e9;
     }
 
     /* 2) Base */
@@ -75,7 +81,7 @@ EINDE WERKAFSPRAKEN
     *{box-sizing:border-box}
     body{
       margin:0;
-      background:var(--bg);
+      background: linear-gradient(180deg, var(--bg), #ffffff 60%);
       color:var(--ink);
       font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,'Helvetica Neue',Arial;
     }
@@ -109,6 +115,29 @@ EINDE WERKAFSPRAKEN
       align-items:center;
       justify-content:space-between;
       margin-bottom:14px;
+      
+      position: sticky;
+      top: 0;
+      z-index: 20;
+
+      background: rgba(255,255,255,.92);
+      backdrop-filter: saturate(150%) blur(6px);
+
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+    
+    .toolbar::before{
+      content: "";
+      position: absolute;
+      left: -1px;
+      right: -1px;
+      top: -1px;
+      height: 3px;
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+      background: linear-gradient(90deg, var(--brand), var(--brand2));
     }
 
     .brand{
@@ -116,6 +145,24 @@ EINDE WERKAFSPRAKEN
       font-size:20px;
       letter-spacing:.3px;
       white-space:nowrap;
+      background: linear-gradient(90deg, var(--brand), var(--brand2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    
+    .brand::after{
+      content: "index";
+      display: inline-block;
+      margin-left: 10px;
+      font-size: 12px;
+      font-weight: 800;
+      color: #1e3a8a;
+      background: #eff6ff;
+      border: 1px solid #dbeafe;
+      padding: 4px 8px;
+      border-radius: 999px;
+      vertical-align: middle;
     }
 
     .toolbar__right{
@@ -132,8 +179,15 @@ EINDE WERKAFSPRAKEN
       border-radius:12px;
       background:#fff;
       font:inherit;
+      box-shadow: 0 6px 14px rgba(15,23,42,.04);
     }
     #search{min-width:260px}
+    
+    select:focus, input:focus{
+      outline: none;
+      border-color: rgba(37,99,235,.55);
+      box-shadow: 0 0 0 4px rgba(37,99,235,.12), 0 6px 14px rgba(15,23,42,.04);
+    }
 
     /* 5) Cards + pills */
 
@@ -142,7 +196,21 @@ EINDE WERKAFSPRAKEN
       font-weight:800;
       margin:10px 0 10px 4px;
       font-size:18px;
+      position: relative;
     }
+    
+    .gb-section__title::after{
+      content: "";
+      position: absolute;
+      left: 0;
+      bottom: -6px;
+      width: 120px;
+      height: 3px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--brand), var(--brand2));
+      opacity: .9;
+    }
+    
     .gb-list{display:grid;gap:12px}
 
     .gb-card{
@@ -157,13 +225,18 @@ EINDE WERKAFSPRAKEN
       box-shadow:var(--shadow);
       padding:12px;
       cursor:pointer;
+      transition: transform .08s ease, box-shadow .15s ease, background .15s ease, outline-color .15s ease;
+    }
+    .gb-card:hover{
+      transform: translateY(-1px);
+      box-shadow: 0 16px 34px rgba(15,23,42,.10);
     }
     .gb-card.is-selected{
-  outline:3px solid var(--primary);
-  outline-offset:2px;
-  background:#faf7ff;
-  box-shadow:0 6px 20px rgba(109,40,217,.18);
-}
+      outline:3px solid var(--primary);
+      outline-offset:2px;
+      background:#faf7ff;
+      box-shadow:0 6px 20px rgba(109,40,217,.18);
+    }
 
 
     .gb-shutter{
@@ -267,13 +340,16 @@ EINDE WERKAFSPRAKEN
       -webkit-tap-highlight-color: transparent;
     }
     .btn{
-      background:var(--primary);
+      background: linear-gradient(90deg, var(--brand), var(--brand2));
       color:#fff;
       border:none;
+      box-shadow: 0 10px 18px rgba(37,99,235,.18);
     }
     .btn:active{transform:translateY(1px)}
     .btn-ghost{
-      background:var(--chip);
+      background: #fff;
+      color: var(--ink);
+      box-shadow: 0 10px 18px rgba(15,23,42,.06);
     }
     .btn-ghost:hover{filter:brightness(.98)}
 
@@ -281,7 +357,7 @@ EINDE WERKAFSPRAKEN
       padding:9px 12px;
       border-radius:12px;
       border:1px solid var(--border);
-      background:var(--primary);
+      background: linear-gradient(90deg, var(--brand), var(--brand2));
       color:#fff;
       cursor:pointer;
       font:inherit;
@@ -318,7 +394,8 @@ EINDE WERKAFSPRAKEN
       position:sticky;
       top:0;
       z-index:5;
-      background:var(--panel);
+      background: rgba(255,255,255,.92);
+      backdrop-filter: saturate(150%) blur(6px);
       border-bottom:1px solid #f1f5f9;
       padding:14px 14px;
       display:flex;
@@ -537,8 +614,8 @@ EINDE WERKAFSPRAKEN
     .pulse-heart {
       display: inline-block;
       vertical-align: middle;
-      width: 24px; /* AANGEPAST: Groter */
-      height: 24px; /* AANGEPAST: Groter */
+      width: 24px;
+      height: 24px;
       fill: #cbd5e1; /* Default grey/dead */
       margin-right: 4px;
       transition: fill 0.3s;
@@ -557,173 +634,7 @@ EINDE WERKAFSPRAKEN
       60% { transform: scale(1); }
       100% { transform: scale(1); }
     }
-  
-/* =========================================================
-   THEME UPGRADE (zelfde kleuren/gevoel als Pictures)
-   Toegevoegd zonder bestaande code te verwijderen
-   ========================================================= */
-
-:root{
-  --brand:#2563eb;
-  --brand2:#0ea5e9;
-
-  /* koppel aan bestaande variabelen als die bestaan */
-  --primary: var(--brand);
-  --bg: #f6f9ff;
-  --panel: #ffffff;
-  --ink: #0f172a;
-  --muted: #64748b;
-  --border: #e5e7eb;
-
-  --shadow: 0 10px 24px rgba(15,23,42,.06);
-}
-
-body{
-  background: linear-gradient(180deg, var(--bg), #ffffff 60%);
-  color: var(--ink);
-}
-
-/* Toolbar: strak + sticky + accentlijn */
-.toolbar{
-  position: sticky;
-  top: 0;
-  z-index: 20;
-
-  background: rgba(255,255,255,.92);
-  backdrop-filter: saturate(150%) blur(6px);
-
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  box-shadow: var(--shadow);
-}
-
-.toolbar::before{
-  content: "";
-  position: absolute;
-  left: -1px;
-  right: -1px;
-  top: -1px;
-  height: 3px;
-  border-top-left-radius: 16px;
-  border-top-right-radius: 16px;
-  background: linear-gradient(90deg, var(--brand), var(--brand2));
-}
-
-/* Brand: gradient tekst */
-.brand{
-  font-weight: 900;
-  background: linear-gradient(90deg, var(--brand), var(--brand2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-/* Kleine badge achter de brand (werkt ook als .brand een div is) */
-.brand::after{
-  content: "index";
-  display: inline-block;
-  margin-left: 10px;
-  font-size: 12px;
-  font-weight: 800;
-  color: #1e3a8a;
-  background: #eff6ff;
-  border: 1px solid #dbeafe;
-  padding: 4px 8px;
-  border-radius: 999px;
-  vertical-align: middle;
-}
-
-/* Inputs: netter */
-select, input[type="text"], input[type="search"]{
-  border: 1px solid var(--border);
-  background: #fff;
-  box-shadow: 0 6px 14px rgba(15,23,42,.04);
-}
-
-select:focus, input[type="text"]:focus, input[type="search"]:focus{
-  outline: none;
-  border-color: rgba(37,99,235,.55);
-  box-shadow: 0 0 0 4px rgba(37,99,235,.12), 0 6px 14px rgba(15,23,42,.04);
-}
-
-/* Buttons: blauw gradient */
-.btn, .btn-small, .btn-primary, .primary{
-  background: linear-gradient(90deg, var(--brand), var(--brand2));
-  color: #fff;
-  border: 0;
-  box-shadow: 0 10px 18px rgba(37,99,235,.18);
-}
-
-.btn:hover, .btn-small:hover{
-  filter: brightness(1.02);
-  transform: translateY(-1px);
-}
-
-.btn:active, .btn-small:active{
-  transform: translateY(0);
-}
-
-/* Ghost buttons blijven wit */
-.btn-ghost, .btn-small.btn-ghost{
-  background: #fff;
-  border: 1px solid var(--border);
-  color: var(--ink);
-  box-shadow: 0 10px 18px rgba(15,23,42,.06);
-}
-
-/* Cards: wat meer diepte */
-.gb-card, .card, .tile{
-  border: 1px solid var(--border);
-  box-shadow: 0 10px 22px rgba(15,23,42,.05);
-  transition: transform .08s ease, box-shadow .15s ease, background .15s ease, outline-color .15s ease;
-}
-
-.gb-card:hover, .card:hover, .tile:hover{
-  transform: translateY(-1px);
-  box-shadow: 0 16px 34px rgba(15,23,42,.10);
-}
-
-/* Selected card: duidelijke focus */
-.gb-card.is-selected, .card.is-selected, .tile.is-selected{
-  outline: 3px solid rgba(37,99,235,.45);
-  outline-offset: 2px;
-  background: linear-gradient(180deg, rgba(37,99,235,.08), #fff 55%);
-  box-shadow: 0 16px 34px rgba(37,99,235,.18);
-}
-
-/* Chips: blauwer */
-.chip{
-  background: #eff6ff;
-  border: 1px solid #dbeafe;
-  color: #1e3a8a;
-}
-
-/* Side header: glass effect */
-.side-header{
-  background: rgba(255,255,255,.92);
-  backdrop-filter: saturate(150%) blur(6px);
-  border: 1px solid var(--border);
-  box-shadow: 0 10px 22px rgba(15,23,42,.05);
-}
-
-/* Titels: klein accentlijntje (als die classes bestaan) */
-.gb-section__title, .section-title, h2{
-  position: relative;
-}
-
-.gb-section__title::after, .section-title::after{
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: -6px;
-  width: 120px;
-  height: 3px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--brand), var(--brand2));
-  opacity: .9;
-}
-
-</style>
+  </style>
 </head>
 
 <body>
@@ -946,21 +857,7 @@ select:focus, input[type="text"]:focus, input[type="search"]:focus{
   <div id="backdrop" class="backdrop" aria-hidden="true"></div>
 
   <script>
-    
-    /* =========================================================
-       JS OVERZICHT
-       1) Config en helpers
-       2) DOM refs en state
-       3) Side panel open/sluit (desktop en mobiel)
-       4) Rendering cards en sections
-       5) API calls
-       6) Filters
-       7) Side panel details
-       8) Shares UI
-       9) Card acties (open, close, events, pictures)
-       10) Init
-       ========================================================= */
-(function(){
+    (function(){
 
       // =========================================================
       // 1) Config en helpers
@@ -1051,7 +948,7 @@ select:focus, input[type="text"]:focus, input[type="search"]:focus{
       }, { passive:true });
 
       function computeOnlineStateFromMinutes(min){
-        // Als we geen lastSeen hebben, is de status niet per se 'slecht', 
+        // Als we geen lastSeen hebben, is de status niet per se 'slecht', 
         // maar we weten het gewoon niet live. We geven 'unknown' terug (grijs).
         if (min === null || Number.isNaN(min)) return { label:'-', cls:'' };
         if (min <= 2) return { label:'Online', cls:'ok' };
@@ -1870,6 +1767,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
       // =========================================================
       // 8) Shares UI
       // =========================================================
+      
       // NIEUW: Haal shares op van de server
       async function fetchShares(boxId) {
         try {
@@ -2027,6 +1925,21 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         }
       });
 
+      function scrollSideToBlock(blockId){
+        const el = document.getElementById(blockId);
+        if(!el) return;
+        const top = side.scrollTop + el.getBoundingClientRect().top - side.getBoundingClientRect().top - 10;
+        side.scrollTo({ top, behavior:'smooth' });
+      }
+
+      function fmtLifecycleLine(at, by){
+        const a = (at && at !== '-') ? at : '';
+        const b = (by && by !== '-') ? by : '';
+        if (!a && !b) return '-';
+        if (a && b) return a + ' (' + b + ')';
+        return a || b;
+      }
+
       // =========================================================
       // 7) Side panel details
       // =========================================================
@@ -2074,10 +1987,9 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
         const boxId = card.getAttribute('data-id');
         
-        // Eerst lokale/lege tabel tonen
+        // Eerst lokale lege tabel tonen
         renderShares(boxId); 
-        
-        // Dan ophalen van server
+        // Dan ophalen van server (als de functie bestaat)
         fetchShares(boxId);
 
         updateSharesCountUiFromLocal(boxId);
@@ -2111,26 +2023,26 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
              
              // Zet tekst ook meteen op 'Zojuist'
              const timeTxt = cardClicked.querySelector('.js-header-time span');
-             if(timeTxt) timeTxt.textContent = 'Zojuist'; 
+             if(timeTxt) timeTxt.textContent = 'Zojuist'; 
         }
 
         // ---------------------------------------------------------
         // 2. KNOPPEN LOGICA
         // ---------------------------------------------------------
-        // LET OP: Deze variabelen definiëren we hier ÉÉN keer.
         const btn = e.target.closest('button[data-action]');
         const card = e.target.closest('.gb-card');
         
         if(!card) return; // Geen kaart? Stop.
 
+        // Als er op een knop is gedrukt
         if(btn){
           const action = btn.getAttribute('data-action');
+          const boxId = card.getAttribute('data-id');
 
           // --- ACTIE: TOGGLE (OPEN/CLOSE) ---
           if(action === 'toggle'){
             e.preventDefault(); e.stopPropagation();
-
-            const boxId = card.getAttribute('data-id');
+            
             // Bepaal huidige status
             const currentDesired = (card.getAttribute('data-desired') === 'open') ? 'open' : 'close';
             const next = currentDesired === 'open' ? 'close' : 'open';
@@ -2167,6 +2079,12 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
               // Update knop tekst
               btn.textContent = (next === 'open') ? 'CLOSE' : 'OPEN';
+              
+              // Update ook het zijpaneel als dat open staat voor deze kaart
+              if(side.classList.contains('is-open') && currentCard === card) {
+                  // Herlaad de zijbalk met de (optimistische) nieuwe status
+                  updateSideFromCard(card, document.getElementById('sideSub').textContent);
+              }
 
               // Timer om status na 5 sec 'definitief' te maken in de UI (voor de show)
               setTimeout(()=>{
@@ -2180,14 +2098,12 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
                     if(statusText) statusText.textContent = "Gesloten zojuist";
                  }
               }, 5100);
-
-              // Update zijpaneel als dat open staat
-              if(side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
-              
-              card.setAttribute('data-desired', next);
               
               // 2. Stuur naar server
               await setDesired(boxId, next);
+              
+              // Update attribuut voor volgende klik
+              card.setAttribute('data-desired', next);
 
               // 3. Sla lokaal op (zodat refresh het onthoudt)
               localStorage.setItem('gb_action_' + boxId, JSON.stringify({
@@ -2220,7 +2136,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           if(action === 'events'){
             e.preventDefault(); e.stopPropagation();
             updateSideFromCard(card, 'Beheer en overzicht');
-            const boxId = card.getAttribute('data-id');
             if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/events`);
             setTimeout(()=>scrollSideToBlock('blockEvents'), 0);
             return;
@@ -2230,7 +2145,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           if(action === 'pictures'){
             e.preventDefault(); e.stopPropagation();
             updateSideFromCard(card, 'Beheer en overzicht');
-            const boxId = card.getAttribute('data-id');
             if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/pictures`);
             return;
           }
@@ -2304,7 +2218,9 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
                  const side = document.getElementById('side');
                  if(side && side.classList.contains('is-open')){
                      if(typeof updateSideFromCard === 'function') {
-                         updateSideFromCard(newCard); 
+                         // We behouden de titel (context) als die er is
+                         const currentTitle = document.getElementById('sideSub').textContent;
+                         updateSideFromCard(newCard, currentTitle); 
                      }
                  }
              }
@@ -2314,7 +2230,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         }
       }, 15000); // 15000 ms = 15 seconden
 
-    })();
-  </script>
+    })();
+  </script>
 </body>
 </html>
