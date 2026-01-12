@@ -1191,4 +1191,70 @@ router.post("/:id/shares", async (req, res) => {
     res.status(500).json({ ok: false, error: "Kon share niet opslaan" });
   }
 });
+/* =====================================================
+   SHARES ROUTES (Fix voor frontend v19)
+   ===================================================== 
+*/
+
+// 1. Ophalen van shares voor deze box
+router.get("/:id/shares", async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Zoek shares die bij deze boxId horen én actief zijn
+    const snap = await db.collection("shares")
+      .where("boxId", "==", id)
+      .where("active", "==", true)
+      .orderBy("createdAt", "desc")
+      .get();
+
+    const shares = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(shares);
+  } catch (err) {
+    console.error("GET shares error:", err);
+    res.status(500).json({ error: "Kon shares niet ophalen" });
+  }
+});
+
+// 2. Nieuwe share toevoegen
+router.post("/:id/shares", async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Data uit je frontend formulier
+    const { phone, comment, expires, auth } = req.body; 
+
+    if (!phone) return res.status(400).json({ error: "Telefoonnummer verplicht" });
+
+    const newShare = {
+      boxId: id,
+      phone: phone,
+      comment: comment || "",
+      expiresAt: expires || null,
+      type: auth ? "authorized" : "temporary", // 'auth' checkbox -> authorized
+      active: true,
+      createdAt: new Date().toISOString()
+    };
+
+    const ref = await db.collection("shares").add(newShare);
+    res.json({ ok: true, id: ref.id, ...newShare });
+  } catch (err) {
+    console.error("POST share error:", err);
+    res.status(500).json({ error: "Kon share niet opslaan" });
+  }
+});
+
+// 3. Share verwijderen (deactiveren)
+router.delete("/:id/shares/:shareId", async (req, res) => {
+  try {
+    const { shareId } = req.params;
+    // We verwijderen niet echt, maar zetten active op false (soft delete)
+    await db.collection("shares").doc(shareId).update({ 
+      active: false,
+      deactivatedAt: new Date().toISOString()
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("DELETE share error:", err);
+    res.status(500).json({ error: "Kon share niet verwijderen" });
+  }
+});
 export default router;
