@@ -1,13 +1,13 @@
 // ============================================
 // API.JS
-// Centrale laag voor backend calls + DEMO MODE
+// Centrale laag voor backend calls
 // ============================================
 
 import { API_BASE, getToken, logout } from "./auth.js";
 import { demoData } from "./demoData.js";
 
-// DEMO MODE aan/uit
-const USE_DEMO = true;
+// DEMO MODE UIT
+const USE_DEMO = false;
 
 // =====================================================
 // 1. Interne request helper
@@ -15,7 +15,6 @@ const USE_DEMO = true;
 async function request(path, options = {}) {
   const token = getToken();
 
-  // DEMO MODE: nooit echt fetchen
   if (USE_DEMO) {
     return demoResponse(path, options);
   }
@@ -32,17 +31,20 @@ async function request(path, options = {}) {
       return;
     }
 
-    if (!res.ok) throw new Error("API fout");
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(t || "API fout");
+    }
 
     return res.json();
   } catch (err) {
-    console.warn("API niet bereikbaar. DEMO MODE actief.");
-    return demoResponse(path, options);
+    console.error("API fout:", err);
+    throw err;
   }
 }
 
 // =====================================================
-// 2. Beschikbare API functies (blijven identiek)
+// 2. Beschikbare API functies
 // =====================================================
 export const api = {
   getBoxes() {
@@ -57,10 +59,27 @@ export const api = {
     return request(`/boxes/${boxId}/shares`);
   },
 
+  // ✅ DIT IS DE FIX
   addShare(boxId, body) {
-    return request(`/boxes/${boxId}/shares`, {
+    return fetch(`${API_BASE}/shares`, {
       method: "POST",
-      body: JSON.stringify(body)
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + getToken()
+      },
+      body: JSON.stringify({
+        phone: body.phone,
+        boxNumber: Number(boxId.split("-").pop()) || 1,
+        boxId: boxId,
+        expiresAt: null
+      })
+    }).then(res => {
+      if (!res.ok) {
+        return res.text().then(t => {
+          throw new Error(t || "Share API fout");
+        });
+      }
+      return res.json();
     });
   },
 
@@ -85,16 +104,14 @@ export const api = {
 };
 
 // =====================================================
-// 3. DEMO MODE DATAFILTER
+// 3. DEMO MODE (ongewijzigd, maar UIT)
 // =====================================================
 
 function demoResponse(path, options = {}) {
-  // 1. Alle boxen (groepen) ophalen
   if (path === "/boxes") {
     return demoData.groups;
   }
 
-  // 2. Shares: /boxes/:id/shares
   const matchShares = path.match(/\/boxes\/(.+)\/shares/);
   if (matchShares) {
     const boxId = matchShares[1];
@@ -103,7 +120,6 @@ function demoResponse(path, options = {}) {
     if (!box) return [];
 
     if (options.method === "POST") {
-      // Share toevoegen in demo-mode
       const body = JSON.parse(options.body);
       box.shares.push({
         time: new Date().toLocaleTimeString("nl-BE"),
@@ -116,54 +132,9 @@ function demoResponse(path, options = {}) {
     return box.shares;
   }
 
-  // 3. Events: /boxes/:id/events
-  const matchEvents = path.match(/\/boxes\/(.+)\/events/);
-  if (matchEvents) {
-    const boxId = matchEvents[1];
-    const box = findDemoBox(boxId);
-    return box ? box.events : [];
-  }
-
-  // 4. Pictures: /boxes/:id/pictures
-  const matchPics = path.match(/\/boxes\/(.+)\/pictures/);
-  if (matchPics) {
-    const boxId = matchPics[1];
-    const box = findDemoBox(boxId);
-    return box ? box.pictures : [];
-  }
-
-  // 5. Planner
-  const matchPlanner = path.match(/\/planner\/(.+)/);
-  if (matchPlanner) {
-    const group = matchPlanner[1];
-    return demoPlanning[group] || [];
-  }
-
-  if (path === "/planner" && options.method === "POST") {
-    const body = JSON.parse(options.body);
-    const g = body.group || "Overig";
-
-    if (!demoPlanning[g]) demoPlanning[g] = [];
-
-    demoPlanning[g].push({
-      date: body.date,
-      phone: body.phone,
-      box: body.box,
-      comment: body.comment,
-      status: "nieuw"
-    });
-
-    return { ok: true };
-  }
-
-  console.warn("DEMO MODE: onbekend endpoint:", path);
   return [];
 }
 
-// Extra demo planning container
-const demoPlanning = {};
-
-// Zoekbox in demo dataset
 function findDemoBox(id) {
   for (const g of demoData.groups) {
     for (const b of g.boxes) {
