@@ -2033,6 +2033,23 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
       // =========================================================
 
       document.addEventListener('click', async (e)=>{
+                // ---------------------------------------------------------
+        // NIEUW: Zodra je klikt, zoek de kaart en zet het hartje AAN
+        // ---------------------------------------------------------
+        const cardClicked = e.target.closest('.gb-card');
+        if(cardClicked) {
+             const heart = cardClicked.querySelector('.pulse-heart');
+             if(heart) heart.classList.add('alive'); // Meteen kloppen!
+             
+             // Optioneel: Zet tekst ook meteen op 'Zojuist'
+             const timeTxt = cardClicked.querySelector('.js-header-time span');
+             if(timeTxt) timeTxt.textContent = 'Zojuist'; 
+        }
+        // ---------------------------------------------------------
+
+        const btn = e.target.closest('button[data-action]');
+        const card = e.target.closest('.gb-card');
+        // ... hier gaat jouw bestaande code verder ...
         const btn = e.target.closest('button[data-action]');
         const card = e.target.closest('.gb-card');
         if(!card) return;
