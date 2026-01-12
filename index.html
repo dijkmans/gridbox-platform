@@ -2032,39 +2032,42 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
       // 9) Card acties
       // =========================================================
 
+      // =========================================================
+      // 9) Card acties (VERVANG DIT HELE BLOK)
+      // =========================================================
       document.addEventListener('click', async (e)=>{
-                // ---------------------------------------------------------
-        // NIEUW: Zodra je klikt, zoek de kaart en zet het hartje AAN
+        
+        // ---------------------------------------------------------
+        // 1. DIRECTE FEEDBACK: Zet hartje AAN bij elke klik
         // ---------------------------------------------------------
         const cardClicked = e.target.closest('.gb-card');
         if(cardClicked) {
              const heart = cardClicked.querySelector('.pulse-heart');
              if(heart) heart.classList.add('alive'); // Meteen kloppen!
              
-             // Optioneel: Zet tekst ook meteen op 'Zojuist'
+             // Zet tekst ook meteen op 'Zojuist'
              const timeTxt = cardClicked.querySelector('.js-header-time span');
              if(timeTxt) timeTxt.textContent = 'Zojuist'; 
         }
-        // ---------------------------------------------------------
 
+        // ---------------------------------------------------------
+        // 2. KNOPPEN LOGICA
+        // ---------------------------------------------------------
+        // LET OP: Deze variabelen definiëren we hier ÉÉN keer.
         const btn = e.target.closest('button[data-action]');
         const card = e.target.closest('.gb-card');
-        // ... hier gaat jouw bestaande code verder ...
-        const btn = e.target.closest('button[data-action]');
-        const card = e.target.closest('.gb-card');
-        if(!card) return;
+        
+        if(!card) return; // Geen kaart? Stop.
 
         if(btn){
           const action = btn.getAttribute('data-action');
 
+          // --- ACTIE: TOGGLE (OPEN/CLOSE) ---
           if(action === 'toggle'){
             e.preventDefault(); e.stopPropagation();
 
             const boxId = card.getAttribute('data-id');
-
-            const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
-            const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || card.getAttribute('data-shutter-state') || '');
-
+            // Bepaal huidige status
             const currentDesired = (card.getAttribute('data-desired') === 'open') ? 'open' : 'close';
             const next = currentDesired === 'open' ? 'close' : 'open';
 
@@ -2073,77 +2076,105 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
               return;
             }
 
+            // Huidige UI status onthouden voor rollback bij error
             const prevIsOpen = card.classList.contains('is-open');
             const prevDoor = card.getAttribute('data-door-state') || '';
             const prevMotion = card.getAttribute('data-motion-state') || '';
-            const prevLifecycle = card.getAttribute('data-lifecycle-state') || '';
-            const prevShutter = card.getAttribute('data-shutter-state') || '';
-
 
             try{
-
+              // 1. Optimistische UI update (meteen tonen)
               if(next === 'open'){
                 card.classList.remove('is-open');
-                void card.offsetWidth;
+                void card.offsetWidth; // Trigger reflow voor animatie
                 card.classList.add('is-open');
                 card.setAttribute('data-motion-state', 'opening');
-                card.setAttribute('data-lifecycle-state', 'opening');
                 
-                // UPDATE TEKST DIRECT:
                 const statusText = card.querySelector('.js-status-text');
                 if(statusText) statusText.textContent = "Wordt geopend...";
 
-                // NOTE: We updaten de Header NIET lokaal, want dat moet de echte poller zijn.
-
               } else {
-                if(!card.classList.contains('is-open')){
-                  card.classList.add('is-open');
-                  void card.offsetWidth;
-                }
+                // Closing
                 card.classList.remove('is-open');
                 card.setAttribute('data-motion-state', 'closing');
-                card.setAttribute('data-lifecycle-state', 'closing');
 
-                // UPDATE TEKST DIRECT:
                 const statusText = card.querySelector('.js-status-text');
                 if(statusText) statusText.textContent = "Wordt gesloten...";
               }
 
-              card.setAttribute('data-shutter-state', card.getAttribute('data-door-state') || card.getAttribute('data-motion-state') || '');
-
+              // Update knop tekst
               btn.textContent = (next === 'open') ? 'CLOSE' : 'OPEN';
 
+              // Timer om status na 5 sec 'definitief' te maken in de UI (voor de show)
               setTimeout(()=>{
-                const motionNow = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
-
-                if(next === 'open' && motionNow === 'opening'){
-                  card.setAttribute('data-door-state', 'open');
-                  card.setAttribute('data-motion-state', '');
-                  card.setAttribute('data-shutter-state', 'open');
-                  card.setAttribute('data-lifecycle-state', 'open');
-                  if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
-                  
-                  // UPDATE TEKST NA TIJD:
-                  const statusText = card.querySelector('.js-status-text');
-                  if(statusText) statusText.textContent = "Geopend zojuist";
-                }
-
-                if(next === 'close' && motionNow === 'closing'){
-                  card.setAttribute('data-door-state', 'closed');
-                  card.setAttribute('data-motion-state', '');
-                  card.setAttribute('data-shutter-state', 'closed');
-                  card.setAttribute('data-lifecycle-state', 'closed');
-                  if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
-
-                  // UPDATE TEKST NA TIJD:
-                  const statusText = card.querySelector('.js-status-text');
-                  if(statusText) statusText.textContent = "Gesloten zojuist";
-                }
+                 const motionNow = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
+                 if(next === 'open' && motionNow === 'opening'){
+                    const statusText = card.querySelector('.js-status-text');
+                    if(statusText) statusText.textContent = "Geopend zojuist";
+                 }
+                 if(next === 'close' && motionNow === 'closing'){
+                    const statusText = card.querySelector('.js-status-text');
+                    if(statusText) statusText.textContent = "Gesloten zojuist";
+                 }
               }, 5100);
 
+              // Update zijpaneel als dat open staat
               if(side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
+              
               card.setAttribute('data-desired', next);
+              
+              // 2. Stuur naar server
               await setDesired(boxId, next);
+
+              // 3. Sla lokaal op (zodat refresh het onthoudt)
+              localStorage.setItem('gb_action_' + boxId, JSON.stringify({
+                  state: next,
+                  ts: Date.now()
+              }));
+
+            } catch(err){
+              // Foutafhandeling: zet UI terug
+              if(prevIsOpen) card.classList.add('is-open'); else card.classList.remove('is-open');
+              card.setAttribute('data-door-state', prevDoor);
+              card.setAttribute('data-motion-state', prevMotion);
+              alert('Actie mislukt: ' + (err.message || err));
+            }
+            return;
+          }
+
+          // --- ACTIE: SHARES ---
+          if(action === 'shares'){
+            e.preventDefault(); e.stopPropagation();
+            updateSideFromCard(card, 'Toegang beheren');
+            side.classList.add('is-wide');
+            app.classList.remove('is-collapsed');
+            app.classList.add('is-expanded');
+            setTimeout(()=>scrollSideToBlock('blockShares'), 0);
+            return;
+          }
+
+          // --- ACTIE: EVENTS ---
+          if(action === 'events'){
+            e.preventDefault(); e.stopPropagation();
+            updateSideFromCard(card, 'Beheer en overzicht');
+            const boxId = card.getAttribute('data-id');
+            if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/events`);
+            setTimeout(()=>scrollSideToBlock('blockEvents'), 0);
+            return;
+          }
+
+          // --- ACTIE: PICTURES ---
+          if(action === 'pictures'){
+            e.preventDefault(); e.stopPropagation();
+            updateSideFromCard(card, 'Beheer en overzicht');
+            const boxId = card.getAttribute('data-id');
+            if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/pictures`);
+            return;
+          }
+        }
+
+        // Als er op de kaart geklikt is (maar niet op een specifieke knop), open zijpaneel
+        updateSideFromCard(card, 'Beheer en overzicht');
+      });
 
               // =========================================================
               // NIEUW: Sla actie lokaal op (persist)
