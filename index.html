@@ -23,11 +23,9 @@ Niet aanpassen. Eerst uitleggen waar het risico zit.
 EINDE WERKAFSPRAKEN
 =====================================================
 
-  Deze versie (V15 - FIX) bevat:
-  1. FIX: Auto-refresh loop (15s) toegevoegd.
-  2. FIX: Lokale actie geheugen verlengd naar 20 min (1200000ms).
-  3. FIX: Directe hartslag feedback bij klik.
-  4. FIX: Dubbele declaraties verwijderd.
+  Deze versie (V16 - FIX) bevat:
+  1. FIX: Syntaxfout in updateSideFromCard opgelost (dubbele regels verwijderd).
+  2. Alle features van V15 behouden (Auto-refresh, SMS shares, Hartslag).
   Datum: 2026-01-12
 -->
 </script>
@@ -1753,7 +1751,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         if(!term) return true;
         term = term.toLowerCase();
         const site = (card.getAttribute('data-site')||'').toLowerCase();
-        const box  = (card.getAttribute('data-box')||'').toLowerCase();
+        const box  = (card.getAttribute('data-box')||'').toLowerCase();
         const addr = (card.getAttribute('data-address')||'').toLowerCase();
         const text = card.innerText.toLowerCase();
         return site.includes(term) || box.includes(term) || addr.includes(term) || text.includes(term);
@@ -1801,27 +1799,27 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
       let currentCard = null;
 
       const sideTitle = document.getElementById('sideTitle');
-      const sideSub   = document.getElementById('sideSub');
+      const sideSub   = document.getElementById('sideSub');
 
       const kvCustomer= document.getElementById('kvCustomer');
-      const kvSite    = document.getElementById('kvSite');
-      const kvBox     = document.getElementById('kvBox');
+      const kvSite    = document.getElementById('kvSite');
+      const kvBox     = document.getElementById('kvBox');
       const kvAddress = document.getElementById('kvAddress');
 
-      const kvActive  = document.getElementById('kvActive');
+      const kvActive  = document.getElementById('kvActive');
       const kvAccess24h = document.getElementById('kvAccess24h');
-      const kvType    = document.getElementById('kvType');
+      const kvType    = document.getElementById('kvType');
       const kvDescription = document.getElementById('kvDescription');
       const kvLifecycleState = document.getElementById('kvLifecycleState');
-      const kvOpened  = document.getElementById('kvOpened');
-      const kvClosed  = document.getElementById('kvClosed');
-      const kvSource  = document.getElementById('kvSource');
-      const kvGeo     = document.getElementById('kvGeo');
+      const kvOpened  = document.getElementById('kvOpened');
+      const kvClosed  = document.getElementById('kvClosed');
+      const kvSource  = document.getElementById('kvSource');
+      const kvGeo     = document.getElementById('kvGeo');
 
-      const kvAgent   = document.getElementById('kvAgent');
+      const kvAgent   = document.getElementById('kvAgent');
       const kvProfile = document.getElementById('kvProfile');
-      const kvSeen    = document.getElementById('kvSeen');
-      const kvStatus  = document.getElementById('kvStatus');
+      const kvSeen    = document.getElementById('kvSeen');
+      const kvStatus  = document.getElementById('kvStatus');
 
       const kvSharesCount = document.getElementById('kvSharesCount');
 
@@ -1864,15 +1862,15 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
       const sharesStore = {};
       const sharesBody = document.querySelector('#sharesTable tbody');
-      const sharePhone   = document.getElementById('sharePhone');
+      const sharePhone   = document.getElementById('sharePhone');
       const shareExpires = document.getElementById('shareExpires');
       const shareComment = document.getElementById('shareComment');
-      const shareAuth    = document.getElementById('shareAuth');
+      const shareAuth    = document.getElementById('shareAuth');
 
       // =========================================================
       // 8) Shares UI
       // =========================================================
-// NIEUW: Haal shares op van de server
+      // NIEUW: Haal shares op van de server
       async function fetchShares(boxId) {
         try {
           // Haal de echte data van de API
@@ -1899,6 +1897,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           console.error("Kon shares niet ophalen", e);
         }
       }
+
       function renderShares(boxId){
         const rows = (sharesStore[boxId]||[]);
         sharesBody.innerHTML = '';
@@ -2064,7 +2063,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
         kvOpened.textContent = fmtLifecycleLine(openedAt, openedBy);
         kvClosed.textContent = fmtLifecycleLine(closedAt, closedBy);
-        kvSource.textContent = card.getAttribute('data-source') || '-'; 
+        kvSource.textContent = card.getAttribute('data-source') || '-'; 
         kvGeo.textContent = card.getAttribute('data-geo') || '-';
 
         kvAgent.textContent = (card.getAttribute('data-agent') ? ('v ' + card.getAttribute('data-agent')) : '-');
@@ -2074,18 +2073,14 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         renderPhones(card);
 
         const boxId = card.getAttribute('data-id');
-        renderShares(boxId);
-
-        updateSharesCountUiFromCard(card);
-// ... (bestaande code) ...
-        const boxId = card.getAttribute('data-id');
-        renderShares(boxId); // Dit toont wat er al lokaal was (vaak niks)
         
-        fetchShares(boxId); // NIEUW: Haal nu de echte lijst van de server! <--- TOEVOEGEN
+        // Eerst lokale/lege tabel tonen
+        renderShares(boxId); 
+        
+        // Dan ophalen van server
+        fetchShares(boxId);
 
         updateSharesCountUiFromLocal(boxId);
-        openSide();
-      }
         openSide();
       }
 
