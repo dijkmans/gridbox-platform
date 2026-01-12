@@ -2,8 +2,18 @@ import { Router } from "express";
 import { Storage } from "@google-cloud/storage";
 import { db } from "../firebase.js";
 import { toBoxDto } from "../dto/boxDto.js";
+import twilio from "twilio"; // <--- Import Twilio
 
 const router = Router();
+
+/*
+=====================================================
+TWILIO CONFIGURATION
+=====================================================
+*/
+const accountSid = "ACb89f4190b..."; // Your Account SID from www.twilio.com/console
+const authToken = "39a7d8...";   // Your Auth Token from www.twilio.com/console
+const client = new twilio(accountSid, authToken);
 
 /*
 =====================================================
@@ -1182,7 +1192,7 @@ router.get("/:id/shares", async (req, res) => {
   }
 });
 
-// 2. Nieuwe share toevoegen
+// 2. Nieuwe share toevoegen (MET SMS)
 router.post("/:id/shares", async (req, res) => {
   try {
     const { id } = req.params;
@@ -1202,6 +1212,27 @@ router.post("/:id/shares", async (req, res) => {
     };
 
     const ref = await db.collection("shares").add(newShare);
+
+    // =========================================================================
+    // SMS INTEGRATIE
+    // =========================================================================
+    try {
+        const messageBody = `Je hebt nu toegang tot Gridbox ${id}. ${comment ? 'Opmerking: ' + comment : ''}`;
+        
+        // Zorg dat 'from' overeenkomt met je Twilio-nummer
+        // 'to' is het nummer dat je invoerde in het formulier
+        await client.messages.create({
+            body: messageBody,
+            from: '+1234567890', // VERVANG DIT MET JOUW TWILIO NUMMER
+            to: phone
+        });
+        console.log(`[SMS] Verstuurd naar ${phone}`);
+    } catch (smsErr) {
+        console.error("[SMS ERROR] Kon geen SMS sturen:", smsErr.message);
+        // We laten de API niet crashen als de SMS faalt, want de share is wel opgeslagen.
+    }
+    // =========================================================================
+
     res.json({ ok: true, id: ref.id, ...newShare });
   } catch (err) {
     console.error("POST share error:", err);
