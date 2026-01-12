@@ -1416,8 +1416,8 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         if (localRaw) {
             try {
                 const localData = JSON.parse(localRaw);
-                // Alleen gebruiken als de actie minder dan 5 minuten geleden was (300000ms)
-                if (Date.now() - localData.ts < 300000) {
+                // Alleen gebruiken als de actie minder dan 20 minuten geleden
+                if (Date.now() - localData.ts < 12000000) {
                     // Is lokale data nieuwer dan wat de server zegt?
                     if (localData.ts > maxTs) {
                         maxTs = localData.ts; // Update maxTs voor beide berekeningen
@@ -2319,6 +2319,40 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           rebuildFilters();
         }
       })();
+  /* =======================================================
+     FIX: AUTO REFRESH LOOP (Elke 15 seconden)
+     Dit zorgt dat het hartje blijft kloppen en tijden updaten.
+     ======================================================= */
+  setInterval(async function() {
+    // 1. Onthoud welke kaart geselecteerd is (zodat het menu niet dichtklapt)
+    const selected = document.querySelector('.gb-card.is-selected');
+    const selectedId = selected ? selected.getAttribute('data-id') : null;
+
+    try {
+      // 2. Haal de nieuwe data op (deze functies bestaan al in je code)
+      const boxes = await loadBoxes();
+      renderSectionsFromBoxes(boxes);
+
+      // 3. Zet de selectie terug
+      if(selectedId){
+         const newCard = document.querySelector(`.gb-card[data-id="${selectedId}"]`);
+         if(newCard){
+             newCard.classList.add('is-selected');
+             
+             // Als het zijpaneel open staat, update dan ook de tekst daar
+             const side = document.getElementById('side');
+             if(side && side.classList.contains('is-open')){
+                 // Zoek de update functie (deze heet waarschijnlijk updateSideFromCard in jouw code)
+                 if(typeof updateSideFromCard === 'function') {
+                     updateSideFromCard(newCard); 
+                 }
+             }
+         }
+      }
+    } catch(e) {
+      console.error("Auto-refresh mislukt (geen ramp, volgende keer beter)", e);
+    }
+  }, 15000); // 15000 ms = 15 seconden
     })();
   </script>
 </body>
