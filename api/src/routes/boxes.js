@@ -1148,49 +1148,7 @@ router.post("/:id/capture", async (req, res) => {
     res.status(500).json({ ok: false, error: "Interne serverfout" });
   }
 });
-/* =====================================================
-   SHARES (Toegevoegd voor frontend "Add Share" knop)
-   ===================================================== */
-router.post("/:id/shares", async (req, res) => {
-  try {
-    const { id } = req.params; // Dit is de boxId (bv. "geel-7")
-    const { phone, comment, expires, auth } = req.body;
 
-    // 1. Haal de box op om het 'boxNumber' te weten (nodig voor SMS)
-    const boxSnap = await db.collection("boxes").doc(id).get();
-    if (!boxSnap.exists) {
-      return res.status(404).json({ ok: false, error: "Box niet gevonden" });
-    }
-    const boxData = boxSnap.data();
-    
-    // Probeer het nummer te vinden in verschillende velden (hoofdletters/kleine letters)
-    const boxNumber = boxData.box?.number || boxData.Portal?.BoxNumber || 0;
-
-    // 2. Maak de share aan in de database
-    const share = {
-      boxId: id,
-      boxNumber: Number(boxNumber),
-      phone: phone,
-      comment: comment || "",
-      active: true,
-      type: auth ? "authorized" : "temporary", // Gemachtigd of tijdelijk
-      createdAt: new Date().toISOString(),
-      expiresAt: expires || null, // Vervaldatum (indien ingevuld)
-      // Extra velden voor logging/beheer
-      createdBy: "portal-ui" 
-    };
-
-    const docRef = await db.collection("shares").add(share);
-
-    console.log(`[SHARE] Nieuwe toegang voor ${phone} op box ${boxNumber}`);
-
-    return res.json({ ok: true, shareId: docRef.id });
-
-  } catch (err) {
-    console.error("Share create error:", err);
-    res.status(500).json({ ok: false, error: "Kon share niet opslaan" });
-  }
-});
 /* =====================================================
    SHARES ROUTES (Fix voor frontend v19)
    ===================================================== 
@@ -1257,4 +1215,5 @@ router.delete("/:id/shares/:shareId", async (req, res) => {
     res.status(500).json({ error: "Kon share niet verwijderen" });
   }
 });
+
 export default router;
