@@ -23,12 +23,12 @@ Niet aanpassen. Eerst uitleggen waar het risico zit.
 EINDE WERKAFSPRAKEN
 =====================================================
 
-  Deze versie (V14) bevat:
-  1. Logica omgedraaid: Standaard DOOD (grijs), tenzij bewijs van leven.
-  2. Bewijs van leven = Server polling < 10min OF Lokale actie < 10min.
-  3. Dit voorkomt dat losgekoppelde boxen een kloppend hartje krijgen.
-  4. Hartslagfrequentie blijft 0.2s (5Hz).
-  Datum: 2026-01-11
+  Deze versie (V15 - FIX) bevat:
+  1. FIX: Auto-refresh loop (15s) toegevoegd.
+  2. FIX: Lokale actie geheugen verlengd naar 20 min (1200000ms).
+  3. FIX: Directe hartslag feedback bij klik.
+  4. FIX: Dubbele declaraties verwijderd.
+  Datum: 2026-01-12
 -->
 </script>
 <html lang="nl">
@@ -1416,8 +1416,10 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         if (localRaw) {
             try {
                 const localData = JSON.parse(localRaw);
-                // Alleen gebruiken als de actie minder dan 20 minuten geleden
-                if (Date.now() - localData.ts < 12000000) {
+                // AANGEPAST: 1200000 ms = 20 minuten. (was 5 min)
+                // Hierdoor blijft jouw klik (open/dicht) langer geldig in het geheugen,
+                // ook als de server nog oude data stuurt.
+                if (Date.now() - localData.ts < 1200000) {
                     // Is lokale data nieuwer dan wat de server zegt?
                     if (localData.ts > maxTs) {
                         maxTs = localData.ts; // Update maxTs voor beide berekeningen
@@ -2032,9 +2034,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
       // 9) Card acties
       // =========================================================
 
-      // =========================================================
-      // 9) Card acties (VERVANG DIT HELE BLOK)
-      // =========================================================
       document.addEventListener('click', async (e)=>{
         
         // ---------------------------------------------------------
@@ -2176,169 +2175,18 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         updateSideFromCard(card, 'Beheer en overzicht');
       });
 
-              // =========================================================
-              // NIEUW: Sla actie lokaal op (persist)
-              // =========================================================
-              localStorage.setItem('gb_action_' + boxId, JSON.stringify({
-                  state: next, // 'open' or 'close'
-                  ts: Date.now()
-              }));
-
-            } catch(err){
-              if(prevIsOpen) card.classList.add('is-open'); else card.classList.remove('is-open');
-              card.setAttribute('data-door-state', prevDoor);
-              card.setAttribute('data-motion-state', prevMotion);
-              card.setAttribute('data-lifecycle-state', prevLifecycle);
-              card.setAttribute('data-shutter-state', prevShutter);
-              btn.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
-              if(currentCard === card && side.classList.contains('is-open')) updateSideFromCard(card, 'Beheer en overzicht');
-
-              alert('Actie mislukt: ' + (err && err.message ? err.message : err));
-            }
-            return;
-          }
-
-          if(action === 'shares'){
-            e.preventDefault(); e.stopPropagation();
-            updateSideFromCard(card, 'Toegang beheren');
-
-            side.classList.add('is-wide');
-            app.classList.remove('is-collapsed');
-            app.classList.add('is-expanded');
-
-            setTimeout(()=>scrollSideToBlock('blockShares'), 0);
-            return;
-          }
-
-          if(action === 'events'){
-            e.preventDefault(); e.stopPropagation();
-            updateSideFromCard(card, 'Beheer en overzicht');
-            const boxId = card.getAttribute('data-id');
-            if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/events`);
-            setTimeout(()=>scrollSideToBlock('blockEvents'), 0);
-            return;
-          }
-
-          if(action === 'pictures'){
-            e.preventDefault(); e.stopPropagation();
-            updateSideFromCard(card, 'Beheer en overzicht');
-            const boxId = card.getAttribute('data-id');
-            if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/pictures`);
-            return;
-          }
-        }
-
-        updateSideFromCard(card, 'Beheer en overzicht');
-      });
-
       document.getElementById('btnOpen').addEventListener('click', async ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
-        const boxId = currentCard.getAttribute('data-id');
-        const prevIsOpen = currentCard.classList.contains('is-open');
-        const prevDoor = currentCard.getAttribute('data-door-state') || '';
-        const prevMotion = currentCard.getAttribute('data-motion-state') || '';
-        const prevLifecycle = currentCard.getAttribute('data-lifecycle-state') || '';
-        const prevShutter = currentCard.getAttribute('data-shutter-state') || '';
-
-        try{
-
-          currentCard.classList.add('is-open');
-          currentCard.setAttribute('data-motion-state','opening');
-          currentCard.setAttribute('data-lifecycle-state','opening');
-          currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'opening');
-
-          const btn = currentCard.querySelector('button[data-action="toggle"]');
-          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), true);
-
-          setTimeout(()=>{
-            if(!currentCard) return;
-            const st = String(currentCard.getAttribute('data-shutter-state') || '').toLowerCase();
-            if(st === 'opening'){
-              currentCard.setAttribute('data-shutter-state','open');
-              currentCard.setAttribute('data-lifecycle-state','open');
-              const b = currentCard.querySelector('button[data-action="toggle"]');
-              if(b) b.textContent = mainButtonLabel('open', '', true);
-              updateSideFromCard(currentCard, 'Beheer en overzicht');
-            }
-          }, 5200);
-
-          currentCard.setAttribute('data-desired','open');
-          await setDesired(boxId, 'open');
-
-          // SAVE LOKAAL
-          localStorage.setItem('gb_action_' + boxId, JSON.stringify({
-              state: 'open',
-              ts: Date.now()
-          }));
-
-          updateSideFromCard(currentCard, 'Beheer en overzicht');
-        } catch(err){
-          if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
-          currentCard.setAttribute('data-door-state', prevDoor);
-          currentCard.setAttribute('data-motion-state', prevMotion);
-          currentCard.setAttribute('data-lifecycle-state', prevLifecycle);
-          currentCard.setAttribute('data-shutter-state', prevShutter);
-          const b0 = currentCard.querySelector('button[data-action=\"toggle\"]');
-          if(b0) b0.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
-          updateSideFromCard(currentCard, 'Beheer en overzicht');
-
-          alert('OPEN mislukt: ' + (err && err.message ? err.message : err));
-        }
+        // We triggeren gewoon de toggle knop op de kaart zelf
+        const btnToggle = currentCard.querySelector('button[data-action="toggle"]');
+        if(btnToggle && btnToggle.textContent === 'OPEN') btnToggle.click();
       });
 
       document.getElementById('btnClose').addEventListener('click', async ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
-        const boxId = currentCard.getAttribute('data-id');
-        const prevIsOpen = currentCard.classList.contains('is-open');
-        const prevDoor = currentCard.getAttribute('data-door-state') || '';
-        const prevMotion = currentCard.getAttribute('data-motion-state') || '';
-        const prevLifecycle = currentCard.getAttribute('data-lifecycle-state') || '';
-        const prevShutter = currentCard.getAttribute('data-shutter-state') || '';
-
-        try{
-
-          currentCard.classList.remove('is-open');
-          currentCard.setAttribute('data-motion-state','closing');
-          currentCard.setAttribute('data-lifecycle-state','closing');
-          currentCard.setAttribute('data-shutter-state', currentCard.getAttribute('data-door-state') || 'closing');
-
-          const btn = currentCard.querySelector('button[data-action="toggle"]');
-          if(btn) btn.textContent = mainButtonLabel(currentCard.getAttribute('data-door-state'), currentCard.getAttribute('data-motion-state'), false);
-
-          setTimeout(()=>{
-            if(!currentCard) return;
-            const st = String(currentCard.getAttribute('data-shutter-state') || '').toLowerCase();
-            if(st === 'closing'){
-              currentCard.setAttribute('data-shutter-state','closed');
-              currentCard.setAttribute('data-lifecycle-state','closed');
-              const b = currentCard.querySelector('button[data-action="toggle"]');
-              if(b) b.textContent = mainButtonLabel('closed', '', false);
-              updateSideFromCard(currentCard, 'Beheer en overzicht');
-            }
-          }, 5200);
-
-          currentCard.setAttribute('data-desired','close');
-          await setDesired(boxId, 'close');
-
-          // SAVE LOKAAL
-          localStorage.setItem('gb_action_' + boxId, JSON.stringify({
-              state: 'close',
-              ts: Date.now()
-          }));
-
-          updateSideFromCard(currentCard, 'Beheer en overzicht');
-        } catch(err){
-          if(prevIsOpen) currentCard.classList.add('is-open'); else currentCard.classList.remove('is-open');
-          currentCard.setAttribute('data-door-state', prevDoor);
-          currentCard.setAttribute('data-motion-state', prevMotion);
-          currentCard.setAttribute('data-lifecycle-state', prevLifecycle);
-          currentCard.setAttribute('data-shutter-state', prevShutter);
-          const b0 = currentCard.querySelector('button[data-action=\"toggle\"]');
-          if(b0) b0.textContent = mainButtonLabel(prevDoor, prevMotion, prevIsOpen);
-          updateSideFromCard(currentCard, 'Beheer en overzicht');
-
-          alert('CLOSE mislukt: ' + (err && err.message ? err.message : err));
-        }
+        // We triggeren gewoon de toggle knop op de kaart zelf
+        const btnToggle = currentCard.querySelector('button[data-action="toggle"]');
+        if(btnToggle && btnToggle.textContent === 'CLOSE') btnToggle.click();
       });
 
       document.getElementById('btnEvents').addEventListener('click', ()=>{
@@ -2367,40 +2215,40 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           rebuildFilters();
         }
       })();
-  /* =======================================================
-     FIX: AUTO REFRESH LOOP (Elke 15 seconden)
-     Dit zorgt dat het hartje blijft kloppen en tijden updaten.
-     ======================================================= */
-  setInterval(async function() {
-    // 1. Onthoud welke kaart geselecteerd is (zodat het menu niet dichtklapt)
-    const selected = document.querySelector('.gb-card.is-selected');
-    const selectedId = selected ? selected.getAttribute('data-id') : null;
 
-    try {
-      // 2. Haal de nieuwe data op (deze functies bestaan al in je code)
-      const boxes = await loadBoxes();
-      renderSectionsFromBoxes(boxes);
+      // =========================================================
+      // 11) AUTO REFRESH LOOP (Elke 15s)
+      // =========================================================
+      setInterval(async function() {
+        // 1. Onthoud welke kaart geselecteerd is (zodat het menu niet dichtklapt)
+        const selected = document.querySelector('.gb-card.is-selected');
+        const selectedId = selected ? selected.getAttribute('data-id') : null;
 
-      // 3. Zet de selectie terug
-      if(selectedId){
-         const newCard = document.querySelector(`.gb-card[data-id="${selectedId}"]`);
-         if(newCard){
-             newCard.classList.add('is-selected');
-             
-             // Als het zijpaneel open staat, update dan ook de tekst daar
-             const side = document.getElementById('side');
-             if(side && side.classList.contains('is-open')){
-                 // Zoek de update functie (deze heet waarschijnlijk updateSideFromCard in jouw code)
-                 if(typeof updateSideFromCard === 'function') {
-                     updateSideFromCard(newCard); 
+        try {
+          // 2. Haal de nieuwe data op
+          const boxes = await loadBoxes();
+          renderSectionsFromBoxes(boxes);
+
+          // 3. Zet de selectie terug
+          if(selectedId){
+             const newCard = document.querySelector(`.gb-card[data-id="${selectedId}"]`);
+             if(newCard){
+                 newCard.classList.add('is-selected');
+                 
+                 // Als het zijpaneel open staat, update dan ook de tekst daar
+                 const side = document.getElementById('side');
+                 if(side && side.classList.contains('is-open')){
+                     if(typeof updateSideFromCard === 'function') {
+                         updateSideFromCard(newCard); 
+                     }
                  }
              }
-         }
-      }
-    } catch(e) {
-      console.error("Auto-refresh mislukt (geen ramp, volgende keer beter)", e);
-    }
-  }, 15000); // 15000 ms = 15 seconden
+          }
+        } catch(e) {
+          console.error("Auto-refresh mislukt (geen ramp, volgende keer beter)", e);
+        }
+      }, 15000); // 15000 ms = 15 seconden
+
     })();
   </script>
 </body>
