@@ -1925,46 +1925,82 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         kvSharesCount.textContent = 'shares ' + rows.length;
       }
 
-      document.getElementById('shareAdd').addEventListener('click', ()=>{
-        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
+      // =========================================================
+      // AANGEPASTE SHARE KNOP (Stuurt nu naar Server/API)
+      // =========================================================
+      document.getElementById('shareAdd').addEventListener('click', async () => {
+        if (!currentCard) return alert('Selecteer eerst een Gridbox links.');
+        
         const boxId = currentCard.getAttribute('data-id');
+        const phoneInput = document.getElementById('sharePhone');
+        const commentInput = document.getElementById('shareComment');
+        const expiresInput = document.getElementById('shareExpires');
+        const authInput = document.getElementById('shareAuth');
 
-        const phone = sharePhone.value.trim();
-        const comment = shareComment.value.trim();
-        const expires = shareExpires.value.trim();
-        const auth = !!shareAuth.checked;
-        if(!phone) return alert('Vul telefoon in.');
+        const phone = phoneInput.value.trim();
+        const comment = commentInput.value.trim();
+        const expires = expiresInput.value.trim();
+        const auth = !!authInput.checked;
 
-        const now = new Date();
-        const pad=n=>String(n).padStart(2,'0');
-        const ts = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        if (!phone) return alert('Vul een telefoonnummer in.');
 
-        sharesStore[boxId] = sharesStore[boxId] || [];
-        sharesStore[boxId].unshift({ts, phone, comment, expires, auth});
-        renderShares(boxId);
+        // 1. Maak de data klaar
+        const shareData = {
+            phone: phone,
+            comment: comment,
+            expires: expires,
+            auth: auth,
+            createdAt: new Date().toISOString()
+        };
 
-        sharePhone.value='';
-        shareComment.value='';
-        shareExpires.value='';
-        shareAuth.checked=false;
+        try {
+            // 2. STUUR NAAR SERVER (API)
+            // We gaan er even vanuit dat je backend luistert op /api/boxes/:id/shares
+            const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/shares`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(shareData)
+            });
 
-        updateSharesCountUiFromLocal(boxId);
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(txt || 'Opslaan mislukt');
+            }
+
+            // 3. UPDATE UI (Alleen als server succes geeft)
+            // We voegen hem nu ook lokaal toe zodat je direct resultaat ziet
+            sharesStore[boxId] = sharesStore[boxId] || [];
+            
+            // Format tijd voor display
+            const now = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            const tsDisplay = `${pad(now.getDate())}/${pad(now.getMonth() + 1)} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+            
+            sharesStore[boxId].unshift({
+                ts: tsDisplay,
+                phone: phone,
+                comment: comment,
+                expires: expires,
+                auth: auth
+            });
+
+            renderShares(boxId);
+            updateSharesCountUiFromLocal(boxId);
+
+            // Velden leegmaken
+            phoneInput.value = '';
+            commentInput.value = '';
+            expiresInput.value = '';
+            authInput.checked = false;
+
+            // Feedback aan gebruiker
+            alert('Share succesvol opgeslagen op de server!');
+
+        } catch (err) {
+            console.error(err);
+            alert('Fout bij opslaan share: ' + err.message);
+        }
       });
-
-      function scrollSideToBlock(blockId){
-        const el = document.getElementById(blockId);
-        if(!el) return;
-        const top = side.scrollTop + el.getBoundingClientRect().top - side.getBoundingClientRect().top - 10;
-        side.scrollTo({ top, behavior:'smooth' });
-      }
-
-      function fmtLifecycleLine(at, by){
-        const a = (at && at !== '-') ? at : '';
-        const b = (by && by !== '-') ? by : '';
-        if (!a && !b) return '-';
-        if (a && b) return a + ' (' + b + ')';
-        return a || b;
-      }
 
       // =========================================================
       // 7) Side panel details
