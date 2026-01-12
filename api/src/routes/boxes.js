@@ -1154,18 +1154,27 @@ router.post("/:id/capture", async (req, res) => {
    ===================================================== 
 */
 
-// 1. Ophalen van shares voor deze box
+// 1. Ophalen van shares voor deze box (VEILIGE VERSIE ZONDER INDEX-FOUT)
 router.get("/:id/shares", async (req, res) => {
   try {
     const { id } = req.params;
-    // Zoek shares die bij deze boxId horen én actief zijn
+    
+    // We halen ze op ZONDER orderBy om de Firestore Index fout te voorkomen
     const snap = await db.collection("shares")
       .where("boxId", "==", id)
       .where("active", "==", true)
-      .orderBy("createdAt", "desc")
       .get();
 
+    // We maken er een lijst van
     const shares = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // We sorteren ze HIER in de code (nieuwste bovenaan)
+    shares.sort((a, b) => {
+        const dateA = new Date(a.createdAt || 0);
+        const dateB = new Date(b.createdAt || 0);
+        return dateB - dateA; 
+    });
+
     res.json(shares);
   } catch (err) {
     console.error("GET shares error:", err);
