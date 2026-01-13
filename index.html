@@ -1864,91 +1864,93 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
       // =========================================================
       document.getElementById('shareAdd').addEventListener('click', async () => {
         if (!currentCard) return alert('Selecteer eerst een Gridbox links.');
-        
+
         const boxId = currentCard.getAttribute('data-id');
+        const boxNumber = Number(currentCard.getAttribute('data-box') || '');
+
         const phoneInput = document.getElementById('sharePhone');
         const commentInput = document.getElementById('shareComment');
         const expiresInput = document.getElementById('shareExpires');
         const authInput = document.getElementById('shareAuth');
 
-        const phone = phoneInput.value.trim();
+        const phoneRaw = phoneInput.value.trim();
         const comment = commentInput.value.trim();
         const expires = expiresInput.value.trim();
         const auth = !!authInput.checked;
 
-        if (!phone) return alert('Vul een telefoonnummer in.');
+        if (!phoneRaw) return alert('Vul een telefoonnummer in.');
+        if (!boxId || boxId === '-') return alert('Box id ontbreekt.');
+        if (!Number.isFinite(boxNumber)) return alert('Box nummer ontbreekt.');
 
-        // 1. Maak de data klaar
-        const shareData = {
-            phone: phone,
-            comment: comment,
-            expires: expires,
-            auth: auth,
-            createdAt: new Date().toISOString()
+        function normalizePhoneForShare(number){
+          if (!number) return '';
+          let s = String(number).trim().replace(/\s+/g, '');
+          if (s.startsWith('00')) s = '+' + s.slice(2);
+          if (s.startsWith('0')) s = '+32' + s.slice(1);
+          return s;
+        }
+
+        const phone = normalizePhoneForShare(phoneRaw);
+
+        const payload = {
+          phone,
+          boxNumber,
+          boxId,
+          expiresAt: expires || null,
+          comment,
+          auth
         };
 
         try {
-            // 2. STUUR NAAR SERVER (API)
-            const boxNumber = Number(currentCard.getAttribute("data-box") || "");
-const shareData = {
-  phone,
-  boxNumber,
-  boxId,
-  expiresAt: expires,
-  comment,
-  auth
-};
+          const res = await fetch(apiUrl('/api/shares'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
 
-const res = await fetch(apiUrl(`/api/shares`), {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(shareData)
-});
+          if (!res.ok) {
+            const txt = await res.text().catch(()=> '');
+            throw new Error(txt || ('Opslaan mislukt: ' + res.status));
+          }
 
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(shareData)
-            });
+          const json = await res.json().catch(()=> ({}));
 
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(txt || 'Opslaan mislukt');
-            }
+          // UI bijwerken
+          sharesStore[boxId] = sharesStore[boxId] || [];
 
-            const json = await res.json(); // Krijg de nieuwe ID terug
+          const now = new Date();
+          const pad = n => String(n).padStart(2, '0');
+          const tsDisplay = `${pad(now.getDate())}/${pad(now.getMonth() + 1)} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-            // 3. UPDATE UI (Alleen als server succes geeft)
-            sharesStore[boxId] = sharesStore[boxId] || [];
-            
-            // Format tijd voor display
-            const now = new Date();
-            const pad = n => String(n).padStart(2, '0');
-            const tsDisplay = `${pad(now.getDate())}/${pad(now.getMonth() + 1)} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-            
-            sharesStore[boxId].unshift({
-                ts: tsDisplay,
-                phone: phone,
-                comment: comment,
-                expires: expires,
-                auth: auth,
-                id: json.shareId || json.id // Gebruik ID van server response
-            });
+          sharesStore[boxId].unshift({
+            ts: tsDisplay,
+            phone,
+            comment,
+            expires,
+            auth,
+            id: json.shareId || json.id
+          });
 
-            renderShares(boxId);
-            updateSharesCountUiFromLocal(boxId);
+          renderShares(boxId);
+          updateSharesCountUiFromLocal(boxId);
 
-            // Velden leegmaken
-            phoneInput.value = '';
-            commentInput.value = '';
-            expiresInput.value = '';
-            authInput.checked = false;
+          // Velden leegmaken
+          phoneInput.value = '';
+          commentInput.value = '';
+          expiresInput.value = '';
+          authInput.checked = false;
 
-            // Feedback aan gebruiker
-            alert('Share succesvol opgeslagen op de server!');
+          if (json.smsSent === true) {
+            alert('Share opgeslagen en sms verstuurd.');
+          } else if (json.smsSent === false) {
+            alert('Share opgeslagen, maar sms niet verstuurd: ' + (json.smsError || 'onbekende reden'));
+          } else {
+            alert('Share opgeslagen.');
+          }
 
         } catch (err) {
-            console.error(err);
-            alert('Fout bij opslaan share: ' + err.message);
+          console.error(err);
+          alert('Fout bij opslaan share: ' + (err.message || err));
         }
       });
 
