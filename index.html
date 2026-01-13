@@ -1889,7 +1889,22 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
         try {
             // 2. STUUR NAAR SERVER (API)
-            const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/shares`), {
+            const boxNumber = Number(currentCard.getAttribute("data-box") || "");
+const shareData = {
+  phone,
+  boxNumber,
+  boxId,
+  expiresAt: expires,
+  comment,
+  auth
+};
+
+const res = await fetch(apiUrl(`/api/shares`), {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(shareData)
+});
+
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(shareData)
