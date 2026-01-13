@@ -6,6 +6,12 @@ import twilio from "twilio";
 const router = Router();
 const db = getFirestore();
 
+// Handig om te checken of Cloud Run echt deze versie draait
+const SHARES_VERSION = "shares-v4-2026-01-13";
+
+// -----------------------------------------------------
+// Helpers
+// -----------------------------------------------------
 function normalizePhone(number) {
   if (!number) return null;
   let s = String(number).trim().replace(/\s+/g, "");
@@ -23,9 +29,11 @@ function parseExpiresAtToIso(value) {
   const s = String(value).trim();
   if (!s) return null;
 
+  // ISO of parseable date string
   const t = Date.parse(s);
   if (Number.isFinite(t)) return new Date(t).toISOString();
 
+  // "dd/mm/yyyy hh:mm"
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/);
   if (m) {
     const dd = Number(m[1]);
@@ -47,12 +55,22 @@ function getTwilioClient() {
   return twilio(sid, token);
 }
 
-/**
- * POST /api/shares
- * Verwacht (minimum): phone, boxNumber, boxId
- * Extra (optioneel): comment, auth, expiresAt (of expires)
- */
+function formatTwilioError(e) {
+  const code = e?.code ?? null;
+  const status = e?.status ?? null;
+  const message = e?.message ? String(e.message) : String(e);
+  return { code, status, message };
+}
+
+// -----------------------------------------------------
+// POST /api/shares
+// Verwacht: phone, boxNumber, boxId
+// Optioneel: comment, auth/authorized, expiresAt/expires
+// -----------------------------------------------------
 router.post("/", async (req, res) => {
+  let smsSent = false;
+  let smsError = null;
+
   try {
     const phoneRaw = req.body?.phone ?? null;
     const boxNumberRaw = req.body?.boxNumber ?? null;
@@ -60,24 +78,36 @@ router.post("/", async (req, res) => {
 
     const comment = req.body?.comment ?? "";
     const auth = !!(req.body?.auth ?? req.body?.authorized ?? false);
-
     const expiresIncoming = req.body?.expiresAt ?? req.body?.expires ?? null;
 
     const phone = normalizePhone(phoneRaw);
     const boxNumber = Number(boxNumberRaw);
 
     if (!phone || !isValidE164(phone)) {
-      return res.status(400).json({ ok: false, message: "Ongeldig telefoonnummer" });
+      return res.status(400).json({
+        ok: false,
+        version: SHARES_VERSION,
+        message: "Ongeldig telefoonnummer",
+      });
     }
     if (!boxId) {
-      return res.status(400).json({ ok: false, message: "boxId is verplicht" });
+      return res.status(400).json({
+        ok: false,
+        version: SHARES_VERSION,
+        message: "boxId is verplicht",
+      });
     }
     if (!Number.isFinite(boxNumber)) {
-      return res.status(400).json({ ok: false, message: "boxNumber is verplicht" });
+      return res.status(400).json({
+        ok: false,
+        version: SHARES_VERSION,
+        message: "boxNumber is verplicht",
+      });
     }
 
     const expiresAt = parseExpiresAtToIso(expiresIncoming);
 
+    // 1) Share opslaan
     const share = {
       phone,
       boxNumber,
@@ -86,52 +116,62 @@ router.post("/", async (req, res) => {
       createdAt: new Date().toISOString(),
       expiresAt: expiresAt || null,
       warnedAt: null,
-
       comment: comment || "",
-      type: auth ? "authorized" : "temporary"
+      type: auth ? "authorized" : "temporary",
     };
 
     const docRef = await db.collection("shares").add(share);
 
+    // 2) SMS tekst
     const smsText = buildShareSms({
       boxNumber,
-      expiresAt: expiresAt || null
+      expiresAt: expiresAt || null,
     });
 
-    const from = process.env.TWILIO_PHONE_NUMBER || null;
+    // 3) Twilio versturen
+    const from = process.env.TWILIO_PHONE_NUMBER || "";
     const client = getTwilioClient();
 
-    let smsSent = false;
-    let smsError = null;
-
-    if (!client || !from) {
-      smsError = "Twilio niet geconfigureerd (env vars ontbreken)";
-      console.warn("⚠️", smsError);
+    if (!client) {
+      smsError = "Twilio niet geconfigureerd: TWILIO_ACCOUNT_SID of TWILIO_AUTH_TOKEN ontbreekt.";
+      console.error("⚠️", smsError);
+    } else if (!from) {
+      smsError = "Twilio niet geconfigureerd: TWILIO_PHONE_NUMBER ontbreekt.";
+      console.error("⚠️", smsError);
     } else {
       try {
-        await client.messages.create({
+        const msg = await client.messages.create({
           body: smsText,
           from,
-          to: phone
+          to: phone,
         });
         smsSent = true;
-        console.log(`✅ SMS verstuurd naar ${phone} (share ${docRef.id})`);
+        console.log("✅ SMS verstuurd", { to: phone, sid: msg.sid, shareId: docRef.id });
       } catch (e) {
-        smsError = e?.message || String(e);
+        const info = formatTwilioError(e);
+        smsError = `Twilio send failed code=${info.code} status=${info.status} message=${info.message}`;
         console.error("⚠️ Twilio verzendfout:", smsError);
       }
     }
 
+    // 4) Response met debug info
     return res.status(201).json({
       ok: true,
+      version: SHARES_VERSION,
       shareId: docRef.id,
       sms: smsText,
       smsSent,
-      smsError
+      smsError,
     });
   } catch (err) {
     console.error("❌ share create error:", err);
-    return res.status(500).json({ ok: false, message: "Share kon niet worden aangemaakt" });
+    return res.status(500).json({
+      ok: false,
+      version: SHARES_VERSION,
+      message: "Share kon niet worden aangemaakt",
+      smsSent,
+      smsError,
+    });
   }
 });
 
