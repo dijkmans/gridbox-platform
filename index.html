@@ -458,6 +458,37 @@
     .field label{font-weight:700;color:#111827;font-size:12px}
     .check{display:flex;align-items:center;gap:8px;margin:8px 0 0}
 
+
+
+    /* =========================================================
+       EXTRA: 2 LAGEN RECHTERPANEEL
+       Laag 1 = Samenvatting
+       Laag 2 = Details
+       ========================================================= */
+
+    .side-body .layer2{ display:none; }
+    .side-body.show-details .layer2{ display:block; }
+
+    .summary-actions{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-top:10px;
+    }
+
+    .alert{
+      display:none;
+      border:1px solid var(--border);
+      background:#f8fafc;
+      border-radius:14px;
+      padding:10px;
+      margin-bottom:10px;
+      font-size:13px;
+    }
+    .alert.ok{ border-color:#bbf7d0; background:#f0fdf4; }
+    .alert.warn{ border-color:#fde68a; background:#fffbeb; }
+    .alert.bad{ border-color:#fecaca; background:#fef2f2; }
+
     /* 7) Tabellen en formulieren */
 
     table{width:100%;border-collapse:separate;border-spacing:0 8px}
@@ -652,6 +683,42 @@
 
       <div class="side-body">
 
+        <div class="block" id="blockSummary">
+          <h4>Samenvatting</h4>
+
+          <div id="kvAlert" class="alert" role="status" aria-live="polite"></div>
+
+          <div class="kv">
+            <div class="muted">Nu</div>
+            <div><span id="kvNowState">-</span><span id="kvNowSince" class="hint"></span></div>
+
+            <div class="muted">Bevestiging</div>
+            <div><span id="kvNowConfirm">-</span><span class="hint">(sensor of timing)</span></div>
+
+            <div class="muted">Gewenst</div>
+            <div><span id="kvDesired">-</span><span id="kvDesiredMeta" class="hint"></span></div>
+
+            <div class="muted">Laatste actie</div>
+            <div><span id="kvLastAction">-</span><span id="kvLastActionMeta" class="hint"></span></div>
+
+            <div class="muted">Verbinding</div>
+            <div><span id="kvConn">-</span><span id="kvConnMeta" class="hint"></span></div>
+
+            <div class="muted">Toegang</div>
+            <div><span id="kvAccessSummary">-</span></div>
+          </div>
+
+          <div class="summary-actions">
+            <button class="btn" id="btnOpen" type="button">OPEN</button>
+            <button class="btn-ghost" id="btnClose" type="button">CLOSE</button>
+            <button class="btn-ghost" id="btnToggleDetails" type="button">Meer details</button>
+          </div>
+
+          <div style="margin-top:10px">
+            <span class="chip">Beheeractie wordt gelogd als portaal</span>
+          </div>
+        </div>
+
         <div class="block" id="blockAccess">
           <h4>Toegang</h4>
           <div class="access-row">
@@ -666,7 +733,7 @@
           </div>
         </div>
 
-        <div class="block" id="blockShares">
+        <div class="block layer2" id="blockShares">
           <h4>Shares</h4>
 
           <div class="form-row">
@@ -710,8 +777,8 @@
           </div>
         </div>
 
-        <div class="block" id="blockStatus">
-          <h4>Status</h4>
+        <div class="block layer2" id="blockStatus">
+          <h4>Details</h4>
 
           <div class="kv">
             <div class="muted">Klant</div>
@@ -799,18 +866,9 @@
               <span id="kvGeo">-</span><span class="hint">(coordinaten)</span>
             </div>
           </div>
-
-          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn" id="btnOpen" type="button">OPEN</button>
-            <button class="btn-ghost" id="btnClose" type="button">CLOSE</button>
-          </div>
-
-          <div style="margin-top:10px">
-            <span class="chip">Beheeractie wordt gelogd als portaal</span>
-          </div>
         </div>
 
-        <div class="block" id="blockPhones">
+        <div class="block layer2" id="blockPhones">
           <h4>Telefoons</h4>
           <div class="muted" style="font-size:12px;margin:-4px 0 10px;">
             Overzicht gelinkte nummers.
@@ -820,7 +878,7 @@
           </ul>
         </div>
 
-        <div class="block" id="blockEvents">
+        <div class="block layer2" id="blockEvents">
           <h4>Events</h4>
           <div id="eventsList" class="muted">Nog geen events geladen</div>
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
@@ -854,6 +912,8 @@
       const app = document.getElementById('app');
       const side = document.getElementById('side');
       const backdrop = document.getElementById('backdrop');
+
+      const sideBody = document.querySelector('.side-body');
 
       const sectionsWrap = document.getElementById('sections');
 
@@ -1154,6 +1214,36 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         return pick(box, ['lifecycle.source','source']) ?? null;
       }
 
+      function pickDesired(box){
+        return pick(box, [
+          'desired',
+          'data.desired',
+          'box.desired',
+          'Portal.desired',
+          'portal.desired'
+        ]) ?? null;
+      }
+
+      function pickDesiredAt(box){
+        return pick(box, [
+          'desiredAt',
+          'data.desiredAt',
+          'data.desired_at',
+          'desired_at',
+          'box.desiredAt'
+        ]) ?? null;
+      }
+
+      function pickDesiredBy(box){
+        return pick(box, [
+          'desiredBy',
+          'data.desiredBy',
+          'data.desired_by',
+          'desired_by',
+          'box.desiredBy'
+        ]) ?? null;
+      }
+
       function pickGeo(box){
         const v = pick(box, ['location.geo','location.geopoint','location.geoPoint','geo','geoPoint']);
         if (!v) return null;
@@ -1380,6 +1470,11 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         const lcSource = fmtMaybe(pickLifecycleSource(box));
         const geo = fmtMaybe(pickGeo(box));
 
+        const desiredRaw = pickDesired(box);
+        const desiredNorm = normalizeDesiredValue(desiredRaw);
+        const desiredAt = fmtMaybe(pickDesiredAt(box));
+        const desiredBy = fmtMaybe(pickDesiredBy(box));
+
         const card = document.createElement('article');
         card.className = 'gb-card';
 
@@ -1427,6 +1522,11 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         card.setAttribute('data-closed-by', closedBy ?? '');
         card.setAttribute('data-source', lcSource ?? '');
         card.setAttribute('data-geo', geo ?? '');
+
+
+        card.setAttribute('data-desired', desiredNorm || '');
+        card.setAttribute('data-desired-at', desiredAt ?? '');
+        card.setAttribute('data-desired-by', desiredBy ?? '');
 
         card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
 
@@ -1698,7 +1798,43 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
       const kvSharesCount = document.getElementById('kvSharesCount');
 
+      const kvAlert = document.getElementById('kvAlert');
+      const kvNowState = document.getElementById('kvNowState');
+      const kvNowSince = document.getElementById('kvNowSince');
+      const kvNowConfirm = document.getElementById('kvNowConfirm');
+      const kvDesired = document.getElementById('kvDesired');
+      const kvDesiredMeta = document.getElementById('kvDesiredMeta');
+      const kvLastAction = document.getElementById('kvLastAction');
+      const kvLastActionMeta = document.getElementById('kvLastActionMeta');
+      const kvConn = document.getElementById('kvConn');
+      const kvConnMeta = document.getElementById('kvConnMeta');
+      const kvAccessSummary = document.getElementById('kvAccessSummary');
+
+      const btnToggleDetails = document.getElementById('btnToggleDetails');
+
       const sidePhones = document.getElementById('sidePhones');
+
+      // Details toggle (laag 2)
+      const DETAILS_KEY = 'gb_side_show_details';
+
+      function setDetailsOpen(open){
+        if(!sideBody || !btnToggleDetails) return;
+        const v = !!open;
+        sideBody.classList.toggle('show-details', v);
+        btnToggleDetails.textContent = v ? 'Minder details' : 'Meer details';
+        try { localStorage.setItem(DETAILS_KEY, v ? '1' : '0'); } catch(_) {}
+      }
+
+      function initDetailsToggle(){
+        let start = false;
+        try { start = localStorage.getItem(DETAILS_KEY) === '1'; } catch(_) {}
+        setDetailsOpen(start);
+        btnToggleDetails.addEventListener('click', ()=>{
+          setDetailsOpen(!sideBody.classList.contains('show-details'));
+        });
+      }
+
+      initDetailsToggle();
 
       function setStatusPill(card){
         const min = Number(card.getAttribute('data-lastseen-min'));
@@ -1801,7 +1937,59 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         // Update de teller in het zijpaneel
         const badge = document.getElementById('kvSharesCount');
         if(badge) badge.textContent = 'shares ' + rows.length;
+
+        updateAccessSummary(boxId);
       }
+
+      function updateAccessSummary(boxId){
+        if(!kvAccessSummary) return;
+        if(!boxId) { kvAccessSummary.textContent = '-'; return; }
+        if(!(boxId in sharesStore)) { kvAccessSummary.textContent = '-'; return; }
+        const rows = (sharesStore[boxId] || []);
+
+        if(!rows.length){
+          kvAccessSummary.textContent = 'Geen shares';
+          return;
+        }
+
+        const now = Date.now();
+        let active = 0;
+        let soonest = null;
+
+        rows.forEach(r=>{
+          if(r && r.auth === true){
+            active += 1;
+            return;
+          }
+          const exp = r ? r.expires : null;
+          if(exp){
+            const ms = parseAnyTime(exp);
+            if(ms && ms < now) return; // verlopen
+            active += 1;
+            if(ms && (soonest === null || ms < soonest)) soonest = ms;
+            return;
+          }
+          active += 1;
+        });
+
+        if(active <= 0){
+          kvAccessSummary.textContent = 'Geen actieve shares';
+          return;
+        }
+
+        const pad = n => String(n).padStart(2,'0');
+        const fmtMini = (ms)=>{
+          const d = new Date(ms);
+          return pad(d.getDate()) + '/' + pad(d.getMonth()+1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        };
+
+        let s = 'Actief: ' + active;
+        if(soonest !== null){
+          s += ' (volgende vervalt: ' + fmtMini(soonest) + ')';
+        }
+        kvAccessSummary.textContent = s;
+      }
+
 
       sharesBody.addEventListener('click', async (e) => { // Let op: 'async' toegevoegd
         const del = e.target.closest('button[data-del]');
@@ -1973,6 +2161,168 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
       // 7) Side panel details
       // =========================================================
 
+      function normalizeDesiredValue(v){
+        const s = String(v ?? '').trim().toLowerCase();
+        if(!s) return '';
+        if(s === 'open' || s === 'opened' || s === 'opening') return 'open';
+        if(s === 'close' || s === 'closed' || s === 'closing') return 'close';
+        return s;
+      }
+
+      function desiredLabel(v){
+        if(v === 'open') return 'Open';
+        if(v === 'close') return 'Dicht';
+        return fmtMaybe(v);
+      }
+
+      function fmtLocalDateTime(v){
+        const ms = parseAnyTime(v);
+        if(!ms) return fmtMaybe(v);
+        const d = new Date(ms);
+        const pad = n => String(n).padStart(2,'0');
+        return pad(d.getDate()) + '/' + pad(d.getMonth()+1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      }
+
+      function fmtSince(v){
+        const ms = parseAnyTime(v);
+        if(!ms) return '';
+        const min = Math.floor((Date.now() - ms) / 60000);
+        if(min < 0) return '';
+        return '(sinds ' + fmtTimeAgo(min) + ')';
+      }
+
+      function setAlertLine(text, level){
+        if(!kvAlert) return;
+        const t = String(text || '').trim();
+        if(!t){
+          kvAlert.style.display = 'none';
+          kvAlert.textContent = '';
+          kvAlert.className = 'alert';
+          return;
+        }
+        kvAlert.style.display = 'block';
+        kvAlert.textContent = t;
+        kvAlert.className = 'alert ' + (level || 'warn');
+      }
+
+      function computeNowInfo(card){
+        const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
+        const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || '');
+
+        if(motion === 'opening') return { label:'Bezig (openen)', base:'opening' };
+        if(motion === 'closing') return { label:'Bezig (sluiten)', base:'closing' };
+
+        if(door === 'open') return { label:'Open', base:'open' };
+        if(door === 'closed') return { label:'Dicht', base:'closed' };
+
+        if(card.classList.contains('is-open')) return { label:'Open', base:'open' };
+        if(card.classList.contains('is-closed')) return { label:'Dicht', base:'closed' };
+
+        // fallback
+        return { label:'Onbekend', base:'' };
+      }
+
+      function updateSummaryFromCard(card){
+        if(!card) return;
+
+        const nowInfo = computeNowInfo(card);
+        if(kvNowState) kvNowState.textContent = nowInfo.label || '-';
+
+        const openedAt = card.getAttribute('data-opened-at') || '';
+        const closedAt = card.getAttribute('data-closed-at') || '';
+
+        if(kvNowSince){
+          let since = '';
+          if(nowInfo.base === 'open') since = fmtSince(openedAt);
+          if(nowInfo.base === 'closed') since = fmtSince(closedAt);
+          kvNowSince.textContent = since ? (' ' + since) : '';
+        }
+
+        const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || '');
+        if(kvNowConfirm){
+          if(door === 'open' || door === 'closed') kvNowConfirm.textContent = 'Sensor';
+          else kvNowConfirm.textContent = 'Timing';
+        }
+
+        const desired = normalizeDesiredValue(card.getAttribute('data-desired') || '');
+        if(kvDesired) kvDesired.textContent = desired ? desiredLabel(desired) : '-';
+
+        const desiredBy = (card.getAttribute('data-desired-by') || '').trim();
+        const desiredAt = (card.getAttribute('data-desired-at') || '').trim();
+        if(kvDesiredMeta){
+          let meta = '';
+          if(desiredBy) meta += 'door ' + desiredBy;
+          if(desiredAt) meta += (meta ? ' om ' : 'om ') + fmtLocalDateTime(desiredAt);
+          kvDesiredMeta.textContent = meta ? (' (' + meta + ')') : '';
+        }
+
+        // Laatste actie
+        const openedBy = (card.getAttribute('data-opened-by') || '').trim();
+        const closedBy = (card.getAttribute('data-closed-by') || '').trim();
+        const source = (card.getAttribute('data-source') || '').trim();
+
+        const tOpen = parseAnyTime(openedAt) || 0;
+        const tClose = parseAnyTime(closedAt) || 0;
+
+        let kind = '-';
+        let at = '';
+        let by = '';
+        if(tOpen == 0 && tClose == 0){
+          kind = '-';
+        } else if(tOpen >= tClose){
+          kind = 'Geopend';
+          at = openedAt;
+          by = openedBy;
+        } else {
+          kind = 'Gesloten';
+          at = closedAt;
+          by = closedBy;
+        }
+
+        if(kvLastAction) kvLastAction.textContent = kind;
+        if(kvLastActionMeta){
+          let meta = '';
+          if(at) meta += fmtLocalDateTime(at);
+          if(by) meta += (meta ? ' door ' : 'door ') + by;
+          if(source) meta += (meta ? ' via ' : 'via ') + source;
+          kvLastActionMeta.textContent = meta ? (' (' + meta + ')') : '';
+        }
+
+        // Verbinding
+        const min = Number(card.getAttribute('data-lastseen-min'));
+        const st = computeOnlineStateFromMinutes(min);
+        if(kvConn) kvConn.textContent = st.label || '-';
+        if(kvConnMeta){
+          const ago = fmtTimeAgo(min);
+          kvConnMeta.textContent = ago ? (' (' + ago + ')') : '';
+        }
+
+        const boxId = card.getAttribute('data-id');
+        // Toegang: als shares nog niet geladen zijn, toon minstens de teller van de backend
+        if(boxId && !(boxId in sharesStore)) {
+          const raw = (card.getAttribute('data-shares-count') || '').trim();
+          if(kvAccessSummary) kvAccessSummary.textContent = raw ? ('Shares: ' + raw) : '-';
+        } else {
+          updateAccessSummary(boxId);
+        }
+
+        // Alert lijn
+        const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
+        if(st.cls === 'bad'){
+          setAlertLine('Box is offline', 'bad');
+        } else if(motion === 'opening'){
+          setAlertLine('Box is bezig met openen', 'ok');
+        } else if(motion === 'closing'){
+          setAlertLine('Box is bezig met sluiten', 'ok');
+        } else if(desired === 'open' && nowInfo.base === 'closed'){
+          setAlertLine('Gewenst is open maar box is dicht', 'warn');
+        } else if(desired === 'close' && nowInfo.base === 'open'){
+          setAlertLine('Gewenst is dicht maar box is open', 'warn');
+        } else {
+          setAlertLine('', '');
+        }
+      }
+
       function updateSideFromCard(card, contextLabel){
         currentCard = card;
         selectCard(card);
@@ -2021,7 +2371,9 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         // Dan ophalen van server (als de functie bestaat)
         fetchShares(boxId);
 
+        updateSharesCountUiFromCard(card);
         updateSharesCountUiFromLocal(boxId);
+        updateSummaryFromCard(card);
         openSide();
       }
 
@@ -2033,6 +2385,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         app.classList.remove('is-collapsed');
         app.classList.add('is-expanded');
 
+        setDetailsOpen(true);
         setTimeout(()=>scrollSideToBlock('blockShares'), 0);
       });
 
@@ -2072,9 +2425,15 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           if(action === 'toggle'){
             e.preventDefault(); e.stopPropagation();
             
-            // Bepaal huidige status
-            const currentDesired = (card.getAttribute('data-desired') === 'open') ? 'open' : 'close';
-            const next = currentDesired === 'open' ? 'close' : 'open';
+            // Bepaal gewenste actie op basis van de knoptekst (OPEN of CLOSE)
+            const label = String(btn.textContent || '').trim().toUpperCase();
+            let next = '';
+            if(label === 'OPEN') next = 'open';
+            else if(label === 'CLOSE') next = 'close';
+            else {
+              // fallback
+              next = card.classList.contains('is-open') ? 'close' : 'open';
+            }
 
             if (!boxId || boxId === '-'){
               alert('Box id ontbreekt.');
@@ -2157,6 +2516,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
             side.classList.add('is-wide');
             app.classList.remove('is-collapsed');
             app.classList.add('is-expanded');
+            setDetailsOpen(true);
             setTimeout(()=>scrollSideToBlock('blockShares'), 0);
             return;
           }
@@ -2165,6 +2525,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           if(action === 'events'){
             e.preventDefault(); e.stopPropagation();
             updateSideFromCard(card, 'Beheer en overzicht');
+            setDetailsOpen(true);
             if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/events`);
             setTimeout(()=>scrollSideToBlock('blockEvents'), 0);
             return;
