@@ -20,7 +20,9 @@ import orgBoxDeviceRouter from "./routes/orgBoxDevice.js";
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// --------------------------------------------------
 // middleware
+// --------------------------------------------------
 app.use(
   cors({
     origin: "*",
@@ -34,15 +36,20 @@ app.use(
     ]
   })
 );
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// --------------------------------------------------
 // healthcheck
+// --------------------------------------------------
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "gridbox-api" });
 });
 
-// debug: test Firestore connectie lokaal
+// --------------------------------------------------
+// DEBUG
+// --------------------------------------------------
 app.get("/api/_debug/firestore", async (req, res) => {
   try {
     const snap = await db.collection("boxes").limit(1).get();
@@ -53,7 +60,74 @@ app.get("/api/_debug/firestore", async (req, res) => {
   }
 });
 
+// --------------------------------------------------
+// BIRD WEBHOOK (NIEUW)
+// --------------------------------------------------
+app.post("/webhooks/bird", async (req, res) => {
+  try {
+    console.log("📩 Bird webhook ontvangen");
+    console.log(JSON.stringify(req.body, null, 2));
+
+    const text =
+      req.body?.body?.text?.text?.trim() || "";
+
+    const from =
+      req.body?.receiver?.contacts?.[0]?.identifierValue || "unknown";
+
+    console.log("Van:", from);
+    console.log("Tekst:", text);
+
+    // Verwacht: OPEN 5
+    const match = text.match(/open\s+(\d+)/i);
+
+    if (!match) {
+      return res.json({ ok: true, action: "ignored" });
+    }
+
+    const boxId = match[1];
+
+    // Zoek box
+    const boxRef = db.collection("boxes").doc(boxId);
+    const snap = await boxRef.get();
+
+    if (!snap.exists) {
+      console.warn("Box niet gevonden:", boxId);
+      return res.json({ ok: false, message: "Box niet gevonden", boxId });
+    }
+
+    // Zet desired = open
+    await boxRef.set(
+      {
+        box: {
+          desired: "open",
+          desiredAt: new Date()
+        },
+        lastCommand: {
+          source: "sms",
+          from,
+          text
+        }
+      },
+      { merge: true }
+    );
+
+    console.log(`✅ Box ${boxId} op OPEN gezet`);
+
+    return res.json({
+      ok: true,
+      action: "open",
+      boxId
+    });
+
+  } catch (err) {
+    console.error("❌ Bird webhook fout:", err);
+    res.status(500).json({ ok: false });
+  }
+});
+
+// --------------------------------------------------
 // helpers
+// --------------------------------------------------
 function normAction(v) {
   if (!v) return null;
   const s = String(v).trim().toLowerCase();
@@ -65,22 +139,13 @@ function normAction(v) {
 
 function toMillis(v) {
   if (!v) return null;
-
-  // Firestore Timestamp heeft meestal toMillis()
   if (typeof v?.toMillis === "function") return v.toMillis();
-
-  // Date object
   if (v instanceof Date) return v.getTime();
-
-  // number
   if (typeof v === "number") return v;
-
-  // string (ISO)
   if (typeof v === "string") {
     const t = Date.parse(v);
     return Number.isFinite(t) ? t : null;
   }
-
   return null;
 }
 
@@ -89,135 +154,44 @@ function pickBox(data) {
   return b && typeof b === "object" ? b : {};
 }
 
-// BELANGRIJK:
-// box.desired = doelstand (blijft staan)
-// box.state = huidige stand (blijft staan)
-// API endpoint /desired geeft enkel "desired" terug als er nog iets te doen is
 function computeDesiredForPi(data) {
   const box = pickBox(data);
 
   const target = normAction(box.desired);
   const state = normAction(box.state);
 
-  // niets gevraagd
   if (!target) return { target: null, state, desired: null, reason: "no_target" };
 
-  // als state al gelijk is aan target, dan is er niks te doen
   if (state && state === target) {
     return { target, state, desired: null, reason: "already_in_state" };
   }
 
-  // extra beveiliging: als desiredAt niet nieuwer is dan lastAppliedAt, dan niet opnieuw sturen
   const desiredAtMs = toMillis(box.desiredAt);
-  const lastAppliedAtMs = toMillis(box.lastAppliedAt) ?? toMillis(data?.lastAckAt);
+  const lastAppliedAtMs =
+    toMillis(box.lastAppliedAt) ?? toMillis(data?.lastAckAt);
 
   if (desiredAtMs && lastAppliedAtMs && desiredAtMs <= lastAppliedAtMs) {
     return { target, state, desired: null, reason: "already_applied_by_time" };
   }
 
-  // anders: Pi moet dit uitvoeren
   return { target, state, desired: target, reason: "pending" };
 }
 
-// helper: vind box doc (primary boxes, daarna fallback)
-async function findBoxDoc(boxId) {
-  const tries = [
-    db.collection("boxes").doc(boxId),
-    db.collection("portals").doc(boxId),
-    db.collection("Portal").doc(boxId),
-    db.collection("devices").doc(boxId)
-  ];
-
-  for (const ref of tries) {
-    const snap = await ref.get();
-    if (snap.exists) return { ref, data: snap.data(), path: ref.path };
-  }
-  return null;
-}
-
-// ------------------------------------------------------------
-// PI desired endpoints
-// ------------------------------------------------------------
-
-// GET desired (Pi kan pollen)
-app.get("/api/boxes/:boxId/desired", async (req, res) => {
-  try {
-    const { boxId } = req.params;
-
-    const found = await findBoxDoc(boxId);
-    if (!found) {
-      return res.status(404).json({ ok: false, message: "Box niet gevonden", boxId });
-    }
-
-    const r = computeDesiredForPi(found.data);
-
-    return res.json({
-      ok: true,
-      boxId,
-      // dit is het commando voor de Pi (alleen als er nog iets te doen is)
-      desired: r.desired,
-      // dit blijft staan ter info (doelstand)
-      target: r.target,
-      // dit blijft staan ter info (huidige stand, als aanwezig)
-      state: r.state,
-      reason: r.reason,
-      source: found.path
-    });
-  } catch (e) {
-    console.error("GET /api/boxes/:boxId/desired error:", e);
-    return res.status(500).json({ ok: false, message: String(e?.message || e) });
-  }
-});
-
-// POST ack (Pi zegt: uitgevoerd)
-// we wissen box.desired NIET meer
-// we zetten box.state + box.lastAppliedAt zodat Pi niet blijft herhalen
-app.post("/api/boxes/:boxId/desired/ack", async (req, res) => {
-  try {
-    const { boxId } = req.params;
-    const action = normAction(req.body?.action ?? null);
-
-    const found = await findBoxDoc(boxId);
-    if (!found) {
-      return res.status(404).json({ ok: false, message: "Box niet gevonden", boxId });
-    }
-
-    await found.ref.set(
-      {
-        box: {
-          state: action, // huidige stand
-          lastAppliedAt: new Date() // timestamp
-        },
-        lastAckAt: new Date().toISOString(),
-        lastAck: action
-      },
-      { merge: true }
-    );
-
-    return res.json({ ok: true, boxId });
-  } catch (e) {
-    console.error("POST /api/boxes/:boxId/desired/ack error:", e);
-    return res.status(500).json({ ok: false, message: String(e?.message || e) });
-  }
-});
-
-// ------------------------------------------------------------
+// --------------------------------------------------
 // routes
-// ------------------------------------------------------------
+// --------------------------------------------------
 app.use("/api/boxes", boxesRouter);
 app.use("/api/status", statusRouter);
 app.use("/api/sms", smsRouter);
 app.use("/api/shares", sharesRouter);
 app.use("/api/internal", internalJobsRouter);
 
-// NEW: capture routes
+// capture
 app.use("/api/boxes/:boxId/capture", captureRouter);
 app.use("/api/orgs/:orgId/boxes/:boxId/capture", captureRouter);
 
-// device routes
-// zonder org (legacy)
+// device
 app.use("/api/boxes/:boxId/device", orgBoxDeviceRouter);
-// met org (nieuwer pad)
 app.use("/api/orgs/:orgId/boxes/:boxId/device", orgBoxDeviceRouter);
 
 // fallback
