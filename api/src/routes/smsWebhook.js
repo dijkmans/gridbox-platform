@@ -6,8 +6,12 @@ import * as sharesService from "../services/sharesService.js";
 
 const router = Router();
 
+/* =========================================================
+   Helpers
+   ========================================================= */
+
 /**
- * Telefoonnummer normaliseren naar internationaal formaat (+32...)
+ * Telefoonnummer normaliseren naar +32…
  */
 function normalizePhone(number) {
   if (!number) return null;
@@ -30,27 +34,21 @@ function isValidE164(number) {
 /**
  * Commando parser
  * Begrijpt:
- *  - open 5
- *  - open5
- *  - sluit 2
- *  - dicht 3
+ *  open 1
+ *  open1
+ *  sluit 2
+ *  dicht 3
  */
 function parseCommand(rawText) {
   const text = String(rawText || "").trim().toLowerCase();
-
   const match = text.match(/(open|close|sluit|dicht)\s*(\d+)/);
 
-  if (!match) {
-    return { command: null, boxNr: null };
-  }
+  if (!match) return { command: null, boxNr: null };
 
   let command = match[1];
   if (command === "sluit" || command === "dicht") command = "close";
 
-  return {
-    command,
-    boxNr: match[2]
-  };
+  return { command, boxNr: match[2] };
 }
 
 /**
@@ -61,7 +59,7 @@ function isShareBlocked(share) {
 
   try {
     const blockedDate =
-      typeof share.blockedAt.toDate === "function"
+      typeof share.blockedAt?.toDate === "function"
         ? share.blockedAt.toDate()
         : new Date(share.blockedAt);
 
@@ -72,83 +70,126 @@ function isShareBlocked(share) {
 }
 
 /**
- * POST /api/sms
- * Bird inbound SMS webhook
+ * BoxId robuust afleiden uit share
  */
+function resolveBoxId(share) {
+  return (
+    share.boxId ||
+    share.box ||
+    share.portalId ||
+    share.boxRef ||
+    null
+  );
+}
+
+/* =========================================================
+   POST /api/sms
+   Bird inbound SMS webhook
+   ========================================================= */
+
 router.post("/", async (req, res) => {
   try {
-    console.log("📩 Bird webhook payload:", JSON.stringify(req.body, null, 2));
+    console.log("📩 SMS webhook payload:", JSON.stringify(req.body, null, 2));
 
-    // ===== Bird payload parsing =====
+    /* -----------------------------------------
+       Payload parsing (Bird + test JSON)
+       ----------------------------------------- */
+
     const rawFrom =
       req.body?.sender?.identifierValue ??
       req.body?.sender?.value ??
+      req.body?.from ??
       null;
 
     const rawText =
       req.body?.body?.text?.text ??
       req.body?.body?.text ??
+      req.body?.message ??
       "";
 
     const from = normalizePhone(rawFrom);
     const { command, boxNr } = parseCommand(rawText);
 
-    console.log(`📩 SMS ontvangen van ${from}: "${rawText}"`);
+    console.log("➡️ Parsed:", { from, command, boxNr });
 
-    // 1. Nummer valideren
+    /* -----------------------------------------
+       Validatie
+       ----------------------------------------- */
+
     if (!from || !isValidE164(from)) {
-      return res.status(200).json({ message: "Ongeldig nummer." });
+      return res.json({ message: "Ongeldig nummer." });
     }
 
-    // 2. Commando valideren
     if (!command || !boxNr) {
-      return res.status(200).json({
-        message: "Gebruik: OPEN 1 om Gridbox 1 te openen."
+      return res.json({
+        message: "Gebruik: OPEN <nummer> of CLOSE <nummer>."
       });
     }
 
-    // 3. Share zoeken
-    const share = await sharesService.findActiveShareByPhoneAndBoxNumber(
-      from,
-      boxNr
-    );
+    /* -----------------------------------------
+       Share zoeken
+       ----------------------------------------- */
+
+    const share =
+      await sharesService.findActiveShareByPhoneAndBoxNumber(from, boxNr);
+
+    console.log("🔍 Share:", share);
 
     if (!share) {
-      console.log(`❌ Geen share voor ${from} op box ${boxNr}`);
-      return res.status(200).json({
+      return res.json({
         message: `U heeft geen toegang tot Gridbox ${boxNr}.`
       });
     }
 
     if (isShareBlocked(share)) {
-      return res.status(200).json({
+      return res.json({
         message: `Uw toegang tot Gridbox ${boxNr} is verlopen.`
       });
     }
 
-    // 4. Actie uitvoeren
+    /* -----------------------------------------
+       BoxId bepalen
+       ----------------------------------------- */
+
+    const boxId = resolveBoxId(share);
+
+    if (!boxId) {
+      console.error("❌ Geen boxId in share:", share);
+      return res.json({
+        message: "Interne fout: box niet gevonden."
+      });
+    }
+
+    console.log("📦 BoxId resolved:", boxId);
+
+    /* -----------------------------------------
+       Actie uitvoeren
+       ----------------------------------------- */
+
     const actionFn =
       command === "open"
         ? boxesService.openBox
         : boxesService.closeBox;
 
-    const result = await actionFn(share.boxId, "sms", from);
+    const result = await actionFn(boxId, "sms", from);
+
+    console.log("⚙️ open/close result:", result);
 
     if (!result?.success) {
-      return res.status(200).json({
+      return res.json({
         message: `Gridbox ${boxNr} is momenteel niet bereikbaar.`
       });
     }
 
     const actieText = command === "open" ? "geopend" : "gesloten";
 
-    return res.status(200).json({
+    return res.json({
       message: `Gridbox ${boxNr} wordt nu ${actieText}.`
     });
 
   } catch (err) {
-    console.error("❌ Bird SMS webhook error:", err);
-    return res.status(200).json({
+    console.error("❌ SMS webhook crash:", err, err?.stack);
+    return res.json({
       message: "Systeemfout. Probeer later opnieuw."
     });
   }
