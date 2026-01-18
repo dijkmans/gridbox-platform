@@ -1,79 +1,71 @@
-import { Router, urlencoded, json } from "express";
+// api/src/routes/smsWebhook.js
+
+import { Router } from "express";
 import * as boxesService from "../services/boxesService.js";
 import * as sharesService from "../services/sharesService.js";
 
 const router = Router();
 
-// Zorg dat we zowel Twilio-data (urlencoded) als JSON kunnen lezen
-router.use(urlencoded({ extended: false }));
-router.use(json());
-
 /**
- * Telefoonnummer normaliseren naar internationaal E.164 formaat
+ * Telefoonnummer normaliseren naar internationaal formaat (+32...)
  */
 function normalizePhone(number) {
   if (!number) return null;
+
   let s = String(number).trim().replace(/\s+/g, "");
+
   if (s.startsWith("00")) s = "+" + s.slice(2);
   if (s.startsWith("0")) s = "+32" + s.slice(1);
+
   return s || null;
 }
 
 /**
- * Controleert of een nummer voldoet aan het internationale formaat (+32...)
+ * E.164 validatie
  */
 function isValidE164(number) {
   return /^\+[1-9]\d{7,14}$/.test(number || "");
 }
 
 /**
- * Antwoord helper: stuurt XML naar Twilio of JSON naar de rest
+ * Commando parser
+ * Begrijpt:
+ *  - open 5
+ *  - open5
+ *  - sluit 2
+ *  - dicht 3
  */
-function sendResponse(req, res, message) {
-  const isTwilio = req.headers["x-twilio-signature"] || req.is("application/x-www-form-urlencoded");
+function parseCommand(rawText) {
+  const text = String(rawText || "").trim().toLowerCase();
 
-  if (isTwilio) {
-    const safe = String(message || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-    return res.status(200).type("text/xml").send(`<Response><Message>${safe}</Message></Response>`);
-  }
-  return res.status(200).json({ message });
-}
-
-/**
- * Commando parser: begrijpt "open 1", "open1", "sluit 2", etc.
- */
-function parseCommand(rawBody) {
-  const text = String(rawBody || "").trim().toLowerCase();
-  
-  // Zoekt naar actie + getal
   const match = text.match(/(open|close|sluit|dicht)\s*(\d+)/);
-  
-  if (match) {
-    let command = match[1];
-    if (command === "sluit" || command === "dicht") command = "close";
-    
-    return {
-      command: command, // 'open' of 'close'
-      boxNr: match[2]    // het nummer, bijv '1'
-    };
+
+  if (!match) {
+    return { command: null, boxNr: null };
   }
-  return { command: null, boxNr: null };
+
+  let command = match[1];
+  if (command === "sluit" || command === "dicht") command = "close";
+
+  return {
+    command,
+    boxNr: match[2]
+  };
 }
 
 /**
- * Check of een share geblokkeerd of verlopen is
+ * Share verlopen of geblokkeerd?
  */
 function isShareBlocked(share) {
   if (!share?.blockedAt) return false;
-  const now = new Date();
+
   try {
-    const blockedDate = typeof share.blockedAt.toDate === "function" 
-      ? share.blockedAt.toDate() 
-      : new Date(share.blockedAt);
-    return now >= blockedDate;
+    const blockedDate =
+      typeof share.blockedAt.toDate === "function"
+        ? share.blockedAt.toDate()
+        : new Date(share.blockedAt);
+
+    return new Date() >= blockedDate;
   } catch {
     return false;
   }
@@ -81,55 +73,84 @@ function isShareBlocked(share) {
 
 /**
  * POST /api/sms
- * Twilio Webhook Endpoint
+ * Bird inbound SMS webhook
  */
 router.post("/", async (req, res) => {
   try {
-    const rawFrom = req.body?.From ?? req.body?.from ?? null;
-    const rawBody = req.body?.Body ?? req.body?.message ?? "";
+    console.log("📩 Bird webhook payload:", JSON.stringify(req.body, null, 2));
+
+    // ===== Bird payload parsing =====
+    const rawFrom =
+      req.body?.sender?.identifierValue ??
+      req.body?.sender?.value ??
+      null;
+
+    const rawText =
+      req.body?.body?.text?.text ??
+      req.body?.body?.text ??
+      "";
 
     const from = normalizePhone(rawFrom);
-    const { command, boxNr } = parseCommand(rawBody);
+    const { command, boxNr } = parseCommand(rawText);
 
-    console.log(`📩 SMS Ontvangen: Van=${from}, Bericht="${rawBody}"`);
+    console.log(`📩 SMS ontvangen van ${from}: "${rawText}"`);
 
-    // 1. Validatie van nummer
+    // 1. Nummer valideren
     if (!from || !isValidE164(from)) {
-      return sendResponse(req, res, "Fout: Ongeldig nummer.");
+      return res.status(200).json({ message: "Ongeldig nummer." });
     }
 
-    // 2. Validatie van commando
+    // 2. Commando valideren
     if (!command || !boxNr) {
-      return sendResponse(req, res, "Gebruik: 'open 1' om Gridbox 1 te openen.");
+      return res.status(200).json({
+        message: "Gebruik: OPEN 1 om Gridbox 1 te openen."
+      });
     }
 
-    // 3. Controleer toegang in Firestore via sharesService
-    const share = await sharesService.findActiveShareByPhoneAndBoxNumber(from, boxNr);
+    // 3. Share zoeken
+    const share = await sharesService.findActiveShareByPhoneAndBoxNumber(
+      from,
+      boxNr
+    );
 
     if (!share) {
-      console.log(`❌ Geen toegang voor ${from} tot box ${boxNr}`);
-      return sendResponse(req, res, `U heeft geen toegang tot Gridbox ${boxNr}.`);
+      console.log(`❌ Geen share voor ${from} op box ${boxNr}`);
+      return res.status(200).json({
+        message: `U heeft geen toegang tot Gridbox ${boxNr}.`
+      });
     }
 
     if (isShareBlocked(share)) {
-      return sendResponse(req, res, `Uw toegang tot Gridbox ${boxNr} is verlopen.`);
+      return res.status(200).json({
+        message: `Uw toegang tot Gridbox ${boxNr} is verlopen.`
+      });
     }
 
-    // 4. Actie uitvoeren via boxesService
-    const serviceAction = command === "open" ? boxesService.openBox : boxesService.closeBox;
-    const result = await serviceAction(share.boxId, "sms", from);
+    // 4. Actie uitvoeren
+    const actionFn =
+      command === "open"
+        ? boxesService.openBox
+        : boxesService.closeBox;
+
+    const result = await actionFn(share.boxId, "sms", from);
 
     if (!result?.success) {
-      return sendResponse(req, res, `Gridbox ${boxNr} is momenteel niet bereikbaar.`);
+      return res.status(200).json({
+        message: `Gridbox ${boxNr} is momenteel niet bereikbaar.`
+      });
     }
 
-    // Bevestiging naar gebruiker
     const actieText = command === "open" ? "geopend" : "gesloten";
-    return sendResponse(req, res, `Gridbox ${boxNr} wordt nu ${actieText}.`);
+
+    return res.status(200).json({
+      message: `Gridbox ${boxNr} wordt nu ${actieText}.`
+    });
 
   } catch (err) {
-    console.error("❌ SMS Webhook Error:", err);
-    return sendResponse(req, res, "Systeemfout. Probeer het later opnieuw.");
+    console.error("❌ Bird SMS webhook error:", err);
+    return res.status(200).json({
+      message: "Systeemfout. Probeer later opnieuw."
+    });
   }
 });
 
