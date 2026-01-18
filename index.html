@@ -709,8 +709,6 @@
           </div>
 
           <div class="summary-actions">
-            <button class="btn" id="btnOpen" type="button">OPEN</button>
-            <button class="btn-ghost" id="btnClose" type="button">CLOSE</button>
             <button class="btn-ghost" id="btnToggleDetails" type="button">Meer details</button>
           </div>
 
@@ -2544,21 +2542,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         updateSideFromCard(card, 'Beheer en overzicht');
       });
 
-      document.getElementById('btnOpen').addEventListener('click', async ()=>{
-        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
-        // We triggeren gewoon de toggle knop op de kaart zelf
-        const btnToggle = currentCard.querySelector('button[data-action="toggle"]');
-        if(btnToggle && btnToggle.textContent === 'OPEN') btnToggle.click();
-      });
-
-      document.getElementById('btnClose').addEventListener('click', async ()=>{
-        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
-        // We triggeren gewoon de toggle knop op de kaart zelf
-        const btnToggle = currentCard.querySelector('button[data-action="toggle"]');
-        if(btnToggle && btnToggle.textContent === 'CLOSE') btnToggle.click();
-      });
-
-      document.getElementById('btnEvents').addEventListener('click', ()=>{
+     document.getElementById('btnEvents').addEventListener('click', ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
         const boxId = currentCard.getAttribute('data-id');
         if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/events`);
