@@ -1,24 +1,24 @@
 {
   "name": "gridbox-api",
   "version": "1.0.0",
+  "private": true,
   "type": "module",
-  "description": "Gridbox API voor devices, commands, status, shares en boxes.",
-  "main": "src/index.js",
+  "description": "Gridbox API voor devices, SMS, shares en box-commands.",
+  "main": "api/src/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "start": "node api/src/index.js",
+    "dev": "nodemon api/src/index.js"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
-    "@google-cloud/firestore": "^7.8.0",
+    "@google-cloud/firestore": "^8.0.0",
     "@google-cloud/storage": "^7.14.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "firebase-admin": "^12.0.0",
-    "twilio": "^5.11.2"
+    "express": "^4.21.0",
+    "firebase-admin": "^12.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
