@@ -1,16 +1,20 @@
 // api/src/routes/shares.js
 //
 // Bird versie (geen Twilio meer)
-// Doel:
+//
+// Doel
 // - Share opslaan in Firestore
-// - Sms sturen via Bird (MessageBird SMS API)
+// - Sms sturen via Bird (MessageBird legacy SMS API: https://rest.messagebird.com/messages)
 // - Zelfde response velden behouden: smsSent en smsError
 //
-// Vereiste env vars (op Cloud Run):
-// - BIRD_ACCESS_KEY  (of MESSAGEBIRD_ACCESS_KEY)
-// - BIRD_ORIGINATOR  (of MESSAGEBIRD_ORIGINATOR)  bv +32480214031
-// Optioneel:
-// - BIRD_API_BASE (default https://rest.messagebird.com)
+// Vereiste env vars (Cloud Run)
+// - BIRD_ACCESS_KEY
+// - BIRD_ORIGINATOR   (bv. +32480214031 of een toegelaten sender)
+//
+// Optioneel
+// - BIRD_API_BASE     (default https://rest.messagebird.com)
+// - BIRD_TIMEOUT_MS   (default 10000)
+// - BIRD_DRY_RUN      ("1" of "true" om niet te versturen, wel te loggen)
 
 import { Router } from "express";
 import { getFirestore } from "firebase-admin/firestore";
@@ -19,7 +23,7 @@ import { buildShareSms } from "../utils/shareMessages.js";
 const router = Router();
 const db = getFirestore();
 
-const SHARES_VERSION = "shares-v6-bird-2026-01-18";
+const SHARES_VERSION = "shares-v7-bird-2026-01-19";
 
 /* =========================
    Helpers
@@ -46,9 +50,11 @@ function parseExpiresAtToIso(value) {
   const s = String(value).trim();
   if (!s) return null;
 
+  // ISO of andere parsebare formats
   const t = Date.parse(s);
   if (Number.isFinite(t)) return new Date(t).toISOString();
 
+  // dd/mm/yyyy of dd/mm/yyyy hh:mm
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/);
   if (m) {
     const dd = Number(m[1]);
@@ -56,6 +62,9 @@ function parseExpiresAtToIso(value) {
     const yyyy = Number(m[3]);
     const hh = m[4] ? Number(m[4]) : 0;
     const min = m[5] ? Number(m[5]) : 0;
+
+    // Let op: dit gebruikt de server timezone. Als je strikt Europe/Brussels wil,
+    // stuur best ISO binnen vanuit je portal.
     const d = new Date(yyyy, mm - 1, dd, hh, min, 0);
     return Number.isFinite(d.getTime()) ? d.toISOString() : null;
   }
@@ -82,67 +91,78 @@ function getBirdApiBase() {
   return String(base).replace(/\/+$/, "");
 }
 
+function getBirdTimeoutMs() {
+  const n = Number(process.env.BIRD_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : 10000;
+}
+
+function isBirdDryRun() {
+  const v = String(process.env.BIRD_DRY_RUN || "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
 async function birdSendSms({ to, body }) {
   const accessKey = getBirdAccessKey();
   const originator = getBirdOriginator();
 
-  if (!accessKey) {
-    return { ok: false, error: "Bird niet geconfigureerd: BIRD_ACCESS_KEY ontbreekt." };
-  }
-  if (!originator) {
-    return { ok: false, error: "Bird niet geconfigureerd: BIRD_ORIGINATOR ontbreekt." };
-  }
+  if (!accessKey) return { ok: false, error: "Bird niet geconfigureerd: BIRD_ACCESS_KEY ontbreekt." };
+  if (!originator) return { ok: false, error: "Bird niet geconfigureerd: BIRD_ORIGINATOR ontbreekt." };
 
   const url = `${getBirdApiBase()}/messages`;
 
+  // MessageBird legacy API verwacht form-url-encoded
   const params = new URLSearchParams();
   params.set("recipients", String(to));
   params.set("originator", String(originator));
   params.set("body", String(body));
 
-  let resp;
+  if (isBirdDryRun()) {
+    console.log("🟡 Bird DRY RUN sms", { to, originator, body: String(body).slice(0, 160) });
+    return { ok: true, id: null, raw: { dryRun: true } };
+  }
+
+  const timeoutMs = getBirdTimeoutMs();
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+
   try {
-    resp = await fetch(url, {
+    const resp = await fetch(url, {
       method: "POST",
       headers: {
         Authorization: `AccessKey ${accessKey}`,
         "Content-Type": "application/x-www-form-urlencoded"
       },
-      body: params.toString()
+      body: params.toString(),
+      signal: ac.signal
     });
-  } catch (e) {
-    return { ok: false, error: `Bird fetch error: ${e?.message || String(e)}` };
-  }
 
-  if (!resp.ok) {
-    let text = "";
-    try {
-      text = await resp.text();
-    } catch {
-      text = "";
-    }
+    const rawText = await resp.text().catch(() => "");
+    clearTimeout(timer);
 
-    try {
-      const j = text ? JSON.parse(text) : null;
-      if (Array.isArray(j?.errors) && j.errors.length > 0) {
-        const e0 = j.errors[0];
-        const msg = e0?.description || e0?.message || JSON.stringify(e0);
+    if (!resp.ok) {
+      // Probeer MessageBird error formaat te lezen
+      try {
+        const j = rawText ? JSON.parse(rawText) : null;
+        const e0 = Array.isArray(j?.errors) && j.errors.length ? j.errors[0] : null;
+        const msg = e0?.description || e0?.message || rawText || resp.statusText;
         return { ok: false, error: `Bird error status=${resp.status} ${msg}` };
+      } catch {
+        return { ok: false, error: `Bird error status=${resp.status} ${rawText || resp.statusText}` };
       }
-      return { ok: false, error: `Bird error status=${resp.status} ${text || resp.statusText}` };
-    } catch {
-      return { ok: false, error: `Bird error status=${resp.status} ${text || resp.statusText}` };
     }
-  }
 
-  let data = null;
-  try {
-    data = await resp.json();
-  } catch {
-    data = null;
+    // Succes response is JSON
+    try {
+      const data = rawText ? JSON.parse(rawText) : null;
+      return { ok: true, id: data?.id ?? null, raw: data };
+    } catch {
+      return { ok: true, id: null, raw: rawText };
+    }
+  } catch (e) {
+    clearTimeout(timer);
+    const msg = e?.name === "AbortError" ? `Bird timeout na ${timeoutMs}ms` : (e?.message || String(e));
+    return { ok: false, error: `Bird fetch error: ${msg}` };
   }
-
-  return { ok: true, id: data?.id ?? null, raw: data };
 }
 
 /* =========================
@@ -166,27 +186,13 @@ router.post("/", async (req, res) => {
     const boxNumber = Number(boxNumberRaw);
 
     if (!phone || !isValidE164(phone)) {
-      return res.status(400).json({
-        ok: false,
-        version: SHARES_VERSION,
-        message: "Ongeldig telefoonnummer"
-      });
+      return res.status(400).json({ ok: false, version: SHARES_VERSION, message: "Ongeldig telefoonnummer" });
     }
-
     if (!boxId) {
-      return res.status(400).json({
-        ok: false,
-        version: SHARES_VERSION,
-        message: "boxId is verplicht"
-      });
+      return res.status(400).json({ ok: false, version: SHARES_VERSION, message: "boxId is verplicht" });
     }
-
     if (!Number.isFinite(boxNumber)) {
-      return res.status(400).json({
-        ok: false,
-        version: SHARES_VERSION,
-        message: "boxNumber is verplicht"
-      });
+      return res.status(400).json({ ok: false, version: SHARES_VERSION, message: "boxNumber is verplicht" });
     }
 
     const expiresAt = parseExpiresAtToIso(expiresIncoming);
@@ -217,7 +223,7 @@ router.post("/", async (req, res) => {
       console.log("✅ Bird SMS verstuurd", { to: phone, id: sendRes.id, shareId: docRef.id });
     } else {
       smsError = sendRes.error || "Bird sms fout";
-      console.error("⚠️ Bird verzendfout:", smsError);
+      console.error("⚠️ Bird verzendfout", { to: phone, shareId: docRef.id, smsError });
     }
 
     return res.status(201).json({
@@ -228,7 +234,6 @@ router.post("/", async (req, res) => {
       smsSent,
       smsError
     });
-
   } catch (err) {
     console.error("❌ share create error:", err);
     return res.status(500).json({
