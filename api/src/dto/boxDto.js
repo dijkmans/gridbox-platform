@@ -78,6 +78,18 @@ export function toBoxDto(id, data) {
       data?.lastSeenMinutes ??
       data?.last_seen_minutes ??
       data?.lastSeen ??
-      null
+      null,
+
+    // Command intent (desired)
+    desired: pickFirst(data, ["desired", "data.desired", "box.desired", "Portal.desired", "portal.desired"]) ?? null,
+    desiredAt: pickFirst(data, ["desiredAt", "data.desiredAt", "data.desired_at", "desired_at"]) ?? null,
+    desiredBy: pickFirst(data, ["desiredBy", "data.desiredBy", "data.desired_by", "desired_by"]) ?? null,
+
+    // Live status pushed by agent (if present in Firestore)
+    status: data?.status ?? null,
+    runtime: data?.runtime ?? null,
+
+    // Optional: keep raw data blob if you store things under data.*
+    data: data?.data ?? null
   };
 }
