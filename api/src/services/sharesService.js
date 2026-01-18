@@ -4,97 +4,185 @@ import * as sharesService from "../services/sharesService.js";
 
 const router = Router();
 
-// Middleware om inkomende data van Twilio (urlencoded) en JSON te verwerken
+/*
+  We ondersteunen zowel:
+  - Twilio: application/x-www-form-urlencoded (From, Body)
+  - JSON providers: application/json (verschillende velden)
+*/
 router.use(urlencoded({ extended: false }));
 router.use(json());
 
-/**
- * Normaliseert het telefoonnummer naar internationaal E.164 formaat
- */
-function normalizePhone(number) {
-  if (!number) return null;
-  let s = String(number).trim().replace(/\s+/g, "");
-  if (s.startsWith("00")) s = "+" + s.slice(2);
-  if (s.startsWith("0")) s = "+32" + s.slice(1);
-  return s || null;
-}
+/* =========================
+   Helpers
+   ========================= */
 
-/**
- * Helper om XML-respons naar Twilio te sturen
- */
-function sendTwilioResponse(res, message) {
-  const safeMessage = String(message || "")
+function safeXml(s) {
+  return String(s ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
 
+function sendTwilioResponse(res, message) {
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Message>${safeMessage}</Message>
+  <Message>${safeXml(message)}</Message>
 </Response>`;
 
   return res.status(200).type("text/xml").send(twiml);
 }
 
-/**
- * Parser voor commando's zoals "open 1", "open1", "sluit 2"
- */
-function parseSmsBody(body) {
-  const text = String(body || "").trim().toLowerCase();
-  
-  // Regex die zoekt naar 'open' of 'close' gevolgd door een getal
-  const match = text.match(/(open|close|sluit|dicht)\s*(\d+)/);
-  
-  if (!match) return { command: null, boxNr: null };
-
-  let command = match[1];
-  // Vertaling voor Nederlandse commando's
-  if (command === "sluit" || command === "dicht") command = "close";
-
-  return {
-    command: command, // 'open' of 'close'
-    boxNr: match[2]    // het nummer, bijv '1'
-  };
+/*
+  Haal telefoonnummer uit meerdere mogelijke payloads.
+  Twilio gebruikt meestal From.
+*/
+function getIncomingFrom(req) {
+  return (
+    req.body?.From ??
+    req.body?.from ??
+    req.body?.sender?.identifierValue ??
+    req.body?.sender?.value ??
+    req.body?.sender ??
+    null
+  );
 }
 
-/**
- * POST /api/sms
- * Het hoofdpunt waar Twilio de berichten naartoe stuurt
- */
-router.post("/", async (req, res) => {
+/*
+  Haal berichttekst uit meerdere mogelijke payloads.
+  Twilio gebruikt meestal Body.
+*/
+function getIncomingBody(req) {
+  const v =
+    req.body?.Body ??
+    req.body?.body?.text?.text ??
+    req.body?.body?.text ??
+    req.body?.message ??
+    req.body?.text ??
+    "";
+
+  // Als er ooit per ongeluk een object binnenkomt, maken we er een string van
+  if (typeof v === "string") return v;
   try {
-    // Twilio stuurt data in 'From' en 'Body' velden
-    const rawFrom = req.body?.From ?? req.body?.from ?? null;
-    const rawBody = req.body?.Body ?? req.body?.message ?? "";
+    return JSON.stringify(v);
+  } catch {
+    return String(v ?? "");
+  }
+}
 
-    const from = normalizePhone(rawFrom);
-    const { command, boxNr } = parseSmsBody(rawBody);
+/*
+  Normaliseer telefoonnummer naar E.164, zo goed mogelijk.
+  - spaties, haakjes, streepjes eruit
+  - "00" wordt "+"
+  - "0" wordt "+32" (Belgische aanname)
+  - "32..." zonder plus wordt "+32..."
+  - "whatsapp:+..." wordt "+..."
+*/
+function normalizePhone(number) {
+  if (!number) return null;
 
-    console.log(`📩 Inkomende SMS van ${from}: "${rawBody}" -> Command: ${command}, Box: ${boxNr}`);
+  let s = String(number).trim();
 
-    // 1. Basis validatie
+  // whatsapp:+324... -> +324...
+  if (s.toLowerCase().startsWith("whatsapp:")) {
+    s = s.slice("whatsapp:".length);
+  }
+
+  // alles weg behalve + en cijfers
+  s = s.replace(/[^\d+]/g, "");
+
+  if (s.startsWith("00")) s = "+" + s.slice(2);
+
+  // Belgische lokale nummers 0xxx -> +32xxx
+  if (s.startsWith("0")) s = "+32" + s.slice(1);
+
+  // Sommige providers sturen "32..." zonder plus
+  if (!s.startsWith("+") && /^\d{9,15}$/.test(s)) {
+    s = "+" + s;
+  }
+
+  // basis sanity check
+  if (!/^\+\d{9,15}$/.test(s)) return null;
+
+  return s;
+}
+
+/*
+  Parser voor commando's.
+  Voorbeelden die werken:
+  - "open 5"
+  - "open5"
+  - "sluit 2"
+  - "dicht10"
+  - "close 3"
+*/
+function parseSmsCommand(rawText) {
+  const text = String(rawText ?? "").trim().toLowerCase();
+
+  // command + optionele spatie of teken + nummer
+  const match = text.match(/\b(open|openen|close|sluit|dicht|toe)\b\s*[-:]?\s*(\d{1,3})\b/);
+  if (!match) return { command: null, boxNr: null };
+
+  let cmd = match[1];
+  const boxNr = parseInt(match[2], 10);
+
+  if (!Number.isFinite(boxNr)) return { command: null, boxNr: null };
+
+  if (cmd === "openen") cmd = "open";
+  if (cmd === "sluit" || cmd === "dicht" || cmd === "toe") cmd = "close";
+
+  if (cmd !== "open" && cmd !== "close") return { command: null, boxNr: null };
+
+  return { command: cmd, boxNr };
+}
+
+function usageText() {
+  return "Gebruik: 'open 5' of 'sluit 5' om een Gridbox te bedienen.";
+}
+
+/* =========================
+   POST /api/sms
+   ========================= */
+
+router.post("/", async (req, res) => {
+  const rawFrom = getIncomingFrom(req);
+  const rawBody = getIncomingBody(req);
+
+  const from = normalizePhone(rawFrom);
+  const { command, boxNr } = parseSmsCommand(rawBody);
+
+  console.log(
+    `📩 SMS webhook binnen: from="${rawFrom}" -> "${from}" body="${String(rawBody).slice(0, 200)}" cmd="${command}" box="${boxNr}"`
+  );
+
+  try {
+    // 1) Basis validatie
     if (!from) {
-      return sendTwilioResponse(res, "Systeemfout: Afzender onbekend.");
+      return sendTwilioResponse(res, "Systeemfout: afzender onbekend of ongeldig nummerformaat.");
     }
 
     if (!command || !boxNr) {
-      return sendTwilioResponse(res, "Gebruik: 'open 1' of 'sluit 1' om een Gridbox te bedienen.");
+      return sendTwilioResponse(res, usageText());
     }
 
-    // 2. Zoek actieve share in de database via sharesService
-    // Deze functie checkt of dit nummer toegang heeft tot dit boxnummer
+    // optioneel: simpele range check zodat "open 999" niet per ongeluk rare dingen doet
+    if (boxNr < 1 || boxNr > 999) {
+      return sendTwilioResponse(res, "Ongeldig boxnummer. Gebruik een nummer tussen 1 en 999.");
+    }
+
+    // 2) Toegangscontrole via shares
     const share = await sharesService.findActiveShareByPhoneAndBoxNumber(from, boxNr);
 
     if (!share) {
-      console.warn(`⚠️ Toegang geweigerd voor ${from} naar box ${boxNr}`);
+      console.warn(`⚠️ Toegang geweigerd: ${from} naar boxNr=${boxNr}`);
       return sendTwilioResponse(res, `U heeft geen actieve toegang tot Gridbox ${boxNr}.`);
     }
 
-    // 3. Optioneel: check op blokkering/verloop (als je service dit niet al doet)
-    // De sharesService.deactivateExpiredShares job zou dit idealiter al moeten afvangen
+    if (!share.boxId) {
+      console.error(`❌ Share gevonden maar boxId ontbreekt. shareId=${share.id ?? "onbekend"} boxNr=${boxNr}`);
+      return sendTwilioResponse(res, "Systeemfout: toegang bestaat, maar box koppeling ontbreekt.");
+    }
 
-    // 4. Voer de actie uit via de boxesService
-    // Dit zet 'desired' op 'open' of 'close' in Firestore
+    // 3) Actie uitvoeren
     let result;
     if (command === "open") {
       result = await boxesService.openBox(share.boxId, "sms", from);
@@ -102,16 +190,16 @@ router.post("/", async (req, res) => {
       result = await boxesService.closeBox(share.boxId, "sms", from);
     }
 
-    // 5. Bevestiging naar de gebruiker
+    // 4) Bevestiging
     if (result?.success) {
       const actieText = command === "open" ? "geopend" : "gesloten";
       return sendTwilioResponse(res, `Gridbox ${boxNr} wordt nu ${actieText}.`);
-    } else {
-      return sendTwilioResponse(res, `Gridbox ${boxNr} is momenteel niet bereikbaar. Probeer het later opnieuw.`);
     }
 
+    console.warn(`⚠️ Box actie faalde of box offline. boxId=${share.boxId} cmd=${command} from=${from}`);
+    return sendTwilioResponse(res, `Gridbox ${boxNr} is momenteel niet bereikbaar. Probeer later opnieuw.`);
   } catch (err) {
-    console.error("❌ Kritieke fout in SMS Webhook:", err);
+    console.error("❌ Kritieke fout in SMS webhook:", err);
     return sendTwilioResponse(res, "Er is een technische fout opgetreden in het Gridbox platform.");
   }
 });
