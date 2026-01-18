@@ -1,18 +1,39 @@
+// api/src/routes/shares.js
+//
+// Bird versie (geen Twilio meer)
+// Doel:
+// - Share opslaan in Firestore
+// - Sms sturen via Bird (MessageBird SMS API)
+// - Zelfde response velden behouden: smsSent en smsError
+//
+// Vereiste env vars (op Cloud Run):
+// - BIRD_ACCESS_KEY  (of MESSAGEBIRD_ACCESS_KEY)
+// - BIRD_ORIGINATOR  (of MESSAGEBIRD_ORIGINATOR)  bv +32480214031
+// Optioneel:
+// - BIRD_API_BASE (default https://rest.messagebird.com)
+
 import { Router } from "express";
 import { getFirestore } from "firebase-admin/firestore";
 import { buildShareSms } from "../utils/shareMessages.js";
-import twilio from "twilio";
 
 const router = Router();
 const db = getFirestore();
 
-const SHARES_VERSION = "shares-v5-2026-01-13";
+const SHARES_VERSION = "shares-v6-bird-2026-01-18";
+
+/* =========================
+   Helpers
+   ========================= */
 
 function normalizePhone(number) {
   if (!number) return null;
+
   let s = String(number).trim().replace(/\s+/g, "");
+
   if (s.startsWith("00")) s = "+" + s.slice(2);
   if (s.startsWith("0")) s = "+32" + s.slice(1);
+  if (!s.startsWith("+") && /^\d{9,15}$/.test(s)) s = "+" + s;
+
   return s || null;
 }
 
@@ -42,19 +63,91 @@ function parseExpiresAtToIso(value) {
   return null;
 }
 
-function getTwilioClient() {
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  if (!sid || !token) return null;
-  return twilio(sid, token);
+function getBirdAccessKey() {
+  return process.env.BIRD_ACCESS_KEY || process.env.MESSAGEBIRD_ACCESS_KEY || null;
 }
 
-function twilioErrToText(e) {
-  const code = e?.code ?? null;
-  const status = e?.status ?? null;
-  const msg = e?.message ? String(e.message) : String(e);
-  return `Twilio error code=${code} status=${status} message=${msg}`;
+function getBirdOriginator() {
+  return (
+    process.env.BIRD_ORIGINATOR ||
+    process.env.MESSAGEBIRD_ORIGINATOR ||
+    process.env.BIRD_FROM ||
+    process.env.MESSAGEBIRD_FROM ||
+    null
+  );
 }
+
+function getBirdApiBase() {
+  const base = process.env.BIRD_API_BASE || "https://rest.messagebird.com";
+  return String(base).replace(/\/+$/, "");
+}
+
+async function birdSendSms({ to, body }) {
+  const accessKey = getBirdAccessKey();
+  const originator = getBirdOriginator();
+
+  if (!accessKey) {
+    return { ok: false, error: "Bird niet geconfigureerd: BIRD_ACCESS_KEY ontbreekt." };
+  }
+  if (!originator) {
+    return { ok: false, error: "Bird niet geconfigureerd: BIRD_ORIGINATOR ontbreekt." };
+  }
+
+  const url = `${getBirdApiBase()}/messages`;
+
+  const params = new URLSearchParams();
+  params.set("recipients", String(to));
+  params.set("originator", String(originator));
+  params.set("body", String(body));
+
+  let resp;
+  try {
+    resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `AccessKey ${accessKey}`,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: params.toString()
+    });
+  } catch (e) {
+    return { ok: false, error: `Bird fetch error: ${e?.message || String(e)}` };
+  }
+
+  if (!resp.ok) {
+    let text = "";
+    try {
+      text = await resp.text();
+    } catch {
+      text = "";
+    }
+
+    try {
+      const j = text ? JSON.parse(text) : null;
+      if (Array.isArray(j?.errors) && j.errors.length > 0) {
+        const e0 = j.errors[0];
+        const msg = e0?.description || e0?.message || JSON.stringify(e0);
+        return { ok: false, error: `Bird error status=${resp.status} ${msg}` };
+      }
+      return { ok: false, error: `Bird error status=${resp.status} ${text || resp.statusText}` };
+    } catch {
+      return { ok: false, error: `Bird error status=${resp.status} ${text || resp.statusText}` };
+    }
+  }
+
+  let data = null;
+  try {
+    data = await resp.json();
+  } catch {
+    data = null;
+  }
+
+  return { ok: true, id: data?.id ?? null, raw: data };
+}
+
+/* =========================
+   Route
+   ========================= */
 
 router.post("/", async (req, res) => {
   let smsSent = false;
@@ -73,13 +166,27 @@ router.post("/", async (req, res) => {
     const boxNumber = Number(boxNumberRaw);
 
     if (!phone || !isValidE164(phone)) {
-      return res.status(400).json({ ok: false, version: SHARES_VERSION, message: "Ongeldig telefoonnummer" });
+      return res.status(400).json({
+        ok: false,
+        version: SHARES_VERSION,
+        message: "Ongeldig telefoonnummer"
+      });
     }
+
     if (!boxId) {
-      return res.status(400).json({ ok: false, version: SHARES_VERSION, message: "boxId is verplicht" });
+      return res.status(400).json({
+        ok: false,
+        version: SHARES_VERSION,
+        message: "boxId is verplicht"
+      });
     }
+
     if (!Number.isFinite(boxNumber)) {
-      return res.status(400).json({ ok: false, version: SHARES_VERSION, message: "boxNumber is verplicht" });
+      return res.status(400).json({
+        ok: false,
+        version: SHARES_VERSION,
+        message: "boxNumber is verplicht"
+      });
     }
 
     const expiresAt = parseExpiresAtToIso(expiresIncoming);
@@ -103,28 +210,14 @@ router.post("/", async (req, res) => {
       expiresAt: expiresAt || null
     });
 
-    const from = process.env.TWILIO_PHONE_NUMBER || "";
-    const client = getTwilioClient();
+    const sendRes = await birdSendSms({ to: phone, body: smsText });
 
-    if (!client) {
-      smsError = "Twilio niet geconfigureerd: TWILIO_ACCOUNT_SID of TWILIO_AUTH_TOKEN ontbreekt.";
-      console.error("⚠️", smsError);
-    } else if (!from) {
-      smsError = "Twilio niet geconfigureerd: TWILIO_PHONE_NUMBER ontbreekt.";
-      console.error("⚠️", smsError);
+    if (sendRes.ok) {
+      smsSent = true;
+      console.log("✅ Bird SMS verstuurd", { to: phone, id: sendRes.id, shareId: docRef.id });
     } else {
-      try {
-        const msg = await client.messages.create({
-          body: smsText,
-          from,
-          to: phone
-        });
-        smsSent = true;
-        console.log("✅ SMS verstuurd", { to: phone, sid: msg.sid, shareId: docRef.id });
-      } catch (e) {
-        smsError = twilioErrToText(e);
-        console.error("⚠️ Twilio verzendfout:", smsError);
-      }
+      smsError = sendRes.error || "Bird sms fout";
+      console.error("⚠️ Bird verzendfout:", smsError);
     }
 
     return res.status(201).json({
@@ -135,6 +228,7 @@ router.post("/", async (req, res) => {
       smsSent,
       smsError
     });
+
   } catch (err) {
     console.error("❌ share create error:", err);
     return res.status(500).json({
