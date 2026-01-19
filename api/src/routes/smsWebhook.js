@@ -75,21 +75,20 @@ function normalizePhone(number) {
 }
 
 function getIncomingFrom(req) {
-  // Bird (Channels) varianten
-  // - sender.identifierValue
-  // - sender.value
-  // Legacy MO varianten
-  // - sender
-  // - originator
-  return (
+  const v =
+    // Bird Channels inbound (jouw payload)
+    req.body?.sender?.contact?.identifierValue ??
+    req.body?.sender?.contact?.platformAddress ??
+    // fallback varianten
     req.body?.sender?.identifierValue ??
     req.body?.sender?.value ??
     req.body?.from ??
-    req.body?.sender ??
     req.body?.originator ??
-    null
-  );
+    null;
+
+  return v ? String(v).trim() : "";
 }
+
 
 function getIncomingText(req) {
   const v =
