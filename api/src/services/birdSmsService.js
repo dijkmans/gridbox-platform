@@ -96,61 +96,99 @@ function safeJson(text) {
 function maskPhone(p) {
   const s = String(p || "");
   if (s.length < 6) return s;
-  return s.slice(0, 4) + "..."+ s.slice(-2);
+  return s.slice(0, 4) + "..." + s.slice(-2);
+}
+
+/* =========================
+   HTTP helpers met redirect support
+   ========================= */
+
+function requestWithRedirect(url, options, bodyString, timeoutMs, redirectsLeft = 5) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, options, (res) => {
+      const status = res.statusCode || 0;
+      const location = res.headers && res.headers.location ? String(res.headers.location) : "";
+
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", async () => {
+        const isRedirect = [301, 302, 303, 307, 308].includes(status) && location;
+
+        if (isRedirect && redirectsLeft > 0) {
+          try {
+            const nextUrl = new URL(location, url).toString();
+
+            let nextOptions = { ...options };
+            let nextBody = bodyString || "";
+
+            // 303: switch meestal naar GET zonder body
+            if (status === 303) {
+              nextOptions = { ...nextOptions, method: "GET" };
+              nextBody = "";
+
+              if (nextOptions.headers) {
+                const h = { ...nextOptions.headers };
+                delete h["Content-Length"];
+                delete h["Content-Type"];
+                nextOptions.headers = h;
+              }
+            }
+
+            // Content-Length opnieuw zetten als er body is
+            if (nextBody && nextOptions.headers) {
+              nextOptions.headers = {
+                ...nextOptions.headers,
+                "Content-Length": Buffer.byteLength(nextBody)
+              };
+            } else if (!nextBody && nextOptions.headers) {
+              const h = { ...nextOptions.headers };
+              delete h["Content-Length"];
+              nextOptions.headers = h;
+            }
+
+            const resp2 = await requestWithRedirect(nextUrl, nextOptions, nextBody, timeoutMs, redirectsLeft - 1);
+            return resolve(resp2);
+          } catch (e) {
+            return resolve({ status, text: data || "" });
+          }
+        }
+
+        return resolve({ status, text: data || "" });
+      });
+    });
+
+    req.on("error", reject);
+    req.setTimeout(timeoutMs, () => req.destroy(new Error(`timeout na ${timeoutMs}ms`)));
+
+    if (bodyString) req.write(bodyString);
+    req.end();
+  });
 }
 
 function requestJson(url, method, headers, bodyObj, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    const body = JSON.stringify(bodyObj);
+  const body = JSON.stringify(bodyObj);
 
-    const req = https.request(
-      url,
-      {
-        method,
-        headers: {
-          ...headers,
-          "Content-Length": Buffer.byteLength(body)
-        }
-      },
-      (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => resolve({ status: res.statusCode || 0, text: data }));
-      }
-    );
+  const options = {
+    method,
+    headers: {
+      ...headers,
+      "Content-Length": Buffer.byteLength(body)
+    }
+  };
 
-    req.on("error", reject);
-    req.setTimeout(timeoutMs, () => req.destroy(new Error(`timeout na ${timeoutMs}ms`)));
-
-    req.write(body);
-    req.end();
-  });
+  return requestWithRedirect(url, options, body, timeoutMs);
 }
 
 function requestForm(url, headers, formBody, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    const req = https.request(
-      url,
-      {
-        method: "POST",
-        headers: {
-          ...headers,
-          "Content-Length": Buffer.byteLength(formBody)
-        }
-      },
-      (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => resolve({ status: res.statusCode || 0, text: data }));
-      }
-    );
+  const options = {
+    method: "POST",
+    headers: {
+      ...headers,
+      "Content-Length": Buffer.byteLength(formBody)
+    }
+  };
 
-    req.on("error", reject);
-    req.setTimeout(timeoutMs, () => req.destroy(new Error(`timeout na ${timeoutMs}ms`)));
-
-    req.write(formBody);
-    req.end();
-  });
+  return requestWithRedirect(url, options, formBody, timeoutMs);
 }
 
 /* =========================
@@ -192,7 +230,6 @@ async function birdSendSmsChannels({ to, body }) {
   if (!ws) return { ok: false, error: "Bird niet geconfigureerd: BIRD_SMS_WORKSPACE_ID ontbreekt." };
   if (!ch) return { ok: false, error: "Bird niet geconfigureerd: BIRD_SMS_CHANNEL_ID ontbreekt." };
 
-  // In de praktijk verwacht Bird voor SMS Channels meestal ook een sender (from)
   if (!sender) return { ok: false, error: "Bird niet geconfigureerd: BIRD_CHANNEL_SENDER of BIRD_ORIGINATOR ontbreekt." };
 
   const url = buildChannelsUrl(ws, ch);
@@ -258,7 +295,6 @@ async function birdSendSmsChannels({ to, body }) {
     if (status < 200 || status >= 300) {
       const { msg, json } = extractChannelsErrorMessage(status, rawText);
 
-      // Log 1 lijn JSON, dan is Cloud Logging veel duidelijker
       console.error(
         "⚠️ Bird channels error " +
           JSON.stringify(
