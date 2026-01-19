@@ -3,13 +3,13 @@
 // Bird inbound webhook (geen Twilio)
 //
 // Doel
-// - Inkomende sms of channel message verwerken
+// - Inkomende sms verwerken (Bird Channels sms.inbound)
 // - Command herkennen: "open 5" of "sluit 5"
 // - Toegang checken via shares (phone + boxNumber + active + niet verlopen)
-// - Command wegschrijven naar Firestore boxCommands (legacy flow)
+// - Command wegschrijven naar Firestore: boxes/<boxId>/commands/<autoId>
 //
 // Vereiste env vars (Cloud Run)
-// - BIRD_ACCESS_KEY (voor replies als SMS_REPLY_ENABLED aan staat)
+// - BIRD_ACCESS_KEY (voor replies)
 //
 // Optioneel
 // - SMS_REPLY_ENABLED ("0" om geen reply sms te sturen, default aan)
@@ -49,9 +49,13 @@ function isReplyEnabled() {
 
 async function replySmsIfEnabled(to, text) {
   if (!isReplyEnabled()) return;
+
   const r = await sendSms({ to, body: text });
   if (!r?.ok) {
-    console.error("⚠️ Bird reply sms faalde", { to: maskPhone(to), error: r?.error || "unknown" });
+    console.error("⚠️ Bird reply sms faalde", {
+      to: maskPhone(to),
+      error: r?.error || "unknown"
+    });
   }
 }
 
@@ -60,9 +64,7 @@ function normalizePhone(number) {
 
   let s = String(number).trim();
 
-  if (s.toLowerCase().startsWith("whatsapp:")) {
-    s = s.slice("whatsapp:".length);
-  }
+  if (s.toLowerCase().startsWith("whatsapp:")) s = s.slice("whatsapp:".length);
 
   s = s.replace(/[^\d+]/g, "");
 
@@ -74,47 +76,29 @@ function normalizePhone(number) {
   return s;
 }
 
-/**
- * Bird webhooks gebruiken soms een wrapper rond de message:
- * - { data: {...} }
- * - { message: {...} }
- * - { payload: {...} }
- * Daarom nemen we altijd een "root" object dat de echte message bevat.
- */
-function getWebhookRoot(req) {
-  return req.body?.data ?? req.body?.message ?? req.body?.payload ?? req.body ?? {};
-}
-
 function getIncomingFrom(req) {
-  const root = getWebhookRoot(req);
-
-  // Bird Channels inbound (jouw Inspect log payload)
-  // root.sender.contact.identifierValue = "+324..."
+  // Bird sms.inbound payload (zoals jij stuurde)
+  // sender.contact.identifierValue = "+324..."
   const v =
-    root?.sender?.contact?.identifierValue ??
-    root?.sender?.contact?.platformAddress ??
-    // extra fallbacks
-    root?.sender?.identifierValue ??
-    root?.sender?.value ??
-    root?.from ??
-    root?.sender ??
-    root?.originator ??
+    req.body?.sender?.contact?.identifierValue ??
+    req.body?.sender?.contact?.platformAddress ??
+    req.body?.sender?.identifierValue ??
+    req.body?.from ??
+    req.body?.sender ??
+    req.body?.originator ??
     null;
 
   return v ? String(v).trim() : null;
 }
 
 function getIncomingText(req) {
-  const root = getWebhookRoot(req);
-
+  // Bird sms.inbound payload
   const v =
-    // Bird Channels inbound: body.text.text
-    root?.body?.text?.text ??
-    root?.body?.text ??
-    // extra fallbacks
-    root?.message ??
-    root?.text ??
-    root?.body ??
+    req.body?.body?.text?.text ??
+    req.body?.body?.text ??
+    req.body?.body ??
+    req.body?.message ??
+    req.body?.text ??
     "";
 
   if (typeof v === "string") return v;
@@ -145,7 +129,7 @@ function parseCommand(rawText) {
 }
 
 function usageText() {
-  return "Gebruik: open 5 of sluit 5.";
+  return "Gebruik: OPEN 5 of SLUIT 5.";
 }
 
 function toMillis(v) {
@@ -174,7 +158,7 @@ function isShareBlockedOrExpired(share) {
 }
 
 async function findActiveShare(from, boxNr) {
-  // index-vriendelijke query: phone + active, boxNr filteren in code
+  // index vriendelijk: phone + active, boxNr filteren in code
   const snap = await db.collection("shares").where("phone", "==", from).where("active", "==", true).get();
   if (snap.empty) return null;
 
@@ -187,26 +171,23 @@ async function resolveBoxIdFromShareOrBoxes(share, boxNr) {
   const direct = share?.boxId ?? share?.box ?? share?.portalId ?? share?.boxRef ?? null;
   if (direct) return String(direct);
 
-  // fallback: zoek box op BoxNumber
   const snap = await db.collection("boxes").where("Portal.BoxNumber", "==", Number(boxNr)).get();
   if (snap.empty) return null;
   return snap.docs[0].id;
 }
 
 async function queueBoxCommand(boxId, type, meta = {}) {
-  const payload = {
-    commandId: `cmd-${Date.now()}`,
-    type,
-    status: "pending",
+  // Nieuwe structuur: boxes/<boxId>/commands/<autoId>
+  const cmd = {
+    type,                 // "open" of "close"
+    status: "queued",     // belangrijk: queued, niet pending
+    source: "sms",
     createdAt: new Date(),
-    meta: {
-      source: "sms",
-      ...meta
-    }
+    ...meta
   };
 
-  await db.collection("boxCommands").doc(String(boxId)).set(payload);
-  return { success: true };
+  const ref = await db.collection("boxes").doc(String(boxId)).collection("commands").add(cmd);
+  return { success: true, commandDocId: ref.id };
 }
 
 function checkWebhookSecret(req) {
@@ -225,11 +206,8 @@ router.post("/", async (req, res) => {
     return res.status(401).json({ ok: false, version: SMS_VERSION, message: "Unauthorized" });
   }
 
-  const root = getWebhookRoot(req);
-
   if (process.env.LOG_SMS_PAYLOAD === "1") {
-    console.log("📩 SMS payload (raw):", JSON.stringify(req.body, null, 2));
-    console.log("📩 SMS payload (root):", JSON.stringify(root, null, 2));
+    console.log("📩 SMS payload:", JSON.stringify(req.body, null, 2));
   }
 
   const rawFrom = getIncomingFrom(req);
@@ -238,13 +216,12 @@ router.post("/", async (req, res) => {
   const from = normalizePhone(rawFrom);
   const { command, boxNr } = parseCommand(rawText);
 
-  // Extra debug (veilig): we maskeren het nummer en tonen de eerste 50 chars van de tekst
   console.log("➡️ SMS parsed", {
     from: maskPhone(from),
     command,
     boxNr,
-    rawFrom: rawFrom ? maskPhone(rawFrom) : null,
-    rawTextPreview: String(rawText || "").slice(0, 50)
+    rawFrom: rawFrom ? String(rawFrom).slice(0, 40) : null,
+    rawTextPreview: String(rawText || "").slice(0, 60)
   });
 
   try {
@@ -254,7 +231,7 @@ router.post("/", async (req, res) => {
 
     if (!command || !boxNr) {
       await replySmsIfEnabled(from, usageText());
-      return apiFail(res, usageText(), { received: String(rawText || "").slice(0, 160) });
+      return apiFail(res, usageText());
     }
 
     if (boxNr < 1 || boxNr > 999) {
@@ -282,22 +259,27 @@ router.post("/", async (req, res) => {
       return apiFail(res, msg);
     }
 
-    const result = await queueBoxCommand(boxId, command === "open" ? "open" : "close", {
-      phone: from,
-      boxNr
-    });
+    const result = await queueBoxCommand(
+      boxId,
+      command === "open" ? "open" : "close",
+      { phone: from, boxNr }
+    );
 
-    if (!result || result.success !== true) {
+    if (!result?.success) {
       const msg = `Gridbox ${boxNr} reageert momenteel niet.`;
       await replySmsIfEnabled(from, msg);
       return apiFail(res, msg);
     }
 
-    const actieText = command === "open" ? "geopend" : "gesloten";
-    const msg = `Gridbox ${boxNr} wordt nu ${actieText}.`;
-
+    const msg = `Gridbox ${boxNr} wordt nu ${command === "open" ? "geopend" : "gesloten"}.`;
     await replySmsIfEnabled(from, msg);
-    return apiOk(res, msg, { boxId, boxNr, command });
+
+    return apiOk(res, msg, {
+      boxId,
+      boxNr,
+      command,
+      commandDocId: result.commandDocId
+    });
   } catch (err) {
     console.error("🔥 sms webhook crash", err);
     return res.status(500).json({ ok: false, version: SMS_VERSION, message: "Interne serverfout" });
