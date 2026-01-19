@@ -75,19 +75,22 @@ function normalizePhone(number) {
 }
 
 function getIncomingFrom(req) {
+  // Bird Channels inbound (jouw payload)
+  // sender.contact.identifierValue = "+324..."
   const v =
-    // Bird Channels inbound (jouw payload)
     req.body?.sender?.contact?.identifierValue ??
     req.body?.sender?.contact?.platformAddress ??
-    // fallback varianten
+    // eventuele andere varianten
     req.body?.sender?.identifierValue ??
     req.body?.sender?.value ??
     req.body?.from ??
+    req.body?.sender ??
     req.body?.originator ??
     null;
 
-  return v ? String(v).trim() : "";
+  return v ? String(v).trim() : null;
 }
+
 
 
 function getIncomingText(req) {
