@@ -1,4 +1,4 @@
-// api/src/routes/smsWebhook.js
+v// api/src/routes/smsWebhook.js
 //
 // Bird inbound webhook (geen Twilio)
 //
@@ -6,7 +6,7 @@
 // - Inkomende sms verwerken (Bird Channels sms.inbound)
 // - Command herkennen: "open 5" of "sluit 5"
 // - Toegang checken via shares (phone + boxNumber + active + niet verlopen)
-// - Command wegschrijven naar Firestore: boxCommands/<boxId> (legacy, zodat je agent blijft werken)
+// - Command wegschrijven naar Firestore: boxCommands/<boxId> (legacy, zodat je Pi agent blijft werken)
 //
 // Vereiste env vars (Cloud Run)
 // - BIRD_ACCESS_KEY (voor replies)
@@ -21,8 +21,7 @@ import { db } from "../firebase.js";
 import { sendSms } from "../services/birdSmsService.js";
 
 const router = Router();
-
-const SMS_VERSION = "sms-webhook-v8-bird-2026-01-19";
+const SMS_VERSION = "sms-webhook-v9-bird-2026-01-19";
 
 router.use(urlencoded({ extended: false }));
 router.use(json());
@@ -67,12 +66,19 @@ async function replySmsIfEnabled(to, text) {
 }
 
 /*
-  Bird webhooks kunnen verschillende shapes hebben.
-  Soms zit de echte message in req.body.data of req.body.payload.
+  Bird webhooks kunnen wrappers hebben.
+  Soms zit de echte message in body.data of body.payload.
 */
 function unwrapBody(req) {
   const b = req?.body ?? {};
-  return b?.data ?? b?.payload ?? b?.message ?? b;
+  return b?.data ?? b?.payload ?? b;
+}
+
+function firstString(...vals) {
+  for (const v of vals) {
+    if (typeof v === "string" && v.trim() !== "") return v;
+  }
+  return null;
 }
 
 function normalizePhone(number) {
@@ -92,17 +98,16 @@ function normalizePhone(number) {
   return s;
 }
 
-function firstString(...vals) {
-  for (const v of vals) {
-    if (typeof v === "string" && v.trim() !== "") return v;
-  }
-  return null;
+function getIncomingDirection(req) {
+  const root = unwrapBody(req);
+  return firstString(root?.direction, root?.message?.direction, root?.data?.direction);
 }
 
 function getIncomingFrom(req) {
   const root = unwrapBody(req);
 
-  // Jouw Bird payload had sender.contact.identifierValue = "+324..."
+  // Jouw Bird payload:
+  // sender.contact.identifierValue = "+324..."
   const v = firstString(
     root?.sender?.contact?.identifierValue,
     root?.sender?.contact?.platformAddress,
@@ -119,7 +124,8 @@ function getIncomingFrom(req) {
 function getIncomingText(req) {
   const root = unwrapBody(req);
 
-  // Jouw Bird payload had body.text.text = "OPEN 1"
+  // Jouw Bird payload:
+  // body.text.text = "OPEN 1"
   const v = firstString(
     root?.body?.text?.text,
     root?.body?.text,
@@ -130,17 +136,12 @@ function getIncomingText(req) {
 
   if (typeof v === "string") return v;
 
+  // fallback: probeer objectvormen
   const maybeObj = root?.body?.text ?? root?.body ?? root?.message ?? null;
-
   if (typeof maybeObj === "string") return maybeObj;
 
   if (maybeObj && typeof maybeObj === "object") {
-    const v2 = firstString(
-      maybeObj?.text,
-      maybeObj?.content,
-      maybeObj?.value,
-      maybeObj?.message
-    );
+    const v2 = firstString(maybeObj?.text, maybeObj?.content, maybeObj?.value, maybeObj?.message);
     if (v2) return v2;
   }
 
@@ -150,6 +151,7 @@ function getIncomingText(req) {
 function parseCommand(rawText) {
   const text = String(rawText ?? "").trim().toLowerCase();
 
+  // Sta toe: "open 1", "open:1", "open-1"
   const m = text.match(/\b(open|openen|close|sluit|dicht|toe)\b\s*[-:]?\s*(\d{1,3})\b/);
   if (!m) return { command: null, boxNr: null };
 
@@ -217,12 +219,12 @@ async function resolveBoxIdFromShareOrBoxes(share, boxNr) {
   return snap.docs[0].id;
 }
 
-// Legacy flow die bij jou al werkt: boxCommands/<boxId> als 1 document
+// Legacy flow: boxCommands/<boxId> als 1 document (zo blijft je Pi agent werken)
 async function queueBoxCommandLegacy(boxId, type, meta = {}) {
   const payload = {
     commandId: `cmd-${Date.now()}`,
     type,               // "open" of "close"
-    status: "pending",  // zo laten, zodat je agent blijft werken
+    status: "pending",  // laten zoals nu
     createdAt: new Date(),
     meta: {
       source: "sms",
@@ -254,6 +256,9 @@ router.post("/", async (req, res) => {
     console.log("📩 SMS payload:", JSON.stringify(req.body, null, 2));
   }
 
+  const root = unwrapBody(req);
+
+  const direction = getIncomingDirection(req);
   const rawFrom = getIncomingFrom(req);
   const rawText = getIncomingText(req);
 
@@ -261,17 +266,25 @@ router.post("/", async (req, res) => {
   const { command, boxNr } = parseCommand(rawText);
 
   console.log("➡️ SMS parsed", {
+    direction: direction || null,
     from: maskPhone(from),
     command,
     boxNr,
     rawFrom: rawFrom ? String(rawFrom).slice(0, 60) : null,
-    rawTextPreview: String(rawText || "").slice(0, 60)
+    rawTextPreview: String(rawText || "").slice(0, 60),
+    messageId: root?.id || null,
+    channelId: root?.channelId || null
   });
 
   try {
-    // Bird kan soms calls doen zonder echte content (bijv events). Dan doen we niets.
+    // Bird kan ook events sturen zonder tekst of zonder afzender.
     if (!rawFrom && !rawText) {
       return apiOk(res, "No message content (ignored).");
+    }
+
+    // Alleen inbound behandelen (als direction gekend is)
+    if (direction && String(direction).toLowerCase() !== "incoming") {
+      return apiOk(res, "Not incoming (ignored).", { direction });
     }
 
     if (!from) {
