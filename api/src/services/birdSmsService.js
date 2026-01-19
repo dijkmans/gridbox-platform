@@ -1,10 +1,24 @@
 // api/src/services/birdSmsService.js
+//
+// Centrale SMS service via Bird (MessageBird legacy SMS API)
+// Endpoint: https://rest.messagebird.com/messages
+//
+// Vereiste env vars
+// - BIRD_ACCESS_KEY
+// - BIRD_ORIGINATOR
+//
+// Optioneel
+// - BIRD_API_BASE     (default https://rest.messagebird.com)
+// - BIRD_TIMEOUT_MS   (default 10000)
+// - BIRD_DRY_RUN      ("1" of "true" om niet te versturen)
 
-function pickAccessKey() {
+import https from "https";
+
+function getBirdAccessKey() {
   return process.env.BIRD_ACCESS_KEY || process.env.MESSAGEBIRD_ACCESS_KEY || null;
 }
 
-function pickOriginator() {
+function getBirdOriginator() {
   return (
     process.env.BIRD_ORIGINATOR ||
     process.env.MESSAGEBIRD_ORIGINATOR ||
@@ -14,79 +28,112 @@ function pickOriginator() {
   );
 }
 
-function pickApiBase() {
+function getBirdApiBase() {
   const base = process.env.BIRD_API_BASE || "https://rest.messagebird.com";
   return String(base).replace(/\/+$/, "");
 }
 
-async function readErrorBody(resp) {
-  const status = resp?.status;
-  const statusText = resp?.statusText;
-
-  let text = "";
-  try {
-    text = await resp.text();
-  } catch {
-    text = "";
-  }
-
-  if (!text) return `Bird error status=${status} ${statusText}`;
-
-  try {
-    const j = JSON.parse(text);
-    if (Array.isArray(j?.errors) && j.errors.length > 0) {
-      const e0 = j.errors[0];
-      const msg = e0?.description || e0?.message || JSON.stringify(e0);
-      return `Bird error status=${status} ${msg}`;
-    }
-    return `Bird error status=${status} ${JSON.stringify(j)}`;
-  } catch {
-    return `Bird error status=${status} ${text}`;
-  }
+function getBirdTimeoutMs() {
+  const n = Number(process.env.BIRD_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : 10000;
 }
 
-export async function sendBirdSms({ to, body, originator } = {}) {
-  const accessKey = pickAccessKey();
-  const from = originator || pickOriginator();
+function isBirdDryRun() {
+  const v = String(process.env.BIRD_DRY_RUN || "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+function postForm(url, headers, body, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      url,
+      {
+        method: "POST",
+        headers: {
+          ...headers,
+          "Content-Length": Buffer.byteLength(body)
+        }
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => resolve({ status: res.statusCode || 0, text: data }));
+      }
+    );
+
+    req.on("error", reject);
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`timeout na ${timeoutMs}ms`));
+    });
+
+    req.write(body);
+    req.end();
+  });
+}
+
+async function birdSendSmsLegacy({ to, body }) {
+  const accessKey = getBirdAccessKey();
+  const originator = getBirdOriginator();
 
   if (!accessKey) return { ok: false, error: "Bird niet geconfigureerd: BIRD_ACCESS_KEY ontbreekt." };
-  if (!from) return { ok: false, error: "Bird niet geconfigureerd: BIRD_ORIGINATOR ontbreekt." };
-  if (!to) return { ok: false, error: "Bird sms error: ontvanger ontbreekt." };
-  if (!body) return { ok: false, error: "Bird sms error: berichttekst ontbreekt." };
+  if (!originator) return { ok: false, error: "Bird niet geconfigureerd: BIRD_ORIGINATOR ontbreekt." };
 
-  const apiBase = pickApiBase();
-  const url = `${apiBase}/messages`;
+  const url = `${getBirdApiBase()}/messages`;
 
   const params = new URLSearchParams();
   params.set("recipients", String(to));
-  params.set("originator", String(from));
+  params.set("originator", String(originator));
   params.set("body", String(body));
 
-  let resp;
+  if (isBirdDryRun()) {
+    console.log("🟡 Bird DRY RUN sms", { to, originator, body: String(body).slice(0, 160) });
+    return { ok: true, id: null, raw: { dryRun: true } };
+  }
+
+  const timeoutMs = getBirdTimeoutMs();
+
   try {
-    resp = await fetch(url, {
-      method: "POST",
-      headers: {
+    const resp = await postForm(
+      url,
+      {
         Authorization: `AccessKey ${accessKey}`,
         "Content-Type": "application/x-www-form-urlencoded"
       },
-      body: params.toString()
-    });
+      params.toString(),
+      timeoutMs
+    );
+
+    const rawText = resp.text || "";
+    const status = resp.status || 0;
+
+    if (status < 200 || status >= 300) {
+      try {
+        const j = rawText ? JSON.parse(rawText) : null;
+        const e0 = Array.isArray(j?.errors) && j.errors.length ? j.errors[0] : null;
+        const msg = e0?.description || e0?.message || rawText || "Onbekende fout";
+        return { ok: false, error: `Bird error status=${status} ${msg}` };
+      } catch {
+        return { ok: false, error: `Bird error status=${status} ${rawText || "Onbekende fout"}` };
+      }
+    }
+
+    try {
+      const data = rawText ? JSON.parse(rawText) : null;
+      return { ok: true, id: data?.id ?? null, raw: data };
+    } catch {
+      return { ok: true, id: null, raw: rawText };
+    }
   } catch (e) {
-    return { ok: false, error: `Bird fetch error: ${e?.message || String(e)}` };
+    return { ok: false, error: `Bird request error: ${e?.message || String(e)}` };
   }
+}
 
-  if (!resp.ok) {
-    const err = await readErrorBody(resp);
-    return { ok: false, error: err };
-  }
+// Hoofdexport die je overal gebruikt
+export async function sendSms({ to, body }) {
+  return birdSendSmsLegacy({ to, body });
+}
 
-  let data = null;
-  try {
-    data = await resp.json();
-  } catch {
-    data = null;
-  }
-
-  return { ok: true, id: data?.id ?? null, raw: data };
+// Alias zodat andere bestanden ook kunnen werken
+export async function sendBirdSms({ to, body }) {
+  return sendSms({ to, body });
 }
