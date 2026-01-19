@@ -10,9 +10,6 @@
 //
 // Vereiste env vars (Cloud Run)
 // - BIRD_ACCESS_KEY (voor replies)
-// - BIRD_SMS_WORKSPACE_ID
-// - BIRD_SMS_CHANNEL_ID
-// - BIRD_CHANNEL_SENDER of BIRD_ORIGINATOR
 //
 // Optioneel
 // - SMS_REPLY_ENABLED ("0" om geen reply sms te sturen, default aan)
@@ -25,7 +22,7 @@ import { sendSms } from "../services/birdSmsService.js";
 
 const router = Router();
 
-const SMS_VERSION = "sms-webhook-v7-bird-2026-01-19";
+const SMS_VERSION = "sms-webhook-v8-bird-2026-01-19";
 
 router.use(urlencoded({ extended: false }));
 router.use(json());
@@ -53,21 +50,25 @@ function isReplyEnabled() {
 async function replySmsIfEnabled(to, text) {
   if (!isReplyEnabled()) return;
 
-  const r = await sendSms({ to, body: text });
-  if (!r?.ok) {
-    console.error("⚠️ Bird reply sms faalde", {
-      to: maskPhone(to),
-      error: r?.error || "unknown",
-      raw: r?.raw || null
-    });
-  } else {
-    console.log("✅ Bird reply sms ok", { to: maskPhone(to), id: r?.id || null });
+  try {
+    const r = await sendSms({ to, body: text });
+    if (!r?.ok) {
+      console.error("⚠️ Bird reply sms faalde", {
+        to: maskPhone(to),
+        error: r?.error || "unknown",
+        raw: r?.raw || null
+      });
+    } else {
+      console.log("✅ Bird reply sms ok", { to: maskPhone(to), id: r?.id || null });
+    }
+  } catch (e) {
+    console.error("⚠️ Bird reply sms exception", { to: maskPhone(to), error: String(e?.message || e) });
   }
 }
 
 /*
   Bird webhooks kunnen verschillende shapes hebben.
-  Soms komt de echte message in req.body.data of req.body.payload.
+  Soms zit de echte message in req.body.data of req.body.payload.
 */
 function unwrapBody(req) {
   const b = req?.body ?? {};
@@ -101,7 +102,7 @@ function firstString(...vals) {
 function getIncomingFrom(req) {
   const root = unwrapBody(req);
 
-  // Jouw Bird log sample had sender.contact.identifierValue
+  // Jouw Bird payload had sender.contact.identifierValue = "+324..."
   const v = firstString(
     root?.sender?.contact?.identifierValue,
     root?.sender?.contact?.platformAddress,
@@ -118,7 +119,7 @@ function getIncomingFrom(req) {
 function getIncomingText(req) {
   const root = unwrapBody(req);
 
-  // Jouw Bird log sample had body.text.text
+  // Jouw Bird payload had body.text.text = "OPEN 1"
   const v = firstString(
     root?.body?.text?.text,
     root?.body?.text,
@@ -127,19 +128,13 @@ function getIncomingText(req) {
     root?.text
   );
 
-  // Als body.text een object is, nog proberen
   if (typeof v === "string") return v;
 
-  const maybeObj =
-    root?.body?.text ??
-    root?.body ??
-    root?.message ??
-    null;
+  const maybeObj = root?.body?.text ?? root?.body ?? root?.message ?? null;
 
   if (typeof maybeObj === "string") return maybeObj;
 
   if (maybeObj && typeof maybeObj === "object") {
-    // probeer nog een paar typische keys
     const v2 = firstString(
       maybeObj?.text,
       maybeObj?.content,
@@ -223,36 +218,21 @@ async function resolveBoxIdFromShareOrBoxes(share, boxNr) {
 }
 
 // Legacy flow die bij jou al werkt: boxCommands/<boxId> als 1 document
-async function queueBoxCommand(boxId, type, meta = {}) {
-  const now = new Date();
-  const commandId = `cmd-${Date.now()}`;
-
+async function queueBoxCommandLegacy(boxId, type, meta = {}) {
   const payload = {
-    commandId,
-    type,              // TOP LEVEL
-    status: "pending", // TOP LEVEL
-    createdAt: now,
-
-    // extra compatibiliteit, sommige agents lezen dit ook top level
-    boxNr: meta?.boxNr ?? null,
-    phone: meta?.phone ?? null,
-    source: "sms",
-
-    // meta blijft bestaan voor extra info
+    commandId: `cmd-${Date.now()}`,
+    type,               // "open" of "close"
+    status: "pending",  // zo laten, zodat je agent blijft werken
+    createdAt: new Date(),
     meta: {
       source: "sms",
-      ...meta,
-
-      // ook hier bewaren, zodat je UI of oude logica niet breekt
-      type,
-      status: "pending"
+      ...meta
     }
   };
 
   await db.collection("boxCommands").doc(String(boxId)).set(payload);
-  return { success: true, commandId };
+  return { success: true };
 }
-
 
 function checkWebhookSecret(req) {
   const secret = String(process.env.BIRD_WEBHOOK_SECRET || "").trim();
@@ -289,7 +269,7 @@ router.post("/", async (req, res) => {
   });
 
   try {
-    // Belangrijk: als Bird een call doet zonder echte sms content, dan doen we niets.
+    // Bird kan soms calls doen zonder echte content (bijv events). Dan doen we niets.
     if (!rawFrom && !rawText) {
       return apiOk(res, "No message content (ignored).");
     }
@@ -299,7 +279,6 @@ router.post("/", async (req, res) => {
     }
 
     if (!rawText || String(rawText).trim() === "") {
-      // Geen tekst, dus ook geen reply. Anders krijg je rare automatische antwoorden.
       return apiOk(res, "Empty text (ignored).", { from: maskPhone(from) });
     }
 
@@ -338,6 +317,13 @@ router.post("/", async (req, res) => {
       command === "open" ? "open" : "close",
       { phone: from, boxNr }
     );
+
+    console.log("🧾 Command queued (legacy)", {
+      boxId,
+      command,
+      boxNr,
+      ok: !!result?.success
+    });
 
     if (!result?.success) {
       const msg = `Gridbox ${boxNr} reageert momenteel niet.`;
