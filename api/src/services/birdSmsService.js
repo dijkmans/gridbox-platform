@@ -9,7 +9,11 @@
 // Vereiste env vars (Channels)
 // - BIRD_ACCESS_KEY
 // - BIRD_SMS_WORKSPACE_ID
-// - BIRD_SMS_CHANNEL_ID   (bv: sms-messagebird:1/3201ff4e-...)
+// - BIRD_SMS_CHANNEL_ID
+//   Tip: neem exact de waarde uit de Bird URL na "/channels/"
+//   Voorbeeld uit je Bird URL: "sms-messagebird:1/3201ff4e-7614-4159-8333-a9b14acded85"
+// - BIRD_CHANNEL_SENDER of BIRD_ORIGINATOR
+//   Dit is je "from" nummer, bv "+32480214031"
 // - Optioneel: BIRD_CONTACT_IDENTIFIER_KEY (default "phonenumber")
 //
 // Vereiste env vars (Legacy fallback)
@@ -17,16 +21,18 @@
 // - BIRD_ORIGINATOR
 //
 // Optioneel
-// - BIRD_CHANNELS_API_BASE (default https://api.bird.com)
-// - BIRD_API_BASE          (default https://rest.messagebird.com)
-// - BIRD_TIMEOUT_MS        (default 10000)
-// - BIRD_DRY_RUN           ("1" of "true")
+// - BIRD_CHANNELS_API_BASE  (default https://api.bird.com)
+// - BIRD_API_BASE           (default https://rest.messagebird.com)
+// - BIRD_TIMEOUT_MS         (default 10000)
+// - BIRD_DRY_RUN            ("1" of "true")
 
 import https from "https";
 
 function env(name, fallback = null) {
   const v = process.env[name];
-  return v === undefined || v === null || String(v).trim() === "" ? fallback : String(v).trim();
+  if (v === undefined || v === null) return fallback;
+  const s = String(v).trim();
+  return s === "" ? fallback : s;
 }
 
 function getBirdAccessKey() {
@@ -64,6 +70,11 @@ function getBirdOriginator() {
   );
 }
 
+// Voor Channels gebruiken we liefst een aparte var, maar we vallen terug op BIRD_ORIGINATOR
+function getChannelsSender() {
+  return env("BIRD_CHANNEL_SENDER", getBirdOriginator());
+}
+
 function getBirdTimeoutMs() {
   const n = Number(env("BIRD_TIMEOUT_MS", "10000"));
   return Number.isFinite(n) && n > 0 ? n : 10000;
@@ -72,6 +83,20 @@ function getBirdTimeoutMs() {
 function isBirdDryRun() {
   const v = String(env("BIRD_DRY_RUN", "")).toLowerCase();
   return v === "1" || v === "true" || v === "yes";
+}
+
+function safeJson(text) {
+  try {
+    return text ? JSON.parse(text) : null;
+  } catch {
+    return null;
+  }
+}
+
+function maskPhone(p) {
+  const s = String(p || "");
+  if (s.length < 6) return s;
+  return s.slice(0, 4) + "..."+ s.slice(-2);
 }
 
 function requestJson(url, method, headers, bodyObj, timeoutMs) {
@@ -128,41 +153,62 @@ function requestForm(url, headers, formBody, timeoutMs) {
   });
 }
 
-function safeJson(text) {
-  try {
-    return text ? JSON.parse(text) : null;
-  } catch {
-    return null;
-  }
+/* =========================
+   Channels (app.bird.com)
+   ========================= */
+
+function buildChannelsUrl(ws, ch) {
+  // channelId kan een "/" bevatten (bv sms-messagebird:1/<uuid>)
+  // Daarom moet het als 1 path-segment ge-encode worden.
+  const chEnc = encodeURIComponent(String(ch));
+  return `${getChannelsApiBase()}/workspaces/${ws}/channels/${chEnc}/messages`;
 }
 
-function maskPhone(p) {
-  const s = String(p || "");
-  if (s.length < 6) return s;
-  return s.slice(0, 4) + "..." + s.slice(-2);
+function extractChannelsErrorMessage(status, rawText) {
+  const j = safeJson(rawText);
+
+  // Veel voorkomende shapes:
+  // - { message: "..." }
+  // - { error: { message: "..." } }
+  // - { errors: [ { description, message, parameter } ] }
+  const msg =
+    j?.message ||
+    j?.error?.message ||
+    (Array.isArray(j?.errors) && (j.errors[0]?.description || j.errors[0]?.message)) ||
+    rawText ||
+    "Onbekende fout";
+
+  return { msg, json: j };
 }
 
 async function birdSendSmsChannels({ to, body }) {
   const accessKey = getBirdAccessKey();
   const ws = getWorkspaceId();
   const ch = getChannelId();
+  const sender = getChannelsSender();
+  const identifierKey = getContactIdentifierKey();
 
   if (!accessKey) return { ok: false, error: "Bird niet geconfigureerd: BIRD_ACCESS_KEY ontbreekt." };
   if (!ws) return { ok: false, error: "Bird niet geconfigureerd: BIRD_SMS_WORKSPACE_ID ontbreekt." };
   if (!ch) return { ok: false, error: "Bird niet geconfigureerd: BIRD_SMS_CHANNEL_ID ontbreekt." };
 
+  // In de praktijk verwacht Bird voor SMS Channels meestal ook een sender (from)
+  if (!sender) return { ok: false, error: "Bird niet geconfigureerd: BIRD_CHANNEL_SENDER of BIRD_ORIGINATOR ontbreekt." };
+
+  const url = buildChannelsUrl(ws, ch);
   const timeoutMs = getBirdTimeoutMs();
 
-  // Belangrijk: channelId kan een "/" bevatten (sms-messagebird:1/...)
-  // Daarom URL-encoden als 1 path segment
-  const chEnc = encodeURIComponent(ch);
-  const url = `${getChannelsApiBase()}/workspaces/${ws}/channels/${chEnc}/messages`;
-
   const payload = {
+    sender: {
+      connector: {
+        identifierKey,
+        identifierValue: String(sender)
+      }
+    },
     receiver: {
       contacts: [
         {
-          identifierKey: getContactIdentifierKey(),
+          identifierKey,
           identifierValue: String(to)
         }
       ]
@@ -176,12 +222,20 @@ async function birdSendSmsChannels({ to, body }) {
   };
 
   if (isBirdDryRun()) {
-    console.log("🟡 Bird DRY RUN channels sms", {
-      ws,
-      ch,
-      to: maskPhone(to),
-      preview: String(body).slice(0, 160)
-    });
+    console.log(
+      "🟡 Bird DRY RUN channels sms " +
+        JSON.stringify(
+          {
+            ws,
+            ch,
+            sender: maskPhone(sender),
+            to: maskPhone(to),
+            preview: String(body).slice(0, 160)
+          },
+          null,
+          0
+        )
+    );
     return { ok: true, id: null, raw: { dryRun: true, mode: "channels" } };
   }
 
@@ -200,33 +254,41 @@ async function birdSendSmsChannels({ to, body }) {
 
     const status = resp.status || 0;
     const rawText = resp.text || "";
-    const j = safeJson(rawText);
 
     if (status < 200 || status >= 300) {
-      const msg =
-        j?.message ||
-        j?.error?.message ||
-        (Array.isArray(j?.errors) && j.errors[0]?.description) ||
-        rawText ||
-        "Onbekende fout";
+      const { msg, json } = extractChannelsErrorMessage(status, rawText);
 
-      console.error("⚠️ Bird channels error", {
-        status,
-        to: maskPhone(to),
-        ws,
-        ch,
-        msg,
-        rawText: rawText.slice(0, 2000)
-      });
+      // Log 1 lijn JSON, dan is Cloud Logging veel duidelijker
+      console.error(
+        "⚠️ Bird channels error " +
+          JSON.stringify(
+            {
+              status,
+              ws,
+              ch,
+              sender: maskPhone(sender),
+              to: maskPhone(to),
+              msg,
+              raw: json || rawText
+            },
+            null,
+            0
+          )
+      );
 
-      return { ok: false, error: `Bird channels error status=${status} ${msg}`, raw: j || rawText };
+      return { ok: false, error: `Bird channels error status=${status} ${msg}`, raw: json || rawText };
     }
 
+    const j = safeJson(rawText);
     return { ok: true, id: j?.id ?? null, raw: j || rawText };
   } catch (e) {
     return { ok: false, error: `Bird channels request error: ${e?.message || String(e)}` };
   }
 }
+
+/* =========================
+   Legacy (rest.messagebird.com)
+   ========================= */
 
 async function birdSendSmsLegacy({ to, body }) {
   const accessKey = getBirdAccessKey();
@@ -244,7 +306,14 @@ async function birdSendSmsLegacy({ to, body }) {
   params.set("body", String(body));
 
   if (isBirdDryRun()) {
-    console.log("🟡 Bird DRY RUN legacy sms", { to: maskPhone(to), originator, preview: String(body).slice(0, 160) });
+    console.log(
+      "🟡 Bird DRY RUN legacy sms " +
+        JSON.stringify(
+          { to: maskPhone(to), originator: maskPhone(originator), preview: String(body).slice(0, 160) },
+          null,
+          0
+        )
+    );
     return { ok: true, id: null, raw: { dryRun: true, mode: "legacy" } };
   }
 
@@ -266,6 +335,22 @@ async function birdSendSmsLegacy({ to, body }) {
     if (status < 200 || status >= 300) {
       const e0 = Array.isArray(j?.errors) && j.errors.length ? j.errors[0] : null;
       const msg = e0?.description || e0?.message || j?.message || rawText || "Onbekende fout";
+
+      console.error(
+        "⚠️ Bird legacy error " +
+          JSON.stringify(
+            {
+              status,
+              to: maskPhone(to),
+              originator: maskPhone(originator),
+              msg,
+              raw: j || rawText
+            },
+            null,
+            0
+          )
+      );
+
       return { ok: false, error: `Bird legacy error status=${status} ${msg}`, raw: j || rawText };
     }
 
@@ -274,6 +359,10 @@ async function birdSendSmsLegacy({ to, body }) {
     return { ok: false, error: `Bird legacy request error: ${e?.message || String(e)}` };
   }
 }
+
+/* =========================
+   Public API
+   ========================= */
 
 export async function sendSms({ to, body }) {
   const ws = getWorkspaceId();
