@@ -22,7 +22,7 @@ import { sendSms } from "../services/birdSmsService.js";
 
 const router = Router();
 
-const SMS_VERSION = "sms-webhook-v5-bird-2026-01-19";
+const SMS_VERSION = "sms-webhook-v6-bird-2026-01-19";
 
 router.use(urlencoded({ extended: false }));
 router.use(json());
@@ -74,32 +74,47 @@ function normalizePhone(number) {
   return s;
 }
 
+/**
+ * Bird webhooks gebruiken soms een wrapper rond de message:
+ * - { data: {...} }
+ * - { message: {...} }
+ * - { payload: {...} }
+ * Daarom nemen we altijd een "root" object dat de echte message bevat.
+ */
+function getWebhookRoot(req) {
+  return req.body?.data ?? req.body?.message ?? req.body?.payload ?? req.body ?? {};
+}
+
 function getIncomingFrom(req) {
-  // Bird Channels inbound (jouw payload)
-  // sender.contact.identifierValue = "+324..."
+  const root = getWebhookRoot(req);
+
+  // Bird Channels inbound (jouw Inspect log payload)
+  // root.sender.contact.identifierValue = "+324..."
   const v =
-    req.body?.sender?.contact?.identifierValue ??
-    req.body?.sender?.contact?.platformAddress ??
-    // eventuele andere varianten
-    req.body?.sender?.identifierValue ??
-    req.body?.sender?.value ??
-    req.body?.from ??
-    req.body?.sender ??
-    req.body?.originator ??
+    root?.sender?.contact?.identifierValue ??
+    root?.sender?.contact?.platformAddress ??
+    // extra fallbacks
+    root?.sender?.identifierValue ??
+    root?.sender?.value ??
+    root?.from ??
+    root?.sender ??
+    root?.originator ??
     null;
 
   return v ? String(v).trim() : null;
 }
 
-
-
 function getIncomingText(req) {
+  const root = getWebhookRoot(req);
+
   const v =
-    req.body?.body?.text?.text ??
-    req.body?.body?.text ??
-    req.body?.body ??
-    req.body?.message ??
-    req.body?.text ??
+    // Bird Channels inbound: body.text.text
+    root?.body?.text?.text ??
+    root?.body?.text ??
+    // extra fallbacks
+    root?.message ??
+    root?.text ??
+    root?.body ??
     "";
 
   if (typeof v === "string") return v;
@@ -163,8 +178,8 @@ async function findActiveShare(from, boxNr) {
   const snap = await db.collection("shares").where("phone", "==", from).where("active", "==", true).get();
   if (snap.empty) return null;
 
-  const shares = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const match = shares.find(s => Number(s.boxNumber) === Number(boxNr));
+  const shares = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const match = shares.find((s) => Number(s.boxNumber) === Number(boxNr));
   return match || null;
 }
 
@@ -210,8 +225,11 @@ router.post("/", async (req, res) => {
     return res.status(401).json({ ok: false, version: SMS_VERSION, message: "Unauthorized" });
   }
 
+  const root = getWebhookRoot(req);
+
   if (process.env.LOG_SMS_PAYLOAD === "1") {
-    console.log("📩 SMS payload:", JSON.stringify(req.body, null, 2));
+    console.log("📩 SMS payload (raw):", JSON.stringify(req.body, null, 2));
+    console.log("📩 SMS payload (root):", JSON.stringify(root, null, 2));
   }
 
   const rawFrom = getIncomingFrom(req);
@@ -220,7 +238,14 @@ router.post("/", async (req, res) => {
   const from = normalizePhone(rawFrom);
   const { command, boxNr } = parseCommand(rawText);
 
-  console.log("➡️ SMS parsed", { from: maskPhone(from), command, boxNr });
+  // Extra debug (veilig): we maskeren het nummer en tonen de eerste 50 chars van de tekst
+  console.log("➡️ SMS parsed", {
+    from: maskPhone(from),
+    command,
+    boxNr,
+    rawFrom: rawFrom ? maskPhone(rawFrom) : null,
+    rawTextPreview: String(rawText || "").slice(0, 50)
+  });
 
   try {
     if (!from) {
@@ -229,7 +254,7 @@ router.post("/", async (req, res) => {
 
     if (!command || !boxNr) {
       await replySmsIfEnabled(from, usageText());
-      return apiFail(res, usageText());
+      return apiFail(res, usageText(), { received: String(rawText || "").slice(0, 160) });
     }
 
     if (boxNr < 1 || boxNr > 999) {
