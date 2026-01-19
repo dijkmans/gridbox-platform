@@ -9,7 +9,8 @@
 // Vereiste env vars (Channels)
 // - BIRD_ACCESS_KEY
 // - BIRD_SMS_WORKSPACE_ID
-// - BIRD_SMS_CHANNEL_ID
+// - BIRD_SMS_CHANNEL_ID   (bv: sms-messagebird:1/3201ff4e-...)
+// - Optioneel: BIRD_CONTACT_IDENTIFIER_KEY (default "phonenumber")
 //
 // Vereiste env vars (Legacy fallback)
 // - BIRD_ACCESS_KEY
@@ -38,6 +39,10 @@ function getWorkspaceId() {
 
 function getChannelId() {
   return env("BIRD_SMS_CHANNEL_ID", null);
+}
+
+function getContactIdentifierKey() {
+  return env("BIRD_CONTACT_IDENTIFIER_KEY", "phonenumber");
 }
 
 function getChannelsApiBase() {
@@ -131,6 +136,12 @@ function safeJson(text) {
   }
 }
 
+function maskPhone(p) {
+  const s = String(p || "");
+  if (s.length < 6) return s;
+  return s.slice(0, 4) + "..." + s.slice(-2);
+}
+
 async function birdSendSmsChannels({ to, body }) {
   const accessKey = getBirdAccessKey();
   const ws = getWorkspaceId();
@@ -140,21 +151,37 @@ async function birdSendSmsChannels({ to, body }) {
   if (!ws) return { ok: false, error: "Bird niet geconfigureerd: BIRD_SMS_WORKSPACE_ID ontbreekt." };
   if (!ch) return { ok: false, error: "Bird niet geconfigureerd: BIRD_SMS_CHANNEL_ID ontbreekt." };
 
-  const url = `${getChannelsApiBase()}/workspaces/${ws}/channels/${ch}/messages`;
   const timeoutMs = getBirdTimeoutMs();
+
+  // Belangrijk: channelId kan een "/" bevatten (sms-messagebird:1/...)
+  // Daarom URL-encoden als 1 path segment
+  const chEnc = encodeURIComponent(ch);
+  const url = `${getChannelsApiBase()}/workspaces/${ws}/channels/${chEnc}/messages`;
 
   const payload = {
     receiver: {
-      contacts: [{ identifierValue: String(to) }]
+      contacts: [
+        {
+          identifierKey: getContactIdentifierKey(),
+          identifierValue: String(to)
+        }
+      ]
     },
     body: {
       type: "text",
-      text: { text: String(body) }
+      text: {
+        text: String(body)
+      }
     }
   };
 
   if (isBirdDryRun()) {
-    console.log("🟡 Bird DRY RUN channels sms", { ws, ch, to, preview: String(body).slice(0, 160) });
+    console.log("🟡 Bird DRY RUN channels sms", {
+      ws,
+      ch,
+      to: maskPhone(to),
+      preview: String(body).slice(0, 160)
+    });
     return { ok: true, id: null, raw: { dryRun: true, mode: "channels" } };
   }
 
@@ -182,6 +209,16 @@ async function birdSendSmsChannels({ to, body }) {
         (Array.isArray(j?.errors) && j.errors[0]?.description) ||
         rawText ||
         "Onbekende fout";
+
+      console.error("⚠️ Bird channels error", {
+        status,
+        to: maskPhone(to),
+        ws,
+        ch,
+        msg,
+        rawText: rawText.slice(0, 2000)
+      });
+
       return { ok: false, error: `Bird channels error status=${status} ${msg}`, raw: j || rawText };
     }
 
@@ -207,7 +244,7 @@ async function birdSendSmsLegacy({ to, body }) {
   params.set("body", String(body));
 
   if (isBirdDryRun()) {
-    console.log("🟡 Bird DRY RUN legacy sms", { to, originator, preview: String(body).slice(0, 160) });
+    console.log("🟡 Bird DRY RUN legacy sms", { to: maskPhone(to), originator, preview: String(body).slice(0, 160) });
     return { ok: true, id: null, raw: { dryRun: true, mode: "legacy" } };
   }
 
@@ -238,19 +275,14 @@ async function birdSendSmsLegacy({ to, body }) {
   }
 }
 
-// Hoofdexport die je overal gebruikt
 export async function sendSms({ to, body }) {
   const ws = getWorkspaceId();
   const ch = getChannelId();
 
-  // Als ws + ch bestaan: altijd Channels gebruiken, originator is dan niet nodig
   if (ws && ch) return birdSendSmsChannels({ to, body });
-
-  // Anders fallback naar legacy
   return birdSendSmsLegacy({ to, body });
 }
 
-// Alias voor compatibiliteit
 export async function sendBirdSms({ to, body }) {
   return sendSms({ to, body });
 }
