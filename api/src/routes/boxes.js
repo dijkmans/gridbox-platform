@@ -2,18 +2,11 @@ import { Router } from "express";
 import { Storage } from "@google-cloud/storage";
 import { db } from "../firebase.js";
 import { toBoxDto } from "../dto/boxDto.js";
-import twilio from "twilio"; // <--- Import Twilio
+import { buildShareSms } from "../utils/shareMessages.js";
+import { sendSms } from "../services/birdSmsService.js";
 
 const router = Router();
 
-/*
-=====================================================
-TWILIO CONFIGURATION
-=====================================================
-*/
-const accountSid = "ACb89f4190b..."; // Your Account SID from www.twilio.com/console
-const authToken = "39a7d8...";   // Your Auth Token from www.twilio.com/console
-const client = new twilio(accountSid, authToken);
 
 /*
 =====================================================
@@ -1193,47 +1186,54 @@ router.get("/:id/shares", async (req, res) => {
 });
 
 // 2. Nieuwe share toevoegen (MET SMS)
+// 2. Nieuwe share toevoegen (MET SMS via Bird)
 router.post("/:id/shares", async (req, res) => {
   try {
     const { id } = req.params;
-    // Data uit je frontend formulier
-    const { phone, comment, expires, auth } = req.body; 
+    const { phone, comment, expires, auth } = req.body;
 
     if (!phone) return res.status(400).json({ error: "Telefoonnummer verplicht" });
 
+    // BoxNumber nodig voor SMS-commando's (open 5)
+    const boxSnap = await db.collection("boxes").doc(String(id)).get();
+    const boxData = boxSnap.exists ? (boxSnap.data() || {}) : {};
+    const boxNumberVal =
+      boxData?.Portal?.BoxNumber ??
+      boxData?.box?.number ??
+      (String(id).match(/^\d+$/) ? Number(id) : null);
+    const boxNumber = Number(boxNumberVal);
+
+    if (!Number.isFinite(boxNumber)) {
+      return res.status(400).json({ error: "BoxNumber niet gevonden voor deze box. Vul Portal.BoxNumber in Firestore." });
+    }
+
     const newShare = {
       boxId: id,
-      phone: phone,
+      boxNumber,
+      phone: String(phone).trim(),
       comment: comment || "",
       expiresAt: expires || null,
-      type: auth ? "authorized" : "temporary", // 'auth' checkbox -> authorized
+      type: auth ? "authorized" : "temporary",
       active: true,
       createdAt: new Date().toISOString()
     };
 
     const ref = await db.collection("shares").add(newShare);
 
-    // =========================================================================
-    // SMS INTEGRATIE
-    // =========================================================================
-    try {
-        const messageBody = `Je hebt nu toegang tot Gridbox ${id}. ${comment ? 'Opmerking: ' + comment : ''}`;
-        
-        // Zorg dat 'from' overeenkomt met je Twilio-nummer
-        // 'to' is het nummer dat je invoerde in het formulier
-        await client.messages.create({
-            body: messageBody,
-            from: '+1234567890', // VERVANG DIT MET JOUW TWILIO NUMMER
-            to: phone
-        });
-        console.log(`[SMS] Verstuurd naar ${phone}`);
-    } catch (smsErr) {
-        console.error("[SMS ERROR] Kon geen SMS sturen:", smsErr.message);
-        // We laten de API niet crashen als de SMS faalt, want de share is wel opgeslagen.
-    }
-    // =========================================================================
+    // SMS versturen (Bird)
+    const smsText = buildShareSms({ boxNumber, expiresAt: newShare.expiresAt });
+    const smsResult = await sendSms({ to: newShare.phone, body: smsText });
 
-    res.json({ ok: true, id: ref.id, ...newShare });
+    await db.collection("shares").doc(ref.id).set(
+      {
+        smsSentAt: smsResult.ok ? new Date().toISOString() : null,
+        smsProvider: smsResult.ok ? "bird" : null,
+        smsError: smsResult.ok ? null : smsResult.error
+      },
+      { merge: true }
+    );
+
+    res.json({ ok: true, id: ref.id, ...newShare, sms: smsResult });
   } catch (err) {
     console.error("POST share error:", err);
     res.status(500).json({ error: "Kon share niet opslaan" });
