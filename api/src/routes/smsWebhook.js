@@ -6,7 +6,10 @@
 // - Inkomende sms verwerken (Bird Channels sms.inbound)
 // - Command herkennen: "open 5" of "sluit 5"
 // - Toegang checken via shares (phone + boxNumber + active + niet verlopen)
-// - Command wegschrijven naar Firestore: boxes/<boxId>/commands/<autoId>
+// - Command wegschrijven naar Firestore
+//   Standaard (veilig): zowel legacy als nieuw
+//   Legacy: boxCommands/<boxId> (1 document)
+//   Nieuw:   boxes/<boxId>/commands/<autoId>
 //
 // Vereiste env vars (Cloud Run)
 // - BIRD_ACCESS_KEY (voor replies)
@@ -15,6 +18,7 @@
 // - SMS_REPLY_ENABLED ("0" om geen reply sms te sturen, default aan)
 // - LOG_SMS_PAYLOAD ("1" om payload volledig te loggen, let op privacy)
 // - BIRD_WEBHOOK_SECRET (als je wilt beveiligen: stuur ?secret=... mee in de webhook URL)
+// - COMMAND_WRITE_MODE ("both" | "legacy" | "new") default "both"
 
 import { Router, urlencoded, json } from "express";
 import { db } from "../firebase.js";
@@ -22,10 +26,16 @@ import { sendSms } from "../services/birdSmsService.js";
 
 const router = Router();
 
-const SMS_VERSION = "sms-webhook-v6-bird-2026-01-19";
+const SMS_VERSION = "sms-webhook-v7-bird-2026-01-19";
 
+// Bird webhooks kunnen komen als application/json, application/*+json, cloudevents, enz.
+// Daarom zetten we json parser breder, anders krijg je lege req.body en dus from:''.
 router.use(urlencoded({ extended: false }));
-router.use(json());
+router.use(
+  json({
+    type: ["application/json", "application/*+json", "application/cloudevents+json", "*/*"]
+  })
+);
 
 function apiOk(res, message, extra = {}) {
   return res.status(200).json({ ok: true, version: SMS_VERSION, message, ...extra });
@@ -76,29 +86,38 @@ function normalizePhone(number) {
   return s;
 }
 
+// Bird webhooks kunnen het message object direct sturen, of in een wrapper onder "data"
+// CloudEvents voorbeeld: { specversion, type, source, id, time, data: { ...message... } }
+function getBirdPayload(req) {
+  return req.body?.data ?? req.body ?? {};
+}
+
 function getIncomingFrom(req) {
+  const b = getBirdPayload(req);
+
   // Bird sms.inbound payload (zoals jij stuurde)
   // sender.contact.identifierValue = "+324..."
   const v =
-    req.body?.sender?.contact?.identifierValue ??
-    req.body?.sender?.contact?.platformAddress ??
-    req.body?.sender?.identifierValue ??
-    req.body?.from ??
-    req.body?.sender ??
-    req.body?.originator ??
+    b?.sender?.contact?.identifierValue ??
+    b?.sender?.contact?.platformAddress ??
+    b?.sender?.identifierValue ??
+    b?.from ??
+    b?.sender ??
+    b?.originator ??
     null;
 
   return v ? String(v).trim() : null;
 }
 
 function getIncomingText(req) {
-  // Bird sms.inbound payload
+  const b = getBirdPayload(req);
+
   const v =
-    req.body?.body?.text?.text ??
-    req.body?.body?.text ??
-    req.body?.body ??
-    req.body?.message ??
-    req.body?.text ??
+    b?.body?.text?.text ??
+    b?.body?.text ??
+    b?.body ??
+    b?.message ??
+    b?.text ??
     "";
 
   if (typeof v === "string") return v;
@@ -113,6 +132,7 @@ function getIncomingText(req) {
 function parseCommand(rawText) {
   const text = String(rawText ?? "").trim().toLowerCase();
 
+  // herkent: open 1, openen 1, sluit 1, dicht 1, toe 1, close 1
   const m = text.match(/\b(open|openen|close|sluit|dicht|toe)\b\s*[-:]?\s*(\d{1,3})\b/);
   if (!m) return { command: null, boxNr: null };
 
@@ -176,18 +196,61 @@ async function resolveBoxIdFromShareOrBoxes(share, boxNr) {
   return snap.docs[0].id;
 }
 
-async function queueBoxCommand(boxId, type, meta = {}) {
+function getCommandWriteMode() {
+  const v = String(process.env.COMMAND_WRITE_MODE ?? "").trim().toLowerCase();
+  if (!v) return "both";
+  if (v === "legacy" || v === "new" || v === "both") return v;
+  return "both";
+}
+
+async function queueCommandLegacy(boxId, type, meta = {}) {
+  // Legacy structuur: boxCommands/<boxId>
+  // Dit matcht wat je agent vroeger las: status "pending", type "open"
+  const payload = {
+    commandId: `cmd-${Date.now()}`,
+    type, // "open" of "close"
+    status: "pending",
+    createdAt: new Date(),
+    meta: {
+      source: "sms",
+      ...meta
+    }
+  };
+
+  await db.collection("boxCommands").doc(String(boxId)).set(payload);
+  return { ok: true, legacyDocId: String(boxId) };
+}
+
+async function queueCommandNew(boxId, type, meta = {}) {
   // Nieuwe structuur: boxes/<boxId>/commands/<autoId>
   const cmd = {
-    type,                 // "open" of "close"
-    status: "queued",     // belangrijk: queued, niet pending
+    type, // "open" of "close"
+    status: "queued",
     source: "sms",
     createdAt: new Date(),
     ...meta
   };
 
   const ref = await db.collection("boxes").doc(String(boxId)).collection("commands").add(cmd);
-  return { success: true, commandDocId: ref.id };
+  return { ok: true, commandDocId: ref.id };
+}
+
+async function queueBoxCommand(boxId, type, meta = {}) {
+  const mode = getCommandWriteMode();
+
+  const out = { success: true };
+
+  if (mode === "legacy" || mode === "both") {
+    const r1 = await queueCommandLegacy(boxId, type, meta);
+    out.legacyDocId = r1.legacyDocId;
+  }
+
+  if (mode === "new" || mode === "both") {
+    const r2 = await queueCommandNew(boxId, type, meta);
+    out.commandDocId = r2.commandDocId;
+  }
+
+  return out;
 }
 
 function checkWebhookSecret(req) {
@@ -220,8 +283,8 @@ router.post("/", async (req, res) => {
     from: maskPhone(from),
     command,
     boxNr,
-    rawFrom: rawFrom ? String(rawFrom).slice(0, 40) : null,
-    rawTextPreview: String(rawText || "").slice(0, 60)
+    rawFrom: rawFrom ? String(rawFrom).slice(0, 60) : null,
+    rawTextPreview: String(rawText || "").slice(0, 80)
   });
 
   try {
@@ -259,11 +322,10 @@ router.post("/", async (req, res) => {
       return apiFail(res, msg);
     }
 
-    const result = await queueBoxCommand(
-      boxId,
-      command === "open" ? "open" : "close",
-      { phone: from, boxNr }
-    );
+    const result = await queueBoxCommand(boxId, command === "open" ? "open" : "close", {
+      phone: from,
+      boxNr
+    });
 
     if (!result?.success) {
       const msg = `Gridbox ${boxNr} reageert momenteel niet.`;
@@ -278,7 +340,9 @@ router.post("/", async (req, res) => {
       boxId,
       boxNr,
       command,
-      commandDocId: result.commandDocId
+      legacyDocId: result.legacyDocId ?? null,
+      commandDocId: result.commandDocId ?? null,
+      writeMode: getCommandWriteMode()
     });
   } catch (err) {
     console.error("🔥 sms webhook crash", err);
