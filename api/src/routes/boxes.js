@@ -3,7 +3,8 @@ import { Storage } from "@google-cloud/storage";
 import { db } from "../firebase.js";
 import { toBoxDto } from "../dto/boxDto.js";
 import { buildShareSms } from "../utils/shareMessages.js";
-import { sendSms } from "../services/birdSmsService.js";
+import { sendBirdSms } from "../services/birdSmsService.js";
+
 
 const router = Router();
 
@@ -1222,7 +1223,8 @@ router.post("/:id/shares", async (req, res) => {
 
     // SMS versturen (Bird)
     const smsText = buildShareSms({ boxNumber, expiresAt: newShare.expiresAt });
-    const smsResult = await sendSms({ to: newShare.phone, body: smsText });
+    const smsResult = await sendBirdSms({ to: newShare.phone, body: smsText });
+
 
     await db.collection("shares").doc(ref.id).set(
       {
