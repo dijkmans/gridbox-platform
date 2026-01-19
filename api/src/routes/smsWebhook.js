@@ -223,21 +223,36 @@ async function resolveBoxIdFromShareOrBoxes(share, boxNr) {
 }
 
 // Legacy flow die bij jou al werkt: boxCommands/<boxId> als 1 document
-async function queueBoxCommandLegacy(boxId, type, meta = {}) {
+async function queueBoxCommand(boxId, type, meta = {}) {
+  const now = new Date();
+  const commandId = `cmd-${Date.now()}`;
+
   const payload = {
-    commandId: `cmd-${Date.now()}`,
-    type,               // "open" of "close"
-    status: "pending",  // laat dit zo, zodat je agent niet breekt
-    createdAt: new Date(),
+    commandId,
+    type,              // TOP LEVEL
+    status: "pending", // TOP LEVEL
+    createdAt: now,
+
+    // extra compatibiliteit, sommige agents lezen dit ook top level
+    boxNr: meta?.boxNr ?? null,
+    phone: meta?.phone ?? null,
+    source: "sms",
+
+    // meta blijft bestaan voor extra info
     meta: {
       source: "sms",
-      ...meta
+      ...meta,
+
+      // ook hier bewaren, zodat je UI of oude logica niet breekt
+      type,
+      status: "pending"
     }
   };
 
   await db.collection("boxCommands").doc(String(boxId)).set(payload);
-  return { success: true };
+  return { success: true, commandId };
 }
+
 
 function checkWebhookSecret(req) {
   const secret = String(process.env.BIRD_WEBHOOK_SECRET || "").trim();
