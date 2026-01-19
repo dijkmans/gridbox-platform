@@ -6,7 +6,7 @@
 // - Inkomende sms verwerken (Bird Channels sms.inbound)
 // - Command herkennen: "open 5" of "sluit 5"
 // - Toegang checken via shares (phone + boxNumber + active + niet verlopen)
-// - Command wegschrijven naar Firestore: boxCommands/<boxId> (legacy, zodat je agent blijft werken)
+// - Command uitvoeren door boxes/<boxId>.box.desired te zetten ("open" of "close")
 //
 // Vereiste env vars (Cloud Run)
 // - BIRD_ACCESS_KEY (voor replies)
@@ -22,7 +22,7 @@ import { sendSms } from "../services/birdSmsService.js";
 
 const router = Router();
 
-const SMS_VERSION = "sms-webhook-v8-bird-2026-01-19";
+const SMS_VERSION = "sms-webhook-v9-bird-2026-01-19";
 
 router.use(urlencoded({ extended: false }));
 router.use(json());
@@ -102,7 +102,6 @@ function firstString(...vals) {
 function getIncomingFrom(req) {
   const root = unwrapBody(req);
 
-  // Jouw Bird payload had sender.contact.identifierValue = "+324..."
   const v = firstString(
     root?.sender?.contact?.identifierValue,
     root?.sender?.contact?.platformAddress,
@@ -119,7 +118,6 @@ function getIncomingFrom(req) {
 function getIncomingText(req) {
   const root = unwrapBody(req);
 
-  // Jouw Bird payload had body.text.text = "OPEN 1"
   const v = firstString(
     root?.body?.text?.text,
     root?.body?.text,
@@ -217,20 +215,27 @@ async function resolveBoxIdFromShareOrBoxes(share, boxNr) {
   return snap.docs[0].id;
 }
 
-// Legacy flow die bij jou al werkt: boxCommands/<boxId> als 1 document
-async function queueBoxCommandLegacy(boxId, type, meta = {}) {
-  const payload = {
-    commandId: `cmd-${Date.now()}`,
-    type,               // "open" of "close"
-    status: "pending",  // zo laten, zodat je agent blijft werken
-    createdAt: new Date(),
-    meta: {
-      source: "sms",
-      ...meta
+// Nieuwe flow die met jouw huidige Pi agent werkt:
+// Zet boxes/<boxId>.box.desired naar "open" of "close"
+async function setBoxDesired(boxId, desired, meta = {}) {
+  const now = new Date();
+
+  const patch = {
+    box: {
+      desired,                // "open" of "close"
+      desiredAt: now,
+      desiredBy: "sms",
+      desiredNonce: Date.now(),
+      desiredMeta: {
+        source: "sms",
+        ...meta
+      }
     }
   };
 
-  await db.collection("boxCommands").doc(String(boxId)).set(payload);
+  // Merge zodat je niets anders overschrijft in de box doc
+  await db.collection("boxes").doc(String(boxId)).set(patch, { merge: true });
+
   return { success: true };
 }
 
@@ -312,15 +317,17 @@ router.post("/", async (req, res) => {
       return apiFail(res, msg);
     }
 
-    const result = await queueBoxCommandLegacy(
+    const desired = command === "open" ? "open" : "close";
+
+    const result = await setBoxDesired(
       boxId,
-      command === "open" ? "open" : "close",
+      desired,
       { phone: from, boxNr }
     );
 
-    console.log("🧾 Command queued (legacy)", {
+    console.log("🧾 Desired gezet", {
       boxId,
-      command,
+      desired,
       boxNr,
       ok: !!result?.success
     });
@@ -331,7 +338,7 @@ router.post("/", async (req, res) => {
       return apiFail(res, msg);
     }
 
-    const msg = `Gridbox ${boxNr} wordt nu ${command === "open" ? "geopend" : "gesloten"}.`;
+    const msg = `Gridbox ${boxNr} wordt nu ${desired === "open" ? "geopend" : "gesloten"}.`;
     await replySmsIfEnabled(from, msg);
 
     return apiOk(res, msg, { boxId, boxNr, command });
