@@ -232,7 +232,7 @@
       background-image:url('https://gridbox.eu/images/f5b43959-ec7d-4fbe-9a38-1324a9617cf3_biss.png');
       background-repeat:repeat-y;
       background-size:100% auto;
-      transition:transform 5s cubic-bezier(.2,.7,.2,1);
+      transition:transform 25s cubic-bezier(.2,.7,.2,1);
       transform:translateY(0);
     }
     .gb-card.is-open .gb-shutter__door{ transform:translateY(-100%); }
@@ -635,7 +635,13 @@
       animation: heartPulse 1s infinite ease-in-out; /* 1s (1000ms) interval */
     }
 
-    @keyframes heartPulse {
+    
+
+    .pulse-heart.warn{
+      fill: #f59e0b; /* Orange warning */
+      animation: none;
+    }
+@keyframes heartPulse {
       0% { transform: scale(1); }
       15% { transform: scale(1.25); }
       30% { transform: scale(1); }
@@ -903,7 +909,140 @@
         return base + path;
       };
 
+      
+
       // =========================================================
+      // 1b) Pending acties (geen fake open/close, wel "verzonden")
+      // =========================================================
+      const PENDING_KEY_PREFIX = 'gb_pending_';
+      const PENDING_TTL_MS = 2 * 60 * 1000; // 2 minuten
+
+      const pendingMem = new Map();
+
+      function setPending(boxId, desired){
+        const v = { desired, ts: Date.now() };
+        pendingMem.set(String(boxId), v);
+        try { localStorage.setItem(PENDING_KEY_PREFIX + String(boxId), JSON.stringify(v)); } catch(_) {}
+      }
+
+      function clearPending(boxId){
+        pendingMem.delete(String(boxId));
+        try { localStorage.removeItem(PENDING_KEY_PREFIX + String(boxId)); } catch(_) {}
+      }
+
+      function getPending(boxId){
+        const key = String(boxId);
+        const m = pendingMem.get(key);
+        if (m && Date.now() - m.ts <= PENDING_TTL_MS) return m;
+
+        try{
+          const raw = localStorage.getItem(PENDING_KEY_PREFIX + key);
+          if(!raw) return null;
+          const v = JSON.parse(raw);
+          if(!v || !v.ts || Date.now() - v.ts > PENDING_TTL_MS){
+            localStorage.removeItem(PENDING_KEY_PREFIX + key);
+            return null;
+          }
+          return v;
+        } catch(_){
+          return null;
+        }
+      }
+
+      // =========================================================
+      // 1c) Fast follow-up na OPEN/CLOSE (zodat het meteen aanvoelt)
+      // =========================================================
+      const FAST_POLL_START_MS = 400;
+      const FAST_POLL_MAX_MS = 45000;
+      const FAST_POLL_STEP_MS = 150;
+      const fastWatch = new Map(); // boxId -> timeoutId
+
+      async function fetchBoxById(boxId){
+        const boxes = await loadBoxes();
+        return (boxes || []).find(b => String(b.id) === String(boxId)) || null;
+      }
+
+      function replaceCardInDomFromBox(box){
+        if(!box || !box.id) return;
+        const boxId = String(box.id);
+        const old = document.querySelector('.gb-card[data-id="' + boxId + '"]');
+        if(!old) return;
+
+        const wasSelected = old.classList.contains('is-selected');
+        const wasCurrent = (currentCard && currentCard.getAttribute('data-id') === boxId);
+
+        const newCard = createCard(box);
+        if(!newCard) return;
+
+        if(wasSelected) newCard.classList.add('is-selected');
+        old.replaceWith(newCard);
+
+        if(wasCurrent){
+          currentCard = newCard;
+          if(side.classList.contains('is-open')){
+            const currentTitle = (document.getElementById('sideSub') || {}).textContent || '';
+            updateSideFromCard(newCard, currentTitle, { silent:true });
+          }
+        }
+      }
+
+      function stopFastWatch(boxId){
+        const key = String(boxId);
+        const t = fastWatch.get(key);
+        if(t) clearTimeout(t);
+        fastWatch.delete(key);
+      }
+
+      function startFastWatch(boxId){
+        const key = String(boxId);
+        stopFastWatch(key);
+
+        const startedAt = Date.now();
+        let delay = FAST_POLL_START_MS;
+
+        const tick = async ()=>{
+          const elapsed = Date.now() - startedAt;
+          if(elapsed > FAST_POLL_MAX_MS){
+            stopFastWatch(key);
+            return;
+          }
+
+          try{
+            const box = await fetchBoxById(key);
+            if(box){
+              replaceCardInDomFromBox(box);
+
+              const motion = normalizeShutterStateDetailed(pickMotionState(box));
+              const door = normalizeShutterStateDetailed(pickDoorState(box));
+              const pend = getPending(key);
+
+              if(pend){
+                const wantDoor = (pend.desired === 'open') ? 'open' : 'closed';
+                const moving = (motion === 'opening' || motion === 'closing');
+
+                if(door === wantDoor && !moving){
+                  clearPending(key);
+                  stopFastWatch(key);
+                  return;
+                }
+              }
+            }
+          } catch(_){}
+
+          delay = Math.min(delay + FAST_POLL_STEP_MS, 1200);
+          fastWatch.set(key, setTimeout(tick, delay));
+        };
+
+        fastWatch.set(key, setTimeout(tick, delay));
+      }
+
+      async function refreshOneBoxNow(boxId){
+        try{
+          const box = await fetchBoxById(boxId);
+          if(box) replaceCardInDomFromBox(box);
+        } catch(_){}
+      }
+// =========================================================
       // 2) DOM refs en state
       // =========================================================
 
@@ -1368,26 +1507,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         
         let lastActionText = 'Geen info';
         let lastSeenHeader = '-';
-        
-        // ============================================================
-        // NIEUW: Check LocalStorage voor een recentere actie dan de server!
-        // ============================================================
-        const localKey = 'gb_action_' + id;
-        const localRaw = localStorage.getItem(localKey);
-        if (localRaw) {
-            try {
-                const localData = JSON.parse(localRaw);
-                // AANGEPAST: 1200000 ms = 20 minuten. (was 5 min)
-                // Hierdoor blijft jouw klik (open/dicht) langer geldig in het geheugen,
-                // ook als de server nog oude data stuurt.
-                if (Date.now() - localData.ts < 1200000) {
-                    // Is lokale data nieuwer dan wat de server zegt?
-                    if (localData.ts > maxTs) {
-                        maxTs = localData.ts; // Update maxTs voor beide berekeningen
-                    }
-                }
-            } catch(e){}
-        }
         // ============================================================
 
         if (maxTs > 0) {
@@ -1421,26 +1540,25 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
              lastSeenHeader = fmtLastSeen(lastSeenNum);
         }
 
-        // ===========================================================
-        // HEADER HEARTBEAT (Kloppend hartje) - REALISTISCHE LOGICA
-        // ===========================================================
-        // STANDAARD: DOOD (false).
-        // Wordt ALLEEN 'true' als we bewijs van leven hebben.
-        let isAlive = false;
 
-        // 1. Check Server Heartbeat (lastSeen)
-        if (lastSeenNum !== null && !isNaN(lastSeenNum) && lastSeenNum <= 10) {
-            isAlive = true;
+        // Pending actie (commando verzonden, wachten op box)
+        const pending = getPending(id);
+        if (pending){
+          lastActionText = (pending.desired === 'open' ? 'Open gevraagd' : 'Dicht gevraagd') + ' zojuist';
+        }
+        // ===========================================================
+        // HEADER HEARTBEAT (Kloppend hartje)
+        // Enkel op basis van lastSeen (echte verbinding)
+        // - alive: <= 2 min
+        // - warn : 2-10 min
+        // - dead : > 10 min of onbekend
+        let heartClass = '';
+
+        if (lastSeenNum !== null && !isNaN(lastSeenNum)) {
+          if (lastSeenNum <= 2) heartClass = 'alive';
+          else if (lastSeenNum <= 10) heartClass = 'warn';
         }
 
-        // 2. Check Recent Local Activity (als fallback)
-        // Als maxTs bekend is en minder dan 10 min geleden
-        // maxTs wordt berekend op basis van open/close timestamps én local storage
-        if (maxTs > 0 && (Date.now() - maxTs) < 600000) { // 600.000ms = 10 min
-             isAlive = true;
-        }
-        
-        const heartClass = isAlive ? 'alive' : '';
         const heartIcon = `
           <svg class="pulse-heart ${heartClass}" viewBox="0 0 24 24">
             <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
@@ -1481,7 +1599,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
         const motionStateAll = normalizeShutterStateDetailed(rawMotionState);
         const motionSince = pickMotionSince(box);
-        const motionState = (motionStateAll && isRecent(motionSince, 20000)) ? motionStateAll : '';
+        const motionState = (motionStateAll && isRecent(motionSince, 60000)) ? motionStateAll : '';
         const doorState = normalizeShutterStateDetailed(rawDoorState);
 
         if (motionState === 'opening') {
@@ -2238,8 +2356,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
         const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || '');
         if(kvNowConfirm){
-          if(door === 'open' || door === 'closed') kvNowConfirm.textContent = 'Sensor';
-          else kvNowConfirm.textContent = 'Timing';
+          kvNowConfirm.textContent = 'Timing (geen sensor)';
         }
 
         const desired = normalizeDesiredValue(card.getAttribute('data-desired') || '');
@@ -2321,7 +2438,8 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         }
       }
 
-      function updateSideFromCard(card, contextLabel){
+      function updateSideFromCard(card, contextLabel, opts){
+        opts = opts || {};
         currentCard = card;
         selectCard(card);
 
@@ -2364,15 +2482,17 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
         const boxId = card.getAttribute('data-id');
         
+        if(!opts.silent){
         // Eerst lokale lege tabel tonen
-        renderShares(boxId); 
-        // Dan ophalen van server (als de functie bestaat)
+        renderShares(boxId);
+        // Dan ophalen van server
         fetchShares(boxId);
+      }
 
         updateSharesCountUiFromCard(card);
         updateSharesCountUiFromLocal(boxId);
         updateSummaryFromCard(card);
-        openSide();
+        if(!opts.silent) openSide();
       }
 
       document.getElementById('btnGoShares').addEventListener('click', ()=>{
@@ -2392,22 +2512,8 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
       // =========================================================
 
       document.addEventListener('click', async (e)=>{
-        
         // ---------------------------------------------------------
-        // 1. DIRECTE FEEDBACK: Zet hartje AAN bij elke klik
-        // ---------------------------------------------------------
-        const cardClicked = e.target.closest('.gb-card');
-        if(cardClicked) {
-             const heart = cardClicked.querySelector('.pulse-heart');
-             if(heart) heart.classList.add('alive'); // Meteen kloppen!
-             
-             // Zet tekst ook meteen op 'Zojuist'
-             const timeTxt = cardClicked.querySelector('.js-header-time span');
-             if(timeTxt) timeTxt.textContent = 'Zojuist'; 
-        }
-
-        // ---------------------------------------------------------
-        // 2. KNOPPEN LOGICA
+        // KNOPPEN LOGICA
         // ---------------------------------------------------------
         const btn = e.target.closest('button[data-action]');
         const card = e.target.closest('.gb-card');
@@ -2422,90 +2528,62 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           // --- ACTIE: TOGGLE (OPEN/CLOSE) ---
           if(action === 'toggle'){
             e.preventDefault(); e.stopPropagation();
-            
-            // Bepaal gewenste actie op basis van de knoptekst (OPEN of CLOSE)
+
             const label = String(btn.textContent || '').trim().toUpperCase();
             let next = '';
             if(label === 'OPEN') next = 'open';
             else if(label === 'CLOSE') next = 'close';
-            else {
-              // fallback
-              next = card.classList.contains('is-open') ? 'close' : 'open';
-            }
+            else next = card.classList.contains('is-open') ? 'close' : 'open';
 
             if (!boxId || boxId === '-'){
               alert('Box id ontbreekt.');
               return;
             }
 
-            // Huidige UI status onthouden voor rollback bij error
-            const prevIsOpen = card.classList.contains('is-open');
-            const prevDoor = card.getAttribute('data-door-state') || '';
-            const prevMotion = card.getAttribute('data-motion-state') || '';
+            // Toon alleen "verzonden", geen fake open/close
+            setPending(boxId, next);
+
+            const statusText = card.querySelector('.js-status-text');
+            if(statusText) statusText.textContent = (next === 'open') ? 'Open gevraagd (wachten op box)' : 'Dicht gevraagd (wachten op box)';
+
+            const prevLabel = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'VERZENDEN...';
 
             try{
-              // 1. Optimistische UI update (meteen tonen)
-              if(next === 'open'){
-                card.classList.remove('is-open');
-                void card.offsetWidth; // Trigger reflow voor animatie
-                card.classList.add('is-open');
-                card.setAttribute('data-motion-state', 'opening');
-                
-                const statusText = card.querySelector('.js-status-text');
-                if(statusText) statusText.textContent = "Wordt geopend...";
-
-              } else {
-                // Closing
-                card.classList.remove('is-open');
-                card.setAttribute('data-motion-state', 'closing');
-
-                const statusText = card.querySelector('.js-status-text');
-                if(statusText) statusText.textContent = "Wordt gesloten...";
+              // Probeer eerst dedicated endpoint (als het bestaat)
+              let sent = false;
+              try{
+                await sendCommand(boxId, next); // /open of /close
+                sent = true;
+              } catch(_){
+                // fallback
               }
 
-              // Update knop tekst
-              btn.textContent = (next === 'open') ? 'CLOSE' : 'OPEN';
-              
-              // Update ook het zijpaneel als dat open staat voor deze kaart
-              if(side.classList.contains('is-open') && currentCard === card) {
-                  // Herlaad de zijbalk met de (optimistische) nieuwe status
-                  updateSideFromCard(card, document.getElementById('sideSub').textContent);
+              if(!sent){
+                await setDesired(boxId, next);
               }
 
-              // Timer om status na 5 sec 'definitief' te maken in de UI (voor de show)
-              setTimeout(()=>{
-                 const motionNow = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
-                 if(next === 'open' && motionNow === 'opening'){
-                   const statusText = card.querySelector('.js-status-text');
-                   if(statusText) statusText.textContent = "Geopend zojuist";
-                 }
-                 if(next === 'close' && motionNow === 'closing'){
-                   const statusText = card.querySelector('.js-status-text');
-                   if(statusText) statusText.textContent = "Gesloten zojuist";
-                 }
-              }, 5100);
-              
-              // 2. Stuur naar server
-              await setDesired(boxId, next);
-              
-              // Update attribuut voor volgende klik
               card.setAttribute('data-desired', next);
 
-              // 3. Sla lokaal op (zodat refresh het onthoudt)
-              localStorage.setItem('gb_action_' + boxId, JSON.stringify({
-                  state: next,
-                  ts: Date.now()
-              }));
+              // Fast follow-up voor snelle UI (tot 45s)
+              startFastWatch(boxId);
 
             } catch(err){
-              // Foutafhandeling: zet UI terug
-              if(prevIsOpen) card.classList.add('is-open'); else card.classList.remove('is-open');
-              card.setAttribute('data-door-state', prevDoor);
-              card.setAttribute('data-motion-state', prevMotion);
+              clearPending(boxId);
+              await refreshOneBoxNow(boxId);
               alert('Actie mislukt: ' + (err.message || err));
+            } finally {
+              // na korte tijd opnieuw klikbaar, echte label volgt via refresh
+              setTimeout(()=>{
+                btn.disabled = false;
+                btn.textContent = prevLabel;
+              }, 1200);
             }
+
             return;
           }
+
 
           // --- ACTIE: SHARES ---
           if(action === 'shares'){
@@ -2594,7 +2672,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
                      if(typeof updateSideFromCard === 'function') {
                          // We behouden de titel (context) als die er is
                          const currentTitle = document.getElementById('sideSub').textContent;
-                         updateSideFromCard(newCard, currentTitle); 
+                         updateSideFromCard(newCard, currentTitle, { silent:true }); 
                      }
                  }
              }
