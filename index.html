@@ -2701,9 +2701,11 @@ return state === 'open'
                 if(pend){
                   btn.textContent = (pend.desired === 'open') ? 'CLOSE' : 'OPEN';
                 } else {
-                  const d = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || '');
-                  const m = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
-                  btn.textContent = mainButtonLabel(d, m, card.classList.contains('is-open'));
+                  btn.textContent = mainButtonLabelFromBox({
+  statusObj: {
+    state: card.classList.contains('is-open') ? 'open' : 'closed'
+  }
+});
                 }
               }, 700);
 }
