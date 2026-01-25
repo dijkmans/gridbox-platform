@@ -29,6 +29,13 @@ function normalizeState(v) {
   return s;
 }
 
+// Legacy mapping voor portal code die "open" / "close" verwacht
+function toLegacyState(normalized) {
+  if (normalized === "open") return "open";
+  if (normalized === "closed") return "close";
+  return null;
+}
+
 function toIso(v) {
   try {
     if (!v) return null;
@@ -67,10 +74,13 @@ router.post("/:boxId", async (req, res) => {
     (typeof body.doorState === "string" ? body.doorState : null) ??
     null;
 
-  const shutterState = normalizeState(shutterStateRaw);
+  // Als er geen nieuwe state meegegeven is, hou vorige bij (in memory)
+  const prev = STATUS[boxId]?.shutterState ?? null;
+  const normalizedIncoming = normalizeState(shutterStateRaw);
+  const shutterState = normalizedIncoming ?? prev;
 
-  const type = safeString(body.type, "heartbeat");     // heartbeat | state | startup
-  const source = safeString(body.source, "agent");     // agent | simulator
+  const type = safeString(body.type, "heartbeat"); // heartbeat | state | startup
+  const source = safeString(body.source, "agent"); // agent | simulator
   const uptime = body.uptime ?? null;
   const temperature = body.temperature ?? null;
 
@@ -78,12 +88,14 @@ router.post("/:boxId", async (req, res) => {
   const nowIso = nowDate.toISOString();
   const nowMs = nowDate.getTime();
 
+  const legacyState = shutterState ? toLegacyState(shutterState) : null;
+
   // Runtime cache
   STATUS[boxId] = {
     boxId,
     online: true,
-    shutterState,
-    state: shutterState, // compat voor code die "state" verwacht
+    shutterState: shutterState ?? null,
+    state: legacyState ?? shutterState ?? null, // compat: sommige code kijkt naar "state"
     type,
     source,
     uptime,
@@ -94,28 +106,41 @@ router.post("/:boxId", async (req, res) => {
 
   // Persist naar Firestore (zodat status niet verdwijnt na restart)
   try {
-    await db.collection("boxes").doc(boxId).set(
-      {
-        status: {
-          online: true,
-          shutterState,
-          state: shutterState, // compat
-          updatedAt: nowDate,
-          lastSeen: nowDate,   // compat
-          lastSeenMs: nowMs,   // handig om later lastSeenMinutes te berekenen
-          type,
-          source,
-          uptime,
-          temperature
-        }
-      },
-      { merge: true }
-    );
+    const statusUpdate = {
+      online: true,
+      updatedAt: nowDate,
+      lastSeen: nowDate,
+      lastSeenMs: nowMs,
+      type,
+      source,
+      uptime,
+      temperature
+    };
+
+    // Alleen overschrijven als we effectief een state hebben
+    if (shutterState != null) {
+      statusUpdate.shutterState = shutterState;
+      statusUpdate.state = legacyState ?? shutterState;
+    }
+
+    // Extra velden om het portaal "vanzelf" goed te laten starten
+    // lastSeenMinutes staat top-level in jouw dto
+    const topLevelUpdate = {
+      status: statusUpdate,
+      lastSeenMinutes: 0
+    };
+
+    // legacy: sommige UI kijkt naar box.state ("open"/"close")
+    if (legacyState) {
+      topLevelUpdate.box = { state: legacyState };
+    }
+
+    await db.collection("boxes").doc(boxId).set(topLevelUpdate, { merge: true });
   } catch (err) {
     console.error("STATUS persist fout:", err);
   }
 
-  res.json({
+  return res.json({
     ok: true,
     boxId,
     status: STATUS[boxId]
@@ -145,40 +170,34 @@ router.get("/:boxId", async (req, res) => {
     const runtime = STATUS[boxId] ?? null;
     const persisted = box.status ?? null;
 
-    // runtime eerst, anders Firestore
     let status = runtime ?? persisted ?? null;
 
-    // Normaliseer output voor de UI
     if (status && typeof status === "object") {
       const lastSeenIso = toIso(status.lastSeen) ?? toIso(status.updatedAt) ?? null;
-      const shutter = status.shutterState ?? status.state ?? null;
+      const shutter = status.shutterState ?? null;
+      const legacy = status.state ?? (shutter ? toLegacyState(shutter) : null) ?? null;
 
       status = {
         ...status,
-        shutterState: shutter,
-        state: shutter,
+        shutterState: shutter ?? null,
+        state: legacy ?? shutter ?? null,
         lastSeen: lastSeenIso
       };
     }
 
-    // desired zit bij sommige versies top-level, bij andere onder box.*
     const desired = box?.box?.desired ?? box?.desired ?? null;
     const desiredAt = box?.box?.desiredAt ?? box?.desiredAt ?? null;
     const desiredBy = box?.box?.desiredBy ?? box?.desiredBy ?? null;
 
-    res.json({
+    return res.json({
       ok: true,
       boxId,
-      box: {
-        desired,
-        desiredAt,
-        desiredBy
-      },
+      box: { desired, desiredAt, desiredBy },
       status
     });
   } catch (err) {
     console.error("GET /api/status/:boxId fout:", err);
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
       message: "Interne serverfout"
     });
@@ -190,7 +209,7 @@ router.get("/:boxId", async (req, res) => {
  * Debug: toont enkel in-memory status (runtime)
  */
 router.get("/", (req, res) => {
-  res.json({
+  return res.json({
     ok: true,
     boxes: Object.values(STATUS)
   });
