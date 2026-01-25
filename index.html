@@ -909,7 +909,22 @@
         return base + path;
       };
 
-      
+      // ===== CENTRALE STATUS WAARHEID =====
+function getEffectiveStateFromBox(box) {
+  // 1. Live runtime status (Cloud Run /api/status)
+  if (box?.statusObj?.state) return box.statusObj.state;
+  if (box?.statusObj?.shutterState) return box.statusObj.shutterState;
+
+  // 2. Persistente Firestore status
+  if (box?.status?.state) return box.status.state;
+  if (box?.status?.shutterState) return box.status.shutterState;
+
+  // 3. Legacy box.state (portal)
+  if (box?.box?.state) return box.box.state;
+
+  // 4. Laatste redmiddel
+  return "close";
+}
 
       // =========================================================
       // 1b) Pending acties (geen fake open/close, wel "verzonden")
