@@ -1,20 +1,19 @@
 <!DOCTYPE html>
-
-<script type="text/plain" id="worknotes">
-  Deze versie (V20 - FINAL FULL FIX) bevat:
-  1. FIX: updateSharesCountUiFromLocal functie hersteld (lost referentiefout op).
-  2. FIX: Delete knop roept nu de API aan (DELETE request)
-  3. FIX: Add Share roept nu de API aan (POST request).
-  4. FIX: Fetch Shares haalt data van de server (GET request).
-  5. FIX: Auto-refresh en Camera/Events logica behouden.
-  Datum: 2026-01-12
--->
-</script>
 <html lang="nl">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Gridbox Portal v1</title>
+
+  <script type="text/plain" id="worknotes">
+Deze versie (V20 - FINAL FULL FIX) bevat:
+1. FIX: updateSharesCountUiFromLocal functie hersteld (lost referentiefout op).
+2. FIX: Delete knop roept nu de API aan (DELETE request)
+3. FIX: Add Share roept nu de API aan (POST request).
+4. FIX: Fetch Shares haalt data van de server (GET request).
+5. FIX: Auto-refresh en Camera/Events logica behouden.
+Datum: 2026-01-12
+  </script>
 
   <style>
     /* =========================================================
@@ -48,7 +47,7 @@
 
       --shadow:0 2px 10px rgba(0,0,0,.08);
       --radius:16px;
-      
+
       /* Theme upgrade overrides */
       --brand:#2563eb;
       --brand2:#0ea5e9;
@@ -93,7 +92,7 @@
       align-items:center;
       justify-content:space-between;
       margin-bottom:14px;
-      
+
       position: sticky;
       top: 0;
       z-index: 20;
@@ -105,7 +104,7 @@
       border-radius: 16px;
       box-shadow: var(--shadow);
     }
-    
+
     .toolbar::before{
       content: "";
       position: absolute;
@@ -128,7 +127,7 @@
       background-clip: text;
       color: transparent;
     }
-    
+
     .brand::after{
       content: "index";
       display: inline-block;
@@ -160,7 +159,7 @@
       box-shadow: 0 6px 14px rgba(15,23,42,.04);
     }
     #search{min-width:260px}
-    
+
     select:focus, input:focus{
       outline: none;
       border-color: rgba(37,99,235,.55);
@@ -176,7 +175,7 @@
       font-size:18px;
       position: relative;
     }
-    
+
     .gb-section__title::after{
       content: "";
       position: absolute;
@@ -188,7 +187,7 @@
       background: linear-gradient(90deg, var(--brand), var(--brand2));
       opacity: .9;
     }
-    
+
     .gb-list{display:grid;gap:12px}
 
     .gb-card{
@@ -215,7 +214,6 @@
       background:#faf7ff;
       box-shadow:0 6px 20px rgba(109,40,217,.18);
     }
-
 
     .gb-shutter{
       position:relative;
@@ -246,14 +244,13 @@
     }
     .gb-site{font-weight:800; font-size:16px}
     .gb-box{font-weight:800;color:#111827}
-    /* Aangepast voor icoon uitlijning */
     .gb-time{
       font-size:.85rem;
       color:var(--muted);
       display:flex;
       align-items:center;
       gap:6px;
-      margin-left: auto; /* Duwt tijd naar rechts */
+      margin-left: auto;
     }
 
     .gb-meta{
@@ -458,8 +455,6 @@
     .field label{font-weight:700;color:#111827;font-size:12px}
     .check{display:flex;align-items:center;gap:8px;margin:8px 0 0}
 
-
-
     /* =========================================================
        EXTRA: 2 LAGEN RECHTERPANEEL
        Laag 1 = Samenvatting
@@ -625,23 +620,22 @@
       vertical-align: middle;
       width: 24px;
       height: 24px;
-      fill: #cbd5e1; /* Default grey/dead */
+      fill: #cbd5e1;
       margin-right: 4px;
       transition: fill 0.3s;
     }
-    
-    .pulse-heart.alive {
-      fill: #ef4444; /* Red */
-      animation: heartPulse 1s infinite ease-in-out; /* 1s (1000ms) interval */
-    }
 
-    
+    .pulse-heart.alive {
+      fill: #ef4444;
+      animation: heartPulse 1s infinite ease-in-out;
+    }
 
     .pulse-heart.warn{
-      fill: #f59e0b; /* Orange warning */
+      fill: #f59e0b;
       animation: none;
     }
-@keyframes heartPulse {
+
+    @keyframes heartPulse {
       0% { transform: scale(1); }
       15% { transform: scale(1.25); }
       30% { transform: scale(1); }
@@ -653,7 +647,7 @@
 </head>
 
 <body>
-    <div id="app" class="app is-collapsed">
+  <div id="app" class="app is-collapsed">
     <main class="main">
       <div class="toolbar">
         <div class="brand">Gridbox</div>
@@ -688,7 +682,6 @@
       </div>
 
       <div class="side-body">
-
         <div class="block" id="blockSummary">
           <h4>Samenvatting</h4>
 
@@ -909,22 +902,61 @@
         return base + path;
       };
 
+      // =========================================================
+      // Helpers
+      // =========================================================
+      function pick(obj, paths){
+        for (const p of paths){
+          const parts = p.split('.');
+          let cur = obj;
+          let ok = true;
+          for (const part of parts){
+            if (cur && Object.prototype.hasOwnProperty.call(cur, part)){
+              cur = cur[part];
+            } else {
+              ok = false;
+              break;
+            }
+          }
+          if (ok && cur !== undefined) return cur;
+        }
+        return undefined;
+      }
+
+      function normalizeShutterStateDetailed(v){
+        const s = String(v ?? '').trim().toLowerCase();
+        if (!s) return '';
+        if (s === 'open' || s === 'opened') return 'open';
+        if (s === 'opening') return 'opening';
+        if (s === 'closed' || s === 'close') return 'closed';
+        if (s === 'closing') return 'closing';
+        if (s === 'error') return 'error';
+        return s;
+      }
+
       // ===== CENTRALE STATUS WAARHEID =====
-function getEffectiveStateFromBox(box) {
-  // 1. Live runtime status (Cloud Run /api/status)
-  if (box?.statusObj?.state) return box.statusObj.state;
-  if (box?.statusObj?.shutterState) return box.statusObj.shutterState;
+      function getEffectiveStateFromBox(box) {
+        const candidates = [
+          box?.statusObj?.state,
+          box?.statusObj?.shutterState,
+          box?.status?.state,
+          box?.status?.shutterState,
+          box?.box?.state,
+          box?.state,
+          box?.shutterState
+        ];
 
-  // 2. Persistente Firestore status
-  if (box?.status?.state) return box.status.state;
-  if (box?.status?.shutterState) return box.status.shutterState;
+        for (const c of candidates){
+          const n = normalizeShutterStateDetailed(c);
+          if (n) return n;
+        }
+        return "closed";
+      }
 
-  // 3. Legacy box.state (portal)
-  if (box?.box?.state) return box.box.state;
-
-  // 4. Laatste redmiddel
-  return "close";
-}
+      function mainButtonLabelFromBox(box){
+        const state = getEffectiveStateFromBox(box);
+        return (state === 'open' || state === 'opening') ? 'CLOSE' : 'OPEN';
+      }
 
       // =========================================================
       // 1b) Pending acties (geen fake open/close, wel "verzonden")
@@ -965,7 +997,86 @@ function getEffectiveStateFromBox(box) {
       }
 
       // =========================================================
-      // 1c) Fast follow-up na OPEN/CLOSE (zodat het meteen aanvoelt)
+      // Tijd parsing (Firestore/ISO/ms)
+      // =========================================================
+      function parseAnyTime(v){
+        try{
+          if (v === null || v === undefined) return null;
+          if (typeof v === 'number' && isFinite(v)){
+            return v > 1e12 ? v : Math.round(v * 1000);
+          }
+          if (typeof v === 'string'){
+            const t = Date.parse(v);
+            return isNaN(t) ? null : t;
+          }
+          if (typeof v === 'object'){
+            const sec = (v.seconds !== undefined) ? v.seconds : (v._seconds !== undefined ? v._seconds : null);
+            const nsec = (v.nanoseconds !== undefined) ? v.nanoseconds : (v._nanoseconds !== undefined ? v._nanoseconds : 0);
+            if (sec !== null && sec !== undefined){
+              const ms = Number(sec) * 1000 + Math.floor(Number(nsec || 0) / 1e6);
+              return isFinite(ms) ? ms : null;
+            }
+          }
+          return null;
+        } catch(_){
+          return null;
+        }
+      }
+
+      function isRecent(tsVal, maxMs){
+        const ms = parseAnyTime(tsVal);
+        if (!ms) return false;
+        return Math.abs(Date.now() - ms) <= maxMs;
+      }
+
+      function computeOnlineStateFromMinutes(min){
+        if (min === null || Number.isNaN(min)) return { label:'-', cls:'' };
+        if (min <= 2) return { label:'Online', cls:'ok' };
+        if (min <= 10) return { label:'Opgelet', cls:'warn' };
+        return { label:'Offline', cls:'bad' };
+      }
+
+      function fmtTimeAgo(min) {
+        if (min === null || Number.isNaN(min)) return '';
+        if (min < 1) return 'zojuist';
+        if (min < 60) return min + ' min. geleden';
+        const uren = Math.floor(min / 60);
+        if (uren < 24) return uren + ' uur geleden';
+        const dagen = Math.floor(uren / 24);
+        if (dagen < 30) return dagen + ' dagen geleden';
+        const maanden = Math.floor(dagen / 30);
+        return maanden + ' maanden geleden';
+      }
+
+      function fmtMaybe(v){
+        if (v === null || v === undefined || v === '') return '-';
+        if (typeof v === 'object'){
+          if (v.name !== undefined) return String(v.name);
+          if (v.code !== undefined) return String(v.code);
+          if (v.number !== undefined) return String(v.number);
+          return '-';
+        }
+        return String(v);
+      }
+
+      function fmtLastSeen(min){
+        if (min === null || min === undefined) return '-';
+        const n = Number(min);
+        if (Number.isNaN(n)) return '-';
+        return n + ' min geleden';
+      }
+
+      function escapeHtml(s){
+        return String(s || '')
+          .replace(/&/g,'&amp;')
+          .replace(/</g,'&lt;')
+          .replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;')
+          .replace(/'/g,'&#39;');
+      }
+
+      // =========================================================
+      // 1c) Fast follow-up na OPEN/CLOSE
       // =========================================================
       const FAST_POLL_START_MS = 400;
       const FAST_POLL_MAX_MS = 45000;
@@ -1057,22 +1168,19 @@ function getEffectiveStateFromBox(box) {
           if(box) replaceCardInDomFromBox(box);
         } catch(_){}
       }
-// =========================================================
+
+      // =========================================================
       // 2) DOM refs en state
       // =========================================================
-
       const app = document.getElementById('app');
       const side = document.getElementById('side');
       const backdrop = document.getElementById('backdrop');
-
       const sideBody = document.querySelector('.side-body');
-
       const sectionsWrap = document.getElementById('sections');
 
       // =========================================================
       // 3) Side panel open/sluit
       // =========================================================
-
       function isOverlayMode(){
         return !!(window.matchMedia && window.matchMedia('(max-width: 980px)').matches);
       }
@@ -1137,105 +1245,38 @@ function getEffectiveStateFromBox(box) {
         touchStartX = null; touchStartY = null;
       }, { passive:true });
 
-      function computeOnlineStateFromMinutes(min){
-        // Als we geen lastSeen hebben, is de status niet per se 'slecht', 
-        // maar we weten het gewoon niet live. We geven 'unknown' terug (grijs).
-        if (min === null || Number.isNaN(min)) return { label:'-', cls:'' };
-        if (min <= 2) return { label:'Online', cls:'ok' };
-        if (min <= 10) return { label:'Opgelet', cls:'warn' };
-        return { label:'Offline', cls:'bad' };
-      }
-
-      // Helper om tijdsverloop tekstueel te maken (bv "2 dagen geleden")
-      function fmtTimeAgo(min) {
-        if (min === null || Number.isNaN(min)) return '';
-        if (min < 1) return 'zojuist';
-        if (min < 60) return min + ' min. geleden';
-        const uren = Math.floor(min / 60);
-        if (uren < 24) return uren + ' uur geleden';
-        const dagen = Math.floor(uren / 24);
-        if (dagen < 30) return dagen + ' dagen geleden';
-        const maanden = Math.floor(dagen / 30);
-        return maanden + ' maanden geleden';
-      }
-
-      function fmtMaybe(v){
-        if (v === null || v === undefined || v === '') return '-';
-        if (typeof v === 'object'){
-          if (v.name !== undefined) return String(v.name);
-          if (v.code !== undefined) return String(v.code);
-          if (v.number !== undefined) return String(v.number);
-          return '-';
+      function buildPhonesListHtml(phones){
+        if (!phones || !Array.isArray(phones) || !phones.length){
+          return '<li class="muted">Geen nummers</li>';
         }
-        return String(v);
+        return phones.map(p=>{
+          const phone = escapeHtml(p.phone || '');
+          const label = escapeHtml(p.label || '');
+          if (!phone) return '';
+          return `<li><span title="${label}">${phone}</span></li>`;
+        }).join('');
       }
 
-      function pick(obj, paths){
-        for (const p of paths){
-          const parts = p.split('.');
-          let cur = obj;
-          let ok = true;
-          for (const part of parts){
-            if (cur && Object.prototype.hasOwnProperty.call(cur, part)){
-              cur = cur[part];
-            } else {
-              ok = false;
-              break;
-            }
-          }
-          if (ok && cur !== undefined) return cur;
-        }
-        return undefined;
+      function buildPhonesDataAttr(phones){
+        if (!phones || !Array.isArray(phones) || !phones.length) return '';
+        return phones
+          .map(p => `${(p.phone||'').trim()}|${(p.label||'').trim()}`)
+          .filter(Boolean)
+          .join(',');
       }
 
-      function normalizeShutterStateDetailed(v){
-        const s = String(v ?? '').trim().toLowerCase();
-        if (!s) return '';
-        if (s === 'open' || s === 'opened') return 'open';
-        if (s === 'opening') return 'opening';
-        if (s === 'closed' || s === 'close') return 'closed';
-        if (s === 'closing') return 'closing';
-        return s;
+      function setBorderByLastSeen(card){
+        const min = Number(card.getAttribute('data-lastseen-min'));
+        const s = computeOnlineStateFromMinutes(min);
+        let color = getComputedStyle(document.documentElement).getPropertyValue('--bad').trim();
+        if (s.cls === 'ok') color = getComputedStyle(document.documentElement).getPropertyValue('--ok').trim();
+        else if (s.cls === 'warn') color = getComputedStyle(document.documentElement).getPropertyValue('--warn').trim();
+        card.style.borderLeftColor = color;
       }
 
-      function shutterLabel(state){
-        const s = String(state ?? '').trim().toLowerCase();
-        if (s === 'open') return 'OPEN';
-        if (s === 'closed') return 'CLOSED';
-        if (s === 'opening') return 'OPENING';
-        if (s === 'closing') return 'CLOSING';
-        return 'UNKNOWN';
-      }
-
-      
-      // Tijd parsing voor "since/timestamp/updatedAt" velden (Firestore/ISO/ms)
-      function parseAnyTime(v){
-        try{
-          if (v === null || v === undefined) return null;
-          if (typeof v === 'number' && isFinite(v)){
-            // ms of seconds
-            return v > 1e12 ? v : Math.round(v * 1000);
-          }
-          if (typeof v === 'string'){
-            // Probeer ISO string
-            const t = Date.parse(v);
-            return isNaN(t) ? null : t;
-          }
-          if (typeof v === 'object'){
-            // Firestore Timestamp {seconds, nanoseconds} of {_seconds, _nanoseconds}
-            const sec = (v.seconds !== undefined) ? v.seconds : (v._seconds !== undefined ? v._seconds : null);
-            const nsec = (v.nanoseconds !== undefined) ? v.nanoseconds : (v._nanoseconds !== undefined ? v._nanoseconds : 0);
-            if (sec !== null && sec !== undefined){
-              const ms = Number(sec) * 1000 + Math.floor(Number(nsec || 0) / 1e6);
-              return isFinite(ms) ? ms : null;
-            }
-          }
-          return null;
-        } catch(_){
-          return null;
-        }
-      }
-
+      // =========================================================
+      // 4) Data picks
+      // =========================================================
       function pickMotionSince(box){
         return pick(box, [
           'state.since',
@@ -1247,29 +1288,12 @@ function getEffectiveStateFromBox(box) {
         ]) ?? null;
       }
 
-      function isRecent(tsVal, maxMs){
-        const ms = parseAnyTime(tsVal);
-        if (!ms) return false;
-        return Math.abs(Date.now() - ms) <= maxMs;
-      }
-
-function mainButtonLabelFromBox(box){
-  const state = getEffectiveStateFromBox(box);
-  return state === 'open' ? 'CLOSE' : 'OPEN';
-}
-
-      // Bewegingsstatus (meestal "opening/closing") komt typisch uit statusObj/state
       function pickMotionState(box){
         return pick(box, [
-          // eerst de echte agent velden
           'statusObj.state',
           'statusObj.shutterState',
-
-          // compat
           'status.state',
           'status.shutterState',
-
-          // legacy / andere plekken
           'box.state',
           'state.state',
           'lifecycle.state',
@@ -1279,22 +1303,14 @@ function mainButtonLabelFromBox(box){
         ]) ?? null;
       }
 
-      // Deurstatus (meestal "open/closed") komt typisch uit statusObj.door, anders uit shutterState/state
       function pickDoorState(box){
         return pick(box, [
-          // deur (als die bestaat)
           'statusObj.door',
-
-          // anders neem shutterState/state als deur-indicatie
           'statusObj.shutterState',
           'statusObj.state',
-
-          // compat
           'status.door',
           'status.shutterState',
           'status.state',
-
-          // legacy
           'box.state',
           'door',
           'shutterState',
@@ -1308,10 +1324,10 @@ function mainButtonLabelFromBox(box){
           'portal.customer',
           'organisation.name',
           'organization.name',
-                    'Portal.Organisation',
-                    'Portal.Organization',
-                    'portal.organisation',
-                    'portal.organization',
+          'Portal.Organisation',
+          'Portal.Organization',
+          'portal.organisation',
+          'portal.organization',
           'customer'
         ]) ?? null;
       }
@@ -1358,8 +1374,8 @@ function mainButtonLabelFromBox(box){
       }
 
       function pickLifecycleState(box){
-  return pick(box, ['lifecycle.state','lifecycle.status']) ?? null;
-}
+        return pick(box, ['lifecycle.state','lifecycle.status']) ?? null;
+      }
 
       function pickLifecycleOpenedAt(box){
         return pick(box, ['lifecycle.openedAt','lifecycle.opened_at','openedAt']) ?? null;
@@ -1456,55 +1472,42 @@ function mainButtonLabelFromBox(box){
         return line1 || line2;
       }
 
-      function fmtLastSeen(min){
-        if (min === null || min === undefined) return '-';
-        const n = Number(min);
-        if (Number.isNaN(n)) return '-';
-        return n + ' min geleden';
+      // =========================================================
+      // 7) Side panel helpers
+      // =========================================================
+      function normalizeDesiredValue(v){
+        const s = String(v ?? '').trim().toLowerCase();
+        if(!s) return '';
+        if(s === 'open' || s === 'opened' || s === 'opening') return 'open';
+        if(s === 'close' || s === 'closed' || s === 'closing') return 'close';
+        return s;
       }
 
-      function escapeHtml(s){
-        return String(s || '')
-          .replace(/&/g,'&amp;')
-          .replace(/</g,'&lt;')
-          .replace(/>/g,'&gt;')
-          .replace(/"/g,'&quot;')
-          .replace(/'/g,'&#39;');
+      function desiredLabel(v){
+        if(v === 'open') return 'Open';
+        if(v === 'close') return 'Dicht';
+        return fmtMaybe(v);
       }
 
-      function setBorderByLastSeen(card){
-        const min = Number(card.getAttribute('data-lastseen-min'));
-        const s = computeOnlineStateFromMinutes(min);
-        let color = getComputedStyle(document.documentElement).getPropertyValue('--bad').trim();
-        if (s.cls === 'ok') color = getComputedStyle(document.documentElement).getPropertyValue('--ok').trim();
-        else if (s.cls === 'warn') color = getComputedStyle(document.documentElement).getPropertyValue('--warn').trim();
-        card.style.borderLeftColor = color;
+      function fmtLocalDateTime(v){
+        const ms = parseAnyTime(v);
+        if(!ms) return fmtMaybe(v);
+        const d = new Date(ms);
+        const pad = n => String(n).padStart(2,'0');
+        return pad(d.getDate()) + '/' + pad(d.getMonth()+1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
       }
 
-      function buildPhonesListHtml(phones){
-        if (!phones || !Array.isArray(phones) || !phones.length){
-          return '<li class="muted">Geen nummers</li>';
-        }
-        return phones.map(p=>{
-          const phone = escapeHtml(p.phone || '');
-          const label = escapeHtml(p.label || '');
-          if (!phone) return '';
-          return `<li><span title="${label}">${phone}</span></li>`;
-        }).join('');
-      }
-
-      function buildPhonesDataAttr(phones){
-        if (!phones || !Array.isArray(phones) || !phones.length) return '';
-        return phones
-          .map(p => `${(p.phone||'').trim()}|${(p.label||'').trim()}`)
-          .filter(Boolean)
-          .join(',');
+      function fmtSince(v){
+        const ms = parseAnyTime(v);
+        if(!ms) return '';
+        const min = Math.floor((Date.now() - ms) / 60000);
+        if(min < 0) return '';
+        return '(sinds ' + fmtTimeAgo(min) + ')';
       }
 
       // =========================================================
       // 4) Rendering cards en sections
       // =========================================================
-
       function createCard(box){
         if (box && box.ui && box.ui.hidden === true) return null;
 
@@ -1525,65 +1528,37 @@ function mainButtonLabelFromBox(box){
         const lastSeenNum = (lastSeen === null || lastSeen === undefined) ? NaN : Number(lastSeen);
         const s = computeOnlineStateFromMinutes(lastSeenNum);
 
-        // NIEUWE LOGICA: Bepaal de meest recente activiteit (Action)
-        // 1. Haal timestamps op
+        // Laatste actie: gebaseerd op open, close, seen
         const tOpen = parseAnyTime(pickLifecycleOpenedAt(box)) || 0;
         const tClose = parseAnyTime(pickLifecycleClosedAt(box)) || 0;
-        // Als lastSeenNum geldig is, rekenen we dat om naar een timestamp (ongeveer)
         const tSeen = (!isNaN(lastSeenNum) && lastSeenNum !== null) ? (Date.now() - lastSeenNum*60000) : 0;
 
-        // 2. Zoek de grootste (meest recente)
-        let maxTs = Math.max(tOpen, tClose, tSeen);
-        
+        const maxTs = Math.max(tOpen, tClose, tSeen);
+
         let lastActionText = 'Geen info';
         let lastSeenHeader = '-';
-        // ============================================================
 
         if (maxTs > 0) {
           const diffMin = Math.floor((Date.now() - maxTs) / 60000);
           const timeStr = fmtTimeAgo(diffMin);
 
-          // Voor de Pill (Actie)
-          if (maxTs === tOpen) {
-            lastActionText = 'Geopend ' + timeStr;
-          } else if (maxTs === tClose) {
-            lastActionText = 'Gesloten ' + timeStr;
-          } else if (maxTs === tSeen) {
-            lastActionText = 'Gezien ' + timeStr;
-          } else {
-            // Fallback (bv lokale actie of maxTs was updated)
-            // Als we lokaal hebben geupdate, is het meestal Open of Close
-            // Maar we weten de state niet 100% zeker hier zonder complexere logica
-            // We gebruiken de timeStr
-             if (localRaw && JSON.parse(localRaw).ts === maxTs) {
-                 const state = JSON.parse(localRaw).state;
-                 lastActionText = (state === 'open' ? 'Geopend ' : 'Gesloten ') + timeStr;
-             } else {
-                 lastActionText = timeStr;
-             }
-          }
+          if (maxTs === tOpen) lastActionText = 'Geopend ' + timeStr;
+          else if (maxTs === tClose) lastActionText = 'Gesloten ' + timeStr;
+          else lastActionText = 'Gezien ' + timeStr;
         }
-        
-        // Voor de Header (Laatst gezien)
-        // Alleen de ECHTE lastSeen gebruiken (geen open/close/local)
+
         if (lastSeenNum !== null && !isNaN(lastSeenNum)) {
-             lastSeenHeader = fmtLastSeen(lastSeenNum);
+          lastSeenHeader = fmtLastSeen(lastSeenNum);
         }
 
-
-        // Pending actie (commando verzonden, wachten op box)
+        // Pending actie
         const pending = getPending(id);
         if (pending){
           lastActionText = (pending.desired === 'open' ? 'Open gevraagd' : 'Dicht gevraagd') + ' zojuist';
         }
-        // ===========================================================
-        // HEADER HEARTBEAT (Kloppend hartje)
-        // Enkel op basis van lastSeen (echte verbinding)
-        // - alive: <= 2 min
-        // - warn : 2-10 min
-        // - dead : > 10 min of onbekend
-        let heartClass = '';
 
+        // Heartbeat
+        let heartClass = '';
         if (lastSeenNum !== null && !isNaN(lastSeenNum)) {
           if (lastSeenNum <= 2) heartClass = 'alive';
           else if (lastSeenNum <= 10) heartClass = 'warn';
@@ -1630,26 +1605,21 @@ function mainButtonLabelFromBox(box){
         const motionStateAll = normalizeShutterStateDetailed(rawMotionState);
         const motionSince = pickMotionSince(box);
 
-        // motionState gebruiken we enkel als "beweging" als het echt opening/closing is (en recent)
         const motionState = (motionStateAll && isRecent(motionSince, 60000)) ? motionStateAll : '';
 
-        // deurstate
         const doorStateRaw = normalizeShutterStateDetailed(rawDoorState);
 
-        // als deur ontbreekt, neem open/closed uit state/shutterState
         const stableDoor =
           (doorStateRaw === 'open' || doorStateRaw === 'closed') ? doorStateRaw :
           (motionStateAll === 'open' || motionStateAll === 'closed') ? motionStateAll :
           '';
 
-        // ===== ENIGE PLAATS DIE is-open ZET =====
-const effectiveState = getEffectiveStateFromBox(box);
+        // ENIGE PLAATS die is-open/is-closed zet
+        const effectiveState = getEffectiveStateFromBox(box);
 
-card.classList.remove('is-open');
-
-if (effectiveState === 'open') {
-  card.classList.add('is-open');
-}
+        card.classList.remove('is-open', 'is-closed');
+        if (effectiveState === 'open' || effectiveState === 'opening') card.classList.add('is-open');
+        else card.classList.add('is-closed');
 
         card.setAttribute('data-motion-state', motionState);
         card.setAttribute('data-door-state', stableDoor || '');
@@ -1678,7 +1648,6 @@ if (effectiveState === 'open') {
         card.setAttribute('data-source', lcSource ?? '');
         card.setAttribute('data-geo', geo ?? '');
 
-
         card.setAttribute('data-desired', desiredNorm || '');
         card.setAttribute('data-desired-at', desiredAt ?? '');
         card.setAttribute('data-desired-by', desiredBy ?? '');
@@ -1691,7 +1660,6 @@ if (effectiveState === 'open') {
           ? `<span class="pill ghost" title="sharesCount">shares -</span>`
           : `<span class="pill ghost" title="sharesCount">shares ${escapeHtml(String(sharesCount))}</span>`;
 
-        // UPDATE: Header nu met hartje, geen tekst
         card.innerHTML = `
           <div class="gb-shutter" aria-hidden="true"><div class="gb-shutter__door"></div></div>
 
@@ -1783,92 +1751,65 @@ if (effectiveState === 'open') {
       // =========================================================
       // 5) API calls
       // =========================================================
+      async function loadRuntimeStatusMap(){
+        try{
+          const res = await fetch(apiUrl('/api/status'), { method:'GET' });
+          if(!res.ok) return new Map();
 
-  async function loadRuntimeStatusMap(){
-  try{
-    const res = await fetch(apiUrl('/api/status'), { method:'GET' });
-    if(!res.ok) return new Map();
+          const data = await res.json().catch(()=> null);
 
-    const data = await res.json().catch(()=> null);
+          const arr =
+            Array.isArray(data) ? data :
+            (data && Array.isArray(data.boxes)) ? data.boxes :
+            [];
 
-    // Verwacht: { ok:true, boxes:[ ... ] }
-    // Of soms: { boxes:[ ... ] }
-    // Of soms: [ ... ]
-    const arr =
-      Array.isArray(data) ? data :
-      (data && Array.isArray(data.boxes)) ? data.boxes :
-      [];
-
-    const map = new Map();
-    arr.forEach(s=>{
-      const id = s && (s.boxId ?? s.id);
-      if(id) map.set(String(id), s);
-    });
-    return map;
-  } catch(_){
-    return new Map();
-  }
-}
-
-    async function loadBoxes(){
-  const res = await fetch(apiUrl('/api/boxes'), { method:'GET' });
-  if (!res.ok){
-    const t = await res.text().catch(()=> '');
-    throw new Error('API fout: ' + res.status + ' ' + t);
-  }
-
-  const data = await res.json().catch(()=> null);
-
-  let items = [];
-  if (Array.isArray(data)) items = data;
-  else if (data && Array.isArray(data.boxes)) items = data.boxes;
-  else if (data && Array.isArray(data.items)) items = data.items;
-
-  // Merge live runtime status (in-memory) over persisted statusObj
-  // Dit voorkomt "springen" als Firestore status nog achterloopt.
-  const rtMap = await loadRuntimeStatusMap();
-  if (rtMap && rtMap.size){
-    const now = Date.now();
-
-    items.forEach(b=>{
-      const id = String(b?.id ?? b?.boxId ?? '');
-      if(!id) return;
-
-      const rt = rtMap.get(id);
-      if(!rt) return;
-
-      // runtime wint op statusObj velden
-      b.statusObj = { ...(b.statusObj || {}), ...rt };
-
-      // legacy string status (open/closed/opening/closing) up-to-date
-      // 1) eerst: als runtime iets heeft, zet dat
-      if (typeof rt.shutterState === 'string' && rt.shutterState) b.status = rt.shutterState;
-      else if (typeof rt.state === 'string' && rt.state) b.status = rt.state;
-
-      // 2) extra safety: als status leeg is maar statusObj wel bestaat, vul status uit statusObj
-      if ((b.status === null || b.status === undefined || String(b.status).trim() === '') && b.statusObj){
-        const s = b.statusObj.shutterState || b.statusObj.state;
-        if (typeof s === 'string' && s) b.status = s;
+          const map = new Map();
+          arr.forEach(s=>{
+            const id = s && (s.boxId ?? s.id);
+            if(id) map.set(String(id), s);
+          });
+          return map;
+        } catch(_){
+          return new Map();
+        }
       }
 
-      // lastSeenMinutes up-to-date (voor heartbeat/online kleuren)
-      if (rt.lastSeenMs && Number.isFinite(Number(rt.lastSeenMs))){
-        const min = Math.max(0, Math.floor((now - Number(rt.lastSeenMs)) / 60000));
-        b.lastSeenMinutes = min;
-      }
-    });
-  } else {
-    // Ook zonder runtime: als status leeg is maar statusObj wel bestaat, vul status
-    items.forEach(b=>{
-      if ((b.status === null || b.status === undefined || String(b.status).trim() === '') && b.statusObj){
-        const s = b.statusObj.shutterState || b.statusObj.state;
-        if (typeof s === 'string' && s) b.status = s;
-      }
-    });
-  }
+      async function loadBoxes(){
+        const res = await fetch(apiUrl('/api/boxes'), { method:'GET' });
+        if (!res.ok){
+          const t = await res.text().catch(()=> '');
+          throw new Error('API fout: ' + res.status + ' ' + t);
+        }
 
-  return items;
-}
+        const data = await res.json().catch(()=> null);
+
+        let items = [];
+        if (Array.isArray(data)) items = data;
+        else if (data && Array.isArray(data.boxes)) items = data.boxes;
+        else if (data && Array.isArray(data.items)) items = data.items;
+
+        const rtMap = await loadRuntimeStatusMap();
+        if (rtMap && rtMap.size){
+          const now = Date.now();
+
+          items.forEach(b=>{
+            const id = String(b?.id ?? b?.boxId ?? '');
+            if(!id) return;
+
+            const rt = rtMap.get(id);
+            if(!rt) return;
+
+            b.statusObj = { ...(b.statusObj || {}), ...rt };
+
+            if (rt.lastSeenMs && Number.isFinite(Number(rt.lastSeenMs))){
+              const min = Math.max(0, Math.floor((now - Number(rt.lastSeenMs)) / 60000));
+              b.lastSeenMinutes = min;
+            }
+          });
+        }
+
+        return items;
+      }
 
       async function setDesired(boxId, desired){
         const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/desired`), {
@@ -1901,6 +1842,9 @@ if (effectiveState === 'open') {
         window.open(url, '_blank', 'noopener');
       }
 
+      // =========================================================
+      // 6) Filters
+      // =========================================================
       const customerFilter = document.getElementById('customerFilter');
       const locationFilter = document.getElementById('locationFilter');
       const search = document.getElementById('search');
@@ -1910,10 +1854,6 @@ if (effectiveState === 'open') {
       }
       function getCustomerOfSection(sec){ return (sec.getAttribute('data-customer') || '').trim(); }
       function getLocationOfSection(sec){ return (sec.getAttribute('data-group') || '').trim(); }
-
-      // =========================================================
-      // 6) Filters
-      // =========================================================
 
       function rebuildCustomerDropdown(){
         const sections = getSections();
@@ -2002,6 +1942,9 @@ if (effectiveState === 'open') {
       locationFilter.addEventListener('change', applyFilters);
       search.addEventListener('input', applyFilters);
 
+      // =========================================================
+      // 7) Side panel state en refs
+      // =========================================================
       let currentCard = null;
 
       const sideTitle = document.getElementById('sideTitle');
@@ -2042,10 +1985,8 @@ if (effectiveState === 'open') {
       const kvAccessSummary = document.getElementById('kvAccessSummary');
 
       const btnToggleDetails = document.getElementById('btnToggleDetails');
-
       const sidePhones = document.getElementById('sidePhones');
 
-      // Details toggle (laag 2)
       const DETAILS_KEY = 'gb_side_show_details';
 
       function setDetailsOpen(open){
@@ -2064,7 +2005,6 @@ if (effectiveState === 'open') {
           setDetailsOpen(!sideBody.classList.contains('show-details'));
         });
       }
-
       initDetailsToggle();
 
       function setStatusPill(card){
@@ -2102,6 +2042,9 @@ if (effectiveState === 'open') {
         card.classList.add('is-selected');
       }
 
+      // =========================================================
+      // 8) Shares UI
+      // =========================================================
       const sharesStore = {};
       const sharesBody = document.querySelector('#sharesTable tbody');
       const sharePhone   = document.getElementById('sharePhone');
@@ -2109,32 +2052,23 @@ if (effectiveState === 'open') {
       const shareComment = document.getElementById('shareComment');
       const shareAuth    = document.getElementById('shareAuth');
 
-      // =========================================================
-      // 8) Shares UI
-      // =========================================================
-      
-      // NIEUW: Haal shares op van de server
       async function fetchShares(boxId) {
         try {
-          // Haal de echte data van de API
           const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/shares`));
-          if (!res.ok) return; // Geen ramp als het mislukt
-          
+          if (!res.ok) return;
+
           const data = await res.json();
-          // Als de server een array teruggeeft, slaan we die op
           if (Array.isArray(data)) {
-              // We mappen de server-data naar het formaat van jouw tabel
-              sharesStore[boxId] = data.map(s => ({
-                  ts: s.createdAt ? new Date(s.createdAt).toLocaleString() : '-',
-                  phone: s.phone,
-                  comment: s.comment,
-                  expires: s.expiresAt,
-                  auth: s.type === 'authorized',
-                  // Bewaar ID voor delete acties
-                  id: s.id 
-              }));
-              renderShares(boxId);
-              updateSharesCountUiFromLocal(boxId);
+            sharesStore[boxId] = data.map(s => ({
+              ts: s.createdAt ? new Date(s.createdAt).toLocaleString() : '-',
+              phone: s.phone,
+              comment: s.comment,
+              expires: s.expiresAt,
+              auth: s.type === 'authorized',
+              id: s.id
+            }));
+            renderShares(boxId);
+            updateSharesCountUiFromLocal(boxId);
           }
         } catch (e) {
           console.error("Kon shares niet ophalen", e);
@@ -2153,9 +2087,9 @@ if (effectiveState === 'open') {
         rows.forEach((r,i)=>{
           const tr = document.createElement('tr');
           tr.innerHTML = `
-            <td>${r.ts}</td>
-            <td>${r.phone}</td>
-            <td>${(r.comment||'').replace(/</g,'&lt;')}</td>
+            <td>${escapeHtml(r.ts)}</td>
+            <td>${escapeHtml(r.phone)}</td>
+            <td>${escapeHtml(r.comment || '')}</td>
             <td>${r.auth ? '<span class="badge">Gemachtigd</span>' : (r.expires ? '<span class="badge">Tijdelijk</span>' : '<span class="badge">Actief</span>')}</td>
             <td class="right"><button class="btn-small btn-ghost" data-del="${i}" type="button">Delete</button></td>
           `;
@@ -2165,10 +2099,8 @@ if (effectiveState === 'open') {
 
       function updateSharesCountUiFromLocal(boxId){
         const rows = (sharesStore[boxId]||[]);
-        // Update de teller in het zijpaneel
         const badge = document.getElementById('kvSharesCount');
         if(badge) badge.textContent = 'shares ' + rows.length;
-
         updateAccessSummary(boxId);
       }
 
@@ -2195,7 +2127,7 @@ if (effectiveState === 'open') {
           const exp = r ? r.expires : null;
           if(exp){
             const ms = parseAnyTime(exp);
-            if(ms && ms < now) return; // verlopen
+            if(ms && ms < now) return;
             active += 1;
             if(ms && (soonest === null || ms < soonest)) soonest = ms;
             return;
@@ -2221,44 +2153,38 @@ if (effectiveState === 'open') {
         kvAccessSummary.textContent = s;
       }
 
-
-      sharesBody.addEventListener('click', async (e) => { // Let op: 'async' toegevoegd
+      sharesBody.addEventListener('click', async (e) => {
         const del = e.target.closest('button[data-del]');
         if (!del || !currentCard) return;
-        
+
         const boxId = currentCard.getAttribute('data-id');
         const idx = Number(del.getAttribute('data-del'));
-        
-        // Haal het juiste share-object op uit het geheugen om het ID te vinden
+
         const shareObj = sharesStore[boxId] && sharesStore[boxId][idx];
 
-        // Veiligheidscheck
         if (!shareObj || !shareObj.id) {
-            // Als er geen ID is (bv net lokaal aangemaakt), verwijder dan alleen lokaal
-            if(sharesStore[boxId]) sharesStore[boxId].splice(idx, 1);
-            renderShares(boxId);
-            updateSharesCountUiFromLocal(boxId);
-            return;
+          if(sharesStore[boxId]) sharesStore[boxId].splice(idx, 1);
+          renderShares(boxId);
+          updateSharesCountUiFromLocal(boxId);
+          return;
         }
 
-        // 1. Roep de server aan om te verwijderen (Soft delete)
         try {
-            const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/shares/${shareObj.id}`), {
-                method: 'DELETE'
-            });
-            
-            if (!res.ok) {
-                console.error("Server fout bij delete", res.status);
-                alert("Kon share niet verwijderen op de server.");
-                return; 
-            }
-        } catch (err) {
-            console.error("Netwerk fout", err);
-            alert("Kon server niet bereiken.");
+          const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/shares/${shareObj.id}`), {
+            method: 'DELETE'
+          });
+
+          if (!res.ok) {
+            console.error("Server fout bij delete", res.status);
+            alert("Kon share niet verwijderen op de server.");
             return;
+          }
+        } catch (err) {
+          console.error("Netwerk fout", err);
+          alert("Kon server niet bereiken.");
+          return;
         }
 
-        // 2. Als de server OK zegt, verwijder dan ook uit het scherm
         sharesStore[boxId].splice(idx, 1);
         renderShares(boxId);
         updateSharesCountUiFromLocal(boxId);
@@ -2278,24 +2204,16 @@ if (effectiveState === 'open') {
         kvSharesCount.textContent = 'shares ' + n;
       }
 
-      // =========================================================
-      // AANGEPASTE SHARE KNOP (Stuurt nu naar Server/API)
-      // =========================================================
       document.getElementById('shareAdd').addEventListener('click', async () => {
         if (!currentCard) return alert('Selecteer eerst een Gridbox links.');
 
         const boxId = currentCard.getAttribute('data-id');
         const boxNumber = Number(currentCard.getAttribute('data-box') || '');
 
-        const phoneInput = document.getElementById('sharePhone');
-        const commentInput = document.getElementById('shareComment');
-        const expiresInput = document.getElementById('shareExpires');
-        const authInput = document.getElementById('shareAuth');
-
-        const phoneRaw = phoneInput.value.trim();
-        const comment = commentInput.value.trim();
-        const expires = expiresInput.value.trim();
-        const auth = !!authInput.checked;
+        const phoneRaw = sharePhone.value.trim();
+        const comment = shareComment.value.trim();
+        const expires = shareExpires.value.trim();
+        const auth = !!shareAuth.checked;
 
         if (!phoneRaw) return alert('Vul een telefoonnummer in.');
         if (!boxId || boxId === '-') return alert('Box id ontbreekt.');
@@ -2334,7 +2252,6 @@ if (effectiveState === 'open') {
 
           const json = await res.json().catch(()=> ({}));
 
-          // UI bijwerken
           sharesStore[boxId] = sharesStore[boxId] || [];
 
           const now = new Date();
@@ -2353,11 +2270,10 @@ if (effectiveState === 'open') {
           renderShares(boxId);
           updateSharesCountUiFromLocal(boxId);
 
-          // Velden leegmaken
-          phoneInput.value = '';
-          commentInput.value = '';
-          expiresInput.value = '';
-          authInput.checked = false;
+          sharePhone.value = '';
+          shareComment.value = '';
+          shareExpires.value = '';
+          shareAuth.checked = false;
 
           if (json.smsSent === true) {
             alert('Share opgeslagen en sms verstuurd.');
@@ -2388,40 +2304,6 @@ if (effectiveState === 'open') {
         return a || b;
       }
 
-      // =========================================================
-      // 7) Side panel details
-      // =========================================================
-
-      function normalizeDesiredValue(v){
-        const s = String(v ?? '').trim().toLowerCase();
-        if(!s) return '';
-        if(s === 'open' || s === 'opened' || s === 'opening') return 'open';
-        if(s === 'close' || s === 'closed' || s === 'closing') return 'close';
-        return s;
-      }
-
-      function desiredLabel(v){
-        if(v === 'open') return 'Open';
-        if(v === 'close') return 'Dicht';
-        return fmtMaybe(v);
-      }
-
-      function fmtLocalDateTime(v){
-        const ms = parseAnyTime(v);
-        if(!ms) return fmtMaybe(v);
-        const d = new Date(ms);
-        const pad = n => String(n).padStart(2,'0');
-        return pad(d.getDate()) + '/' + pad(d.getMonth()+1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
-      }
-
-      function fmtSince(v){
-        const ms = parseAnyTime(v);
-        if(!ms) return '';
-        const min = Math.floor((Date.now() - ms) / 60000);
-        if(min < 0) return '';
-        return '(sinds ' + fmtTimeAgo(min) + ')';
-      }
-
       function setAlertLine(text, level){
         if(!kvAlert) return;
         const t = String(text || '').trim();
@@ -2443,16 +2325,13 @@ if (effectiveState === 'open') {
         if(motion === 'opening') return { label:'Bezig (openen)', base:'opening' };
         if(motion === 'closing') return { label:'Bezig (sluiten)', base:'closing' };
 
-        if(motion === 'open') return { label:'Open', base:'open' };
-        if(motion === 'closed') return { label:'Dicht', base:'closed' };
-
         if(door === 'open') return { label:'Open', base:'open' };
         if(door === 'closed') return { label:'Dicht', base:'closed' };
 
         const state = card.classList.contains('is-open') ? 'open' : 'closed';
-return state === 'open'
-  ? { label:'Open', base:'open' }
-  : { label:'Dicht', base:'closed' };
+        return state === 'open'
+          ? { label:'Open', base:'open' }
+          : { label:'Dicht', base:'closed' };
       }
 
       function updateSummaryFromCard(card){
@@ -2471,7 +2350,6 @@ return state === 'open'
           kvNowSince.textContent = since ? (' ' + since) : '';
         }
 
-        const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || '');
         if(kvNowConfirm){
           kvNowConfirm.textContent = 'Timing (geen sensor)';
         }
@@ -2488,7 +2366,6 @@ return state === 'open'
           kvDesiredMeta.textContent = meta ? (' (' + meta + ')') : '';
         }
 
-        // Laatste actie
         const openedBy = (card.getAttribute('data-opened-by') || '').trim();
         const closedBy = (card.getAttribute('data-closed-by') || '').trim();
         const source = (card.getAttribute('data-source') || '').trim();
@@ -2520,7 +2397,6 @@ return state === 'open'
           kvLastActionMeta.textContent = meta ? (' (' + meta + ')') : '';
         }
 
-        // Verbinding
         const min = Number(card.getAttribute('data-lastseen-min'));
         const st = computeOnlineStateFromMinutes(min);
         if(kvConn) kvConn.textContent = st.label || '-';
@@ -2530,7 +2406,6 @@ return state === 'open'
         }
 
         const boxId = card.getAttribute('data-id');
-        // Toegang: als shares nog niet geladen zijn, toon minstens de teller van de backend
         if(boxId && !(boxId in sharesStore)) {
           const raw = (card.getAttribute('data-shares-count') || '').trim();
           if(kvAccessSummary) kvAccessSummary.textContent = raw ? ('Shares: ' + raw) : '-';
@@ -2538,7 +2413,6 @@ return state === 'open'
           updateAccessSummary(boxId);
         }
 
-        // Alert lijn
         const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
         if(st.cls === 'bad'){
           setAlertLine('Box is offline', 'bad');
@@ -2588,7 +2462,7 @@ return state === 'open'
 
         kvOpened.textContent = fmtLifecycleLine(openedAt, openedBy);
         kvClosed.textContent = fmtLifecycleLine(closedAt, closedBy);
-        kvSource.textContent = card.getAttribute('data-source') || '-'; 
+        kvSource.textContent = card.getAttribute('data-source') || '-';
         kvGeo.textContent = card.getAttribute('data-geo') || '-';
 
         kvAgent.textContent = (card.getAttribute('data-agent') ? ('v ' + card.getAttribute('data-agent')) : '-');
@@ -2598,13 +2472,11 @@ return state === 'open'
         renderPhones(card);
 
         const boxId = card.getAttribute('data-id');
-        
+
         if(!opts.silent){
-        // Eerst lokale lege tabel tonen
-        renderShares(boxId);
-        // Dan ophalen van server
-        fetchShares(boxId);
-      }
+          renderShares(boxId);
+          fetchShares(boxId);
+        }
 
         updateSharesCountUiFromCard(card);
         updateSharesCountUiFromLocal(boxId);
@@ -2627,22 +2499,16 @@ return state === 'open'
       // =========================================================
       // 9) Card acties
       // =========================================================
-
       document.addEventListener('click', async (e)=>{
-        // ---------------------------------------------------------
-        // KNOPPEN LOGICA
-        // ---------------------------------------------------------
         const btn = e.target.closest('button[data-action]');
         const card = e.target.closest('.gb-card');
-        
-        if(!card) return; // Geen kaart? Stop.
 
-        // Als er op een knop is gedrukt
+        if(!card) return;
+
         if(btn){
           const action = btn.getAttribute('data-action');
           const boxId = card.getAttribute('data-id');
 
-          // --- ACTIE: TOGGLE (OPEN/CLOSE) ---
           if(action === 'toggle'){
             e.preventDefault(); e.stopPropagation();
 
@@ -2657,33 +2523,26 @@ return state === 'open'
               return;
             }
 
-            // Toon alleen "verzonden", geen fake open/close
             setPending(boxId, next);
 
             const statusText = card.querySelector('.js-status-text');
             if(statusText) statusText.textContent = (next === 'open') ? 'Open gevraagd (wachten op box)' : 'Dicht gevraagd (wachten op box)';
 
-            const prevLabel = btn.textContent;
             btn.disabled = true;
             btn.textContent = 'VERZENDEN...';
 
             try{
-              // Probeer eerst dedicated endpoint (als het bestaat)
               let sent = false;
               try{
-                await sendCommand(boxId, next); // /open of /close
+                await sendCommand(boxId, next);
                 sent = true;
-              } catch(_){
-                // fallback
-              }
+              } catch(_){}
 
               if(!sent){
                 await setDesired(boxId, next);
               }
 
               card.setAttribute('data-desired', next);
-
-              // Fast follow-up voor snelle UI (tot 45s)
               startFastWatch(boxId);
 
             } catch(err){
@@ -2691,30 +2550,22 @@ return state === 'open'
               await refreshOneBoxNow(boxId);
               alert('Actie mislukt: ' + (err.message || err));
             } finally {
-              // na korte tijd opnieuw klikbaar, echte label volgt via refresh
               setTimeout(()=>{
                 if(!btn.isConnected) return;
                 btn.disabled = false;
 
-                // niet terug naar de oude tekst, toon de volgende actie
                 const pend = getPending(boxId);
                 if(pend){
                   btn.textContent = (pend.desired === 'open') ? 'CLOSE' : 'OPEN';
                 } else {
-                  btn.textContent = mainButtonLabelFromBox({
-  statusObj: {
-    state: card.classList.contains('is-open') ? 'open' : 'closed'
-  }
-});
+                  btn.textContent = card.classList.contains('is-open') ? 'CLOSE' : 'OPEN';
                 }
               }, 700);
-}
+            }
 
             return;
           }
 
-
-          // --- ACTIE: SHARES ---
           if(action === 'shares'){
             e.preventDefault(); e.stopPropagation();
             updateSideFromCard(card, 'Toegang beheren');
@@ -2726,7 +2577,6 @@ return state === 'open'
             return;
           }
 
-          // --- ACTIE: EVENTS ---
           if(action === 'events'){
             e.preventDefault(); e.stopPropagation();
             updateSideFromCard(card, 'Beheer en overzicht');
@@ -2736,7 +2586,6 @@ return state === 'open'
             return;
           }
 
-          // --- ACTIE: PICTURES ---
           if(action === 'pictures'){
             e.preventDefault(); e.stopPropagation();
             updateSideFromCard(card, 'Beheer en overzicht');
@@ -2745,11 +2594,10 @@ return state === 'open'
           }
         }
 
-        // Als er op de kaart geklikt is (maar niet op een specifieke knop), open zijpaneel
         updateSideFromCard(card, 'Beheer en overzicht');
       });
 
-     document.getElementById('btnEvents').addEventListener('click', ()=>{
+      document.getElementById('btnEvents').addEventListener('click', ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
         const boxId = currentCard.getAttribute('data-id');
         if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/events`);
@@ -2764,7 +2612,6 @@ return state === 'open'
       // =========================================================
       // 10) Init
       // =========================================================
-
       (async function init(){
         try{
           const boxes = await loadBoxes();
@@ -2780,36 +2627,30 @@ return state === 'open'
       // 11) AUTO REFRESH LOOP (Elke 15s)
       // =========================================================
       setInterval(async function() {
-        // 1. Onthoud welke kaart geselecteerd is (zodat het menu niet dichtklapt)
         const selected = document.querySelector('.gb-card.is-selected');
         const selectedId = selected ? selected.getAttribute('data-id') : null;
 
         try {
-          // 2. Haal de nieuwe data op
           const boxes = await loadBoxes();
           renderSectionsFromBoxes(boxes);
 
-          // 3. Zet de selectie terug
           if(selectedId){
-             const newCard = document.querySelector(`.gb-card[data-id="${selectedId}"]`);
-             if(newCard){
-                 newCard.classList.add('is-selected');
-                 
-                 // Als het zijpaneel open staat, update dan ook de tekst daar
-                 const side = document.getElementById('side');
-                 if(side && side.classList.contains('is-open')){
-                     if(typeof updateSideFromCard === 'function') {
-                         // We behouden de titel (context) als die er is
-                         const currentTitle = document.getElementById('sideSub').textContent;
-                         updateSideFromCard(newCard, currentTitle, { silent:true }); 
-                     }
-                 }
-             }
+            const newCard = document.querySelector(`.gb-card[data-id="${selectedId}"]`);
+            if(newCard){
+              newCard.classList.add('is-selected');
+
+              if(side && side.classList.contains('is-open')){
+                if(typeof updateSideFromCard === 'function') {
+                  const currentTitle = document.getElementById('sideSub').textContent;
+                  updateSideFromCard(newCard, currentTitle, { silent:true });
+                }
+              }
+            }
           }
         } catch(e) {
           console.error("Auto-refresh mislukt (geen ramp, volgende keer beter)", e);
         }
-      }, 15000); // 15000 ms = 15 seconden
+      }, 15000);
 
     })();
   </script>
