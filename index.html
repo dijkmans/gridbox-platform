@@ -3,7 +3,7 @@
 <script type="text/plain" id="worknotes">
   Deze versie (V20 - FINAL FULL FIX) bevat:
   1. FIX: updateSharesCountUiFromLocal functie hersteld (lost referentiefout op).
-  2. FIX: Delete knop roept nu de API aan (DELETE request).
+  2. FIX: Delete knop roept nu de API aan (DELETE request)
   3. FIX: Add Share roept nu de API aan (POST request).
   4. FIX: Fetch Shares haalt data van de server (GET request).
   5. FIX: Auto-refresh en Camera/Events logica behouden.
@@ -1358,8 +1358,8 @@ function mainButtonLabelFromBox(box){
       }
 
       function pickLifecycleState(box){
-        return pick(box, ['lifecycle.state','lifecycle.status','state','status']) ?? null;
-      }
+  return pick(box, ['lifecycle.state','lifecycle.status']) ?? null;
+}
 
       function pickLifecycleOpenedAt(box){
         return pick(box, ['lifecycle.openedAt','lifecycle.opened_at','openedAt']) ?? null;
