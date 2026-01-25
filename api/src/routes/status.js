@@ -1,18 +1,18 @@
 // api/src/routes/status.js
 import { Router } from "express";
 import { db } from "../firebase.js";
-import { FieldValue } from "firebase-admin/firestore";
 
 const router = Router();
 
 /**
- * In-memory runtime cache (optioneel, vluchtig)
+ * In-memory runtime cache
+ * Mag verdwijnen bij restart
  */
 const RUNTIME = Object.create(null);
 
-/* -------------------------
- * Normalizers
- * ------------------------- */
+/* =========================
+   Helpers
+   ========================= */
 
 function normalizeShutter(v) {
   const s = String(v ?? "").trim().toLowerCase();
@@ -47,9 +47,10 @@ function normalizeLock(v) {
   return null;
 }
 
-/* -------------------------
- * POST /api/status/:boxId
- * ------------------------- */
+/* =========================
+   POST /api/status/:boxId
+   ========================= */
+
 router.post("/:boxId", async (req, res) => {
   const { boxId } = req.params;
   if (!boxId) {
@@ -61,8 +62,14 @@ router.post("/:boxId", async (req, res) => {
   const shutter =
     normalizeShutter(body.shutterState) ??
     normalizeShutter(body.state) ??
-    normalizeShutter(body.doorState) ??
-    null;
+    normalizeShutter(body.doorState);
+
+  if (!shutter) {
+    return res.status(400).json({
+      ok: false,
+      message: "Geen geldige shutterState ontvangen"
+    });
+  }
 
   const door = normalizeDoor(body.door);
   const lock = normalizeLock(body.lock);
@@ -71,27 +78,25 @@ router.post("/:boxId", async (req, res) => {
   const type = typeof body.type === "string" ? body.type : "state";
 
   const now = new Date();
-  const nowIso = now.toISOString();
   const nowMs = now.getTime();
 
-  // Runtime cache (alleen als er een echte status is)
-  if (shutter) {
-    RUNTIME[boxId] = {
-      boxId,
-      shutterState: shutter,
-      state: toLegacy(shutter),
-      door,
-      lock,
-      source,
-      type,
-      online: true,
-      lastSeen: nowIso,
-      lastSeenMs: nowMs
-    };
-  }
+  /* ---------- Runtime ---------- */
 
-  // Firestore is de waarheid
-  const statusUpdate = {
+  RUNTIME[boxId] = {
+    boxId,
+    shutterState: shutter,
+    state: toLegacy(shutter),
+    door,
+    lock,
+    source,
+    type,
+    online: true,
+    lastSeenMs: nowMs
+  };
+
+  /* ---------- Firestore (bron van waarheid) ---------- */
+
+  const statusDoc = {
     shutterState: shutter,
     state: toLegacy(shutter),
     door: door ?? null,
@@ -99,17 +104,16 @@ router.post("/:boxId", async (req, res) => {
     source,
     type,
     online: true,
-    lastSeen: FieldValue.serverTimestamp(),
+    lastSeen: now,
     lastSeenMs: nowMs,
-    updatedAt: FieldValue.serverTimestamp()
+    updatedAt: now
   };
 
   try {
     await db.collection("boxes").doc(boxId).set(
       {
-        status: statusUpdate,
-        // legacy compat voor UI
-        box: shutter ? { state: toLegacy(shutter) } : {},
+        status: statusDoc,
+        box: { state: toLegacy(shutter) },
         lastSeenMinutes: null
       },
       { merge: true }
@@ -122,13 +126,14 @@ router.post("/:boxId", async (req, res) => {
   return res.json({
     ok: true,
     boxId,
-    status: statusUpdate
+    status: statusDoc
   });
 });
 
-/* -------------------------
- * GET /api/status/:boxId
- * ------------------------- */
+/* =========================
+   GET /api/status/:boxId
+   ========================= */
+
 router.get("/:boxId", async (req, res) => {
   const { boxId } = req.params;
 
@@ -139,19 +144,17 @@ router.get("/:boxId", async (req, res) => {
     }
 
     const box = snap.data();
-    const persisted = box.status ?? null;
-    const runtime = RUNTIME[boxId] ?? null;
 
-    const status = runtime ?? persisted ?? null;
-
-    const desired = box?.box?.desired ?? null;
-    const desiredAt = box?.box?.desiredAt ?? null;
-    const desiredBy = box?.box?.desiredBy ?? null;
+    const status = RUNTIME[boxId] ?? box.status ?? null;
 
     return res.json({
       ok: true,
       boxId,
-      box: { desired, desiredAt, desiredBy },
+      box: {
+        desired: box?.box?.desired ?? null,
+        desiredAt: box?.box?.desiredAt ?? null,
+        desiredBy: box?.box?.desiredBy ?? null
+      },
       status
     });
   } catch (err) {
@@ -160,9 +163,10 @@ router.get("/:boxId", async (req, res) => {
   }
 });
 
-/* -------------------------
- * GET /api/status (debug)
- * ------------------------- */
+/* =========================
+   GET /api/status
+   ========================= */
+
 router.get("/", (req, res) => {
   return res.json({
     ok: true,
