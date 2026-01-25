@@ -5,40 +5,97 @@ import { db } from "../db.js";
 const router = Router();
 
 /**
- * Tijdelijke in-memory status
- * Alleen runtime info van agent (heartbeat / state)
- * Wordt bewust NIET persistent opgeslagen
+ * In-memory status (runtime cache).
+ * Extra: we bewaren status ook persistent in Firestore:
+ * boxes/<boxId>.status
  */
 const STATUS = {};
 
+function normalizeState(v) {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (!s) return null;
+  if (s === "close") return "closed";
+  if (s === "closed") return "closed";
+  if (s === "opened") return "open";
+  if (s === "open") return "open";
+  if (s === "opening") return "opening";
+  if (s === "closing") return "closing";
+  if (s === "error") return "error";
+  return s;
+}
+
+function toIso(v) {
+  try {
+    if (!v) return null;
+    if (typeof v === "string") return v;
+    if (typeof v.toDate === "function") return v.toDate().toISOString(); // Firestore Timestamp
+    if (v instanceof Date) return v.toISOString();
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * POST /api/status/:boxId
- * Ontvang statusupdates en heartbeats van agent
- * Agent is de enige schrijver van state
+ * Ontvang statusupdates en heartbeats van agent.
+ * Agent is de enige schrijver van state.
+ * We slaan op in memory + persistent in Firestore.
  */
-router.post("/:boxId", (req, res) => {
+router.post("/:boxId", async (req, res) => {
   const { boxId } = req.params;
+  const body = req.body || {};
 
-  const {
-    shutterState = null,   // open | closed | opening | closing | error
-    type = "heartbeat",    // heartbeat | state | startup
-    source = "agent",      // agent | simulator
-    uptime = null,
-    temperature = null
-  } = req.body || {};
+  const shutterStateRaw =
+    (typeof body.shutterState === "string" ? body.shutterState : null) ??
+    (typeof body.state === "string" ? body.state : null) ??
+    (typeof body.doorState === "string" ? body.doorState : null) ??
+    null;
 
-  const now = new Date().toISOString();
+  const shutterState = normalizeState(shutterStateRaw);
 
+  const type = String(body.type ?? "heartbeat"); // heartbeat | state | startup
+  const source = String(body.source ?? "agent"); // agent | simulator
+  const uptime = body.uptime ?? null;
+  const temperature = body.temperature ?? null;
+
+  const nowDate = new Date();
+  const nowIso = nowDate.toISOString();
+
+  // Runtime cache
   STATUS[boxId] = {
     boxId,
     online: true,
     shutterState,
+    state: shutterState, // compat voor code die "state" verwacht
     type,
     source,
     uptime,
     temperature,
-    lastSeen: now
+    lastSeen: nowIso
   };
+
+  // Persist naar Firestore (zodat status niet verdwijnt na restart)
+  try {
+    await db.collection("boxes").doc(boxId).set(
+      {
+        status: {
+          online: true,
+          shutterState,
+          state: shutterState, // compat
+          updatedAt: nowDate,
+          lastSeen: nowDate, // compat
+          type,
+          source,
+          uptime,
+          temperature
+        }
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.error("STATUS persist fout:", err);
+  }
 
   console.log("[STATUS]", boxId, STATUS[boxId]);
 
@@ -51,14 +108,12 @@ router.post("/:boxId", (req, res) => {
 
 /**
  * GET /api/status/:boxId
- * Geeft gecombineerde view voor UI en agent:
- * - status: runtime toestand (agent)
- * - box.desired: intent (Firestore)
+ * Geeft gecombineerde view:
+ * - desired: uit Firestore
+ * - status: runtime als die bestaat, anders de laatst opgeslagen status uit Firestore
  */
 router.get("/:boxId", async (req, res) => {
   const { boxId } = req.params;
-
-  const status = STATUS[boxId] ?? null;
 
   try {
     const boxSnap = await db.collection("boxes").doc(boxId).get();
@@ -71,13 +126,37 @@ router.get("/:boxId", async (req, res) => {
       });
     }
 
+    const runtime = STATUS[boxId] ?? null;
+    const persisted = box.status ?? null;
+
+    // runtime eerst, anders Firestore
+    let status = runtime ?? persisted ?? null;
+
+    // Normaliseer output voor de UI
+    if (status && typeof status === "object") {
+      const lastSeenIso = toIso(status.lastSeen) ?? toIso(status.updatedAt) ?? null;
+      const shutter = status.shutterState ?? status.state ?? null;
+
+      status = {
+        ...status,
+        shutterState: shutter,
+        state: shutter,
+        lastSeen: lastSeenIso
+      };
+    }
+
+    // desired zit bij sommige versies top-level, bij andere onder box.*
+    const desired = box?.box?.desired ?? box?.desired ?? null;
+    const desiredAt = box?.box?.desiredAt ?? box?.desiredAt ?? null;
+    const desiredBy = box?.box?.desiredBy ?? box?.desiredBy ?? null;
+
     res.json({
       ok: true,
       boxId,
       box: {
-        desired: box.desired ?? null,
-        desiredAt: box.desiredAt ?? null,
-        desiredBy: box.desiredBy ?? null
+        desired,
+        desiredAt,
+        desiredBy
       },
       status
     });
@@ -92,7 +171,7 @@ router.get("/:boxId", async (req, res) => {
 
 /**
  * GET /api/status
- * Overzicht van alle bekende boxen (debug / admin)
+ * Debug: toont enkel in-memory status (runtime)
  */
 router.get("/", (req, res) => {
   res.json({
