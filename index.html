@@ -1238,15 +1238,10 @@
         return Math.abs(Date.now() - ms) <= maxMs;
       }
 
-function mainButtonLabel(doorState, motionState, fallbackIsOpen){
-        const d =
-          normalizeShutterStateDetailed(doorState) ||
-          (fallbackIsOpen ? 'open' : 'closed');
-
-        // UI toont enkel acties, geen tussenstates
-        if (d === 'open') return 'CLOSE';
-        return 'OPEN';
-      }
+function mainButtonLabelFromBox(box){
+  const state = getEffectiveStateFromBox(box);
+  return state === 'open' ? 'CLOSE' : 'OPEN';
+}
 
       // Bewegingsstatus (meestal "opening/closing") komt typisch uit statusObj/state
       function pickMotionState(box){
