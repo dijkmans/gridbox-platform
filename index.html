@@ -1631,15 +1631,15 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           (doorStateRaw === 'open' || doorStateRaw === 'closed') ? doorStateRaw :
           (motionStateAll === 'open' || motionStateAll === 'closed') ? motionStateAll :
           '';
-        if (motionState === 'opening') {
-          card.classList.add('is-open');
-        } else if (motionState === 'closing') {
-          card.classList.remove('is-open');
-        } else if (stableDoor === 'open') {
-          card.classList.add('is-open');
-        } else if (stableDoor === 'closed') {
-          card.classList.remove('is-open');
-        }
+
+        // ===== ENIGE PLAATS DIE is-open ZET =====
+const effectiveState = getEffectiveStateFromBox(box);
+
+card.classList.remove('is-open');
+
+if (effectiveState === 'open') {
+  card.classList.add('is-open');
+}
 
         card.setAttribute('data-motion-state', motionState);
         card.setAttribute('data-door-state', stableDoor || '');
