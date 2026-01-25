@@ -2434,9 +2434,10 @@ if (effectiveState === 'open') {
         if(door === 'open') return { label:'Open', base:'open' };
         if(door === 'closed') return { label:'Dicht', base:'closed' };
 
-        if(card.classList.contains('is-open')) return { label:'Open', base:'open' };
-
-        return { label:'Onbekend', base:'' };
+        const state = card.classList.contains('is-open') ? 'open' : 'closed';
+return state === 'open'
+  ? { label:'Open', base:'open' }
+  : { label:'Dicht', base:'closed' };
       }
 
       function updateSummaryFromCard(card){
