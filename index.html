@@ -1670,7 +1670,7 @@ if (effectiveState === 'open') {
 
         card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
 
-        const toggleLabel = mainButtonLabel(stableDoor, motionState, card.classList.contains('is-open'));
+        const toggleLabel = mainButtonLabelFromBox(box);
 
         const sharesPill = (sharesCount === null || Number.isNaN(sharesCount))
           ? `<span class="pill ghost" title="sharesCount">shares -</span>`
