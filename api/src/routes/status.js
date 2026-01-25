@@ -36,6 +36,26 @@ function toLegacyState(normalized) {
   return null;
 }
 
+function normalizeDoor(v) {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (!s) return null;
+
+  if (s === "open" || s === "opened") return "open";
+  if (s === "close" || s === "closed") return "closed";
+
+  return s;
+}
+
+function normalizeLock(v) {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (!s) return null;
+
+  if (s === "locked") return "locked";
+  if (s === "unlocked") return "unlocked";
+
+  return s;
+}
+
 function toIso(v) {
   try {
     if (!v) return null;
@@ -81,12 +101,41 @@ router.post("/:boxId", async (req, res) => {
 
   const type = safeString(body.type, "heartbeat"); // heartbeat | state | startup
   const source = safeString(body.source, "agent"); // agent | simulator
+
+  // Optionele velden (kunnen uit oude status blijven hangen als je ze niet overschrijft)
+  const doorRaw =
+    (typeof body.door === "string" ? body.door : null) ??
+    (typeof body.doorState === "string" ? body.doorState : null) ??
+    null;
+
+  const lockRaw =
+    (typeof body.lock === "string" ? body.lock : null) ??
+    (typeof body.lockState === "string" ? body.lockState : null) ??
+    null;
+
+  const door = normalizeDoor(doorRaw);
+  const lock = normalizeLock(lockRaw);
+
+  const lastError =
+    body.lastError == null
+      ? null
+      : typeof body.lastError === "string"
+        ? body.lastError
+        : JSON.stringify(body.lastError);
+
   const uptime = body.uptime ?? null;
   const temperature = body.temperature ?? null;
+
+  // simulated: bij agent willen we dit altijd false (oude true mag niet blijven hangen)
+  const simulatedIncoming =
+    typeof body.simulated === "boolean" ? body.simulated : null;
 
   const nowDate = new Date();
   const nowIso = nowDate.toISOString();
   const nowMs = nowDate.getTime();
+
+  // Bij echte agent updates forceren we simulated false
+  const simulated = source === "agent" ? false : (simulatedIncoming ?? false);
 
   const legacyState = shutterState ? toLegacyState(shutterState) : null;
 
@@ -94,12 +143,17 @@ router.post("/:boxId", async (req, res) => {
   STATUS[boxId] = {
     boxId,
     online: true,
+    simulated,
+    door: door ?? null,
+    lock: lock ?? null,
+    lastError,
     shutterState: shutterState ?? null,
     state: legacyState ?? shutterState ?? null, // compat: sommige code kijkt naar "state"
     type,
     source,
     uptime,
     temperature,
+    timestamp: nowIso,
     lastSeen: nowIso,
     lastSeenMs: nowMs
   };
@@ -108,23 +162,40 @@ router.post("/:boxId", async (req, res) => {
   try {
     const statusUpdate = {
       online: true,
+      source,
+      type,
+      uptime,
+      temperature,
+
+      // Zorg dat deze altijd vers en correct zijn
       updatedAt: nowDate,
       lastSeen: nowDate,
       lastSeenMs: nowMs,
-      type,
-      source,
-      uptime,
-      temperature
+
+      // Dit is belangrijk om oude velden te overschrijven
+      simulated,
+      timestamp: source === "agent" ? nowIso : (typeof body.timestamp === "string" ? body.timestamp : nowIso),
+
+      // Oude velden die soms blijven hangen: forceer ze naar iets dat klopt
+      door: door ?? null,
+      lock: lock ?? null,
+      lastError: lastError ?? null,
+
+      // Deze horen niet in status te blijven hangen
+      desired: null,
+      desiredAt: null
     };
 
     // Alleen overschrijven als we effectief een state hebben
     if (shutterState != null) {
       statusUpdate.shutterState = shutterState;
       statusUpdate.state = legacyState ?? shutterState;
+    } else {
+      // Als er geen nieuwe state is, laat shutterState en state ongemoeid (merge)
+      // maar we blijven wel lastSeen, timestamp, simulated enz updaten
     }
 
     // Extra velden om het portaal "vanzelf" goed te laten starten
-    // lastSeenMinutes staat top-level in jouw dto
     const topLevelUpdate = {
       status: statusUpdate,
       // lastSeenMinutes niet meer hardcoderen (bleef anders voor altijd 0)
