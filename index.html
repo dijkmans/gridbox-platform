@@ -1223,17 +1223,11 @@
 
       function pickMotionSince(box){
         return pick(box, [
-          'statusObj.updatedAt',
-          'statusObj.lastSeen',
-          'statusObj.lastSeenMs',
-          'statusObj.timestamp',
-          'status.updatedAt',
-          'status.lastSeen',
-          'status.lastSeenMs',
-          'status.timestamp',
           'state.since',
           'lifecycle.since',
+          'status.timestamp',
           'state.timestamp',
+          'status.updatedAt',
           'updatedAt'
         ]) ?? null;
       }
@@ -1254,35 +1248,47 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         return 'OPEN';
       }
 
-      // Bewegingsstatus (meestal "opening/closing") komt typisch uit state.state
+      // Bewegingsstatus (meestal "opening/closing") komt typisch uit statusObj/state
       function pickMotionState(box){
         return pick(box, [
-          'statusObj.shutterState',
+          // eerst de echte agent velden
           'statusObj.state',
-          'statusObj.door',
-          'status',
+          'statusObj.shutterState',
+
+          // compat
+          'status.state',
+          'status.shutterState',
+
+          // legacy / andere plekken
+          'box.state',
           'state.state',
           'lifecycle.state',
           'lifecycle.status',
-          'lifecycleState',
           'shutterState',
           'state'
         ]) ?? null;
       }
 
-      // Deurstatus (meestal "open/closed") komt typisch uit status.door of status.state
+      // Deurstatus (meestal "open/closed") komt typisch uit statusObj.door, anders uit shutterState/state
       function pickDoorState(box){
         return pick(box, [
+          // deur (als die bestaat)
           'statusObj.door',
+
+          // anders neem shutterState/state als deur-indicatie
           'statusObj.shutterState',
           'statusObj.state',
-          'status',
+
+          // compat
           'status.door',
+          'status.shutterState',
           'status.state',
-          'lifecycle.door',
+
+          // legacy
+          'box.state',
           'door',
-          'shutter.door',
-          'shutter.state'
+          'shutterState',
+          'state'
         ]) ?? null;
       }
 
@@ -1613,23 +1619,32 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
         const motionStateAll = normalizeShutterStateDetailed(rawMotionState);
         const motionSince = pickMotionSince(box);
-        const motionState = (motionStateAll && isRecent(motionSince, 60000)) ? motionStateAll : '';
-        const doorState = normalizeShutterStateDetailed(rawDoorState);
 
+        // motionState gebruiken we enkel als "beweging" als het echt opening/closing is (en recent)
+        const motionState = (motionStateAll && isRecent(motionSince, 60000)) ? motionStateAll : '';
+
+        // deurstate
+        const doorStateRaw = normalizeShutterStateDetailed(rawDoorState);
+
+        // als deur ontbreekt, neem open/closed uit state/shutterState
+        const stableDoor =
+          (doorStateRaw === 'open' || doorStateRaw === 'closed') ? doorStateRaw :
+          (motionStateAll === 'open' || motionStateAll === 'closed') ? motionStateAll :
+          '';
         if (motionState === 'opening') {
           card.classList.add('is-open');
         } else if (motionState === 'closing') {
           card.classList.remove('is-open');
-        } else if (doorState === 'open') {
+        } else if (stableDoor === 'open') {
           card.classList.add('is-open');
-        } else if (doorState === 'closed') {
+        } else if (stableDoor === 'closed') {
           card.classList.remove('is-open');
         }
 
         card.setAttribute('data-motion-state', motionState);
-        card.setAttribute('data-door-state', doorState);
-        card.setAttribute('data-shutter-state', doorState || motionState);
-        
+        card.setAttribute('data-door-state', stableDoor || '');
+        card.setAttribute('data-shutter-state', stableDoor || motionState || '');
+
         card.setAttribute('data-id', id);
         card.setAttribute('data-site', site === '-' ? '' : site);
         card.setAttribute('data-box', boxNumber === '-' ? '' : boxNumber);
@@ -1660,7 +1675,7 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
         card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
 
-        const toggleLabel = mainButtonLabel(doorState, motionState, card.classList.contains('is-open'));
+        const toggleLabel = mainButtonLabel(stableDoor, motionState, card.classList.contains('is-open'));
 
         const sharesPill = (sharesCount === null || Number.isNaN(sharesCount))
           ? `<span class="pill ghost" title="sharesCount">shares -</span>`
@@ -1765,8 +1780,13 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           const t = await res.text().catch(()=> '');
           throw new Error('API fout: ' + res.status + ' ' + t);
         }
-        const data = await res.json().catch(()=> []);
-        return Array.isArray(data) ? data : [];
+        const data = await res.json().catch(()=> null);
+
+        if (Array.isArray(data)) return data;
+        if (data && Array.isArray(data.boxes)) return data.boxes;
+        if (data && Array.isArray(data.items)) return data.items;
+
+        return [];
       }
 
       async function setDesired(boxId, desired){
@@ -2342,13 +2362,14 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         if(motion === 'opening') return { label:'Bezig (openen)', base:'opening' };
         if(motion === 'closing') return { label:'Bezig (sluiten)', base:'closing' };
 
+        if(motion === 'open') return { label:'Open', base:'open' };
+        if(motion === 'closed') return { label:'Dicht', base:'closed' };
+
         if(door === 'open') return { label:'Open', base:'open' };
         if(door === 'closed') return { label:'Dicht', base:'closed' };
 
         if(card.classList.contains('is-open')) return { label:'Open', base:'open' };
-        if(card.classList.contains('is-closed')) return { label:'Dicht', base:'closed' };
 
-        // fallback
         return { label:'Onbekend', base:'' };
       }
 
@@ -2565,11 +2586,18 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
             btn.textContent = 'VERZENDEN...';
 
             try{
-              // Always set desired first (agent leest desired)
-              await setDesired(boxId, next);
+              // Probeer eerst dedicated endpoint (als het bestaat)
+              let sent = false;
+              try{
+                await sendCommand(boxId, next); // /open of /close
+                sent = true;
+              } catch(_){
+                // fallback
+              }
 
-              // Optioneel: legacy endpoint (mag falen)
-              try{ await sendCommand(boxId, next); } catch(_){}
+              if(!sent){
+                await setDesired(boxId, next);
+              }
 
               card.setAttribute('data-desired', next);
 
@@ -2583,10 +2611,20 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
             } finally {
               // na korte tijd opnieuw klikbaar, echte label volgt via refresh
               setTimeout(()=>{
+                if(!btn.isConnected) return;
                 btn.disabled = false;
-                btn.textContent = prevLabel;
-              }, 1200);
-            }
+
+                // niet terug naar de oude tekst, toon de volgende actie
+                const pend = getPending(boxId);
+                if(pend){
+                  btn.textContent = (pend.desired === 'open') ? 'CLOSE' : 'OPEN';
+                } else {
+                  const d = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || '');
+                  const m = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
+                  btn.textContent = mainButtonLabel(d, m, card.classList.contains('is-open'));
+                }
+              }, 700);
+}
 
             return;
           }
