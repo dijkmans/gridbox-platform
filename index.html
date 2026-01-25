@@ -1800,46 +1800,65 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
   }
 }
 
-      async function loadBoxes(){
-        const res = await fetch(apiUrl('/api/boxes'), { method:'GET' });
-        if (!res.ok){
-          const t = await res.text().catch(()=> '');
-          throw new Error('API fout: ' + res.status + ' ' + t);
-        }
-        const data = await res.json().catch(()=> null);
+    async function loadBoxes(){
+  const res = await fetch(apiUrl('/api/boxes'), { method:'GET' });
+  if (!res.ok){
+    const t = await res.text().catch(()=> '');
+    throw new Error('API fout: ' + res.status + ' ' + t);
+  }
 
-        let items = [];
-        if (Array.isArray(data)) items = data;
-        else if (data && Array.isArray(data.boxes)) items = data.boxes;
-        else if (data && Array.isArray(data.items)) items = data.items;
+  const data = await res.json().catch(()=> null);
 
-        // Merge live runtime status (in-memory) over persisted statusObj
-        // Dit voorkomt "springen" als Firestore status nog achterloopt.
-        const rtMap = await loadRuntimeStatusMap();
-        if (rtMap && rtMap.size){
-          const now = Date.now();
-          items.forEach(b=>{
-            const id = String(b?.id ?? b?.boxId ?? '');
-            if(!id) return;
-            const rt = rtMap.get(id);
-            if(!rt) return;
+  let items = [];
+  if (Array.isArray(data)) items = data;
+  else if (data && Array.isArray(data.boxes)) items = data.boxes;
+  else if (data && Array.isArray(data.items)) items = data.items;
 
-            b.statusObj = { ...(b.statusObj || {}), ...rt };
+  // Merge live runtime status (in-memory) over persisted statusObj
+  // Dit voorkomt "springen" als Firestore status nog achterloopt.
+  const rtMap = await loadRuntimeStatusMap();
+  if (rtMap && rtMap.size){
+    const now = Date.now();
 
-            // legacy string status (open/close/opening/closing) up-to-date
-            if (typeof rt.shutterState === 'string' && rt.shutterState) b.status = rt.shutterState;
-            else if (typeof rt.state === 'string' && rt.state) b.status = rt.state;
+    items.forEach(b=>{
+      const id = String(b?.id ?? b?.boxId ?? '');
+      if(!id) return;
 
-            // lastSeenMinutes up-to-date (voor heartbeat/online kleuren)
-            if (rt.lastSeenMs && Number.isFinite(Number(rt.lastSeenMs))){
-              const min = Math.max(0, Math.floor((now - Number(rt.lastSeenMs)) / 60000));
-              b.lastSeenMinutes = min;
-            }
-          });
-        }
+      const rt = rtMap.get(id);
+      if(!rt) return;
 
-        return items;
+      // runtime wint op statusObj velden
+      b.statusObj = { ...(b.statusObj || {}), ...rt };
+
+      // legacy string status (open/closed/opening/closing) up-to-date
+      // 1) eerst: als runtime iets heeft, zet dat
+      if (typeof rt.shutterState === 'string' && rt.shutterState) b.status = rt.shutterState;
+      else if (typeof rt.state === 'string' && rt.state) b.status = rt.state;
+
+      // 2) extra safety: als status leeg is maar statusObj wel bestaat, vul status uit statusObj
+      if ((b.status === null || b.status === undefined || String(b.status).trim() === '') && b.statusObj){
+        const s = b.statusObj.shutterState || b.statusObj.state;
+        if (typeof s === 'string' && s) b.status = s;
       }
+
+      // lastSeenMinutes up-to-date (voor heartbeat/online kleuren)
+      if (rt.lastSeenMs && Number.isFinite(Number(rt.lastSeenMs))){
+        const min = Math.max(0, Math.floor((now - Number(rt.lastSeenMs)) / 60000));
+        b.lastSeenMinutes = min;
+      }
+    });
+  } else {
+    // Ook zonder runtime: als status leeg is maar statusObj wel bestaat, vul status
+    items.forEach(b=>{
+      if ((b.status === null || b.status === undefined || String(b.status).trim() === '') && b.statusObj){
+        const s = b.statusObj.shutterState || b.statusObj.state;
+        if (typeof s === 'string' && s) b.status = s;
+      }
+    });
+  }
+
+  return items;
+}
 
       async function setDesired(boxId, desired){
         const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/desired`), {
