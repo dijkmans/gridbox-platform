@@ -55,6 +55,16 @@ function toMillis(v) {
   try {
     if (!v) return null;
 
+
+    // number (ms of seconds)
+    if (typeof v === "number") {
+      // milliseconds since epoch
+      if (v > 1e12) return Math.floor(v);
+      // seconds since epoch
+      if (v > 1e9) return Math.floor(v * 1000);
+      return null;
+    }
+
     // Firestore Timestamp
     if (typeof v.toDate === "function") {
       const d = v.toDate();
@@ -87,24 +97,29 @@ function toMillis(v) {
 }
 
 function computeLastSeenMinutes(data) {
-  // 1) als er al een directe waarde bestaat, laat die winnen
+  // 1) afleiden uit status timestamps (meest betrouwbaar)
+  const ls =
+    data?.status?.lastSeenMs ??
+    data?.status?.updatedAt ??
+    data?.status?.lastSeen ??
+    null;
+
+  const ms = toMillis(ls);
+  if (ms) {
+    const diff = Date.now() - ms;
+    if (Number.isFinite(diff)) {
+      return Math.max(0, Math.round(diff / 60000));
+    }
+  }
+
+  // 2) fallback naar bestaande velden als status geen timestamp heeft
   const direct =
     data?.lastSeenMinutes ??
     data?.last_seen_minutes ??
-    data?.lastSeen ??
     null;
 
-  if (direct !== null && direct !== undefined && direct !== "") return direct;
-
-  // 2) anders afleiden uit status timestamps
-  const ls = data?.status?.updatedAt ?? data?.status?.lastSeen ?? null;
-  const ms = toMillis(ls);
-  if (!ms) return null;
-
-  const diff = Date.now() - ms;
-  if (!Number.isFinite(diff)) return null;
-
-  return Math.max(0, Math.round(diff / 60000));
+  const n = Number(direct);
+  return Number.isFinite(n) ? n : null;
 }
 
 export function toBoxDto(id, data) {
