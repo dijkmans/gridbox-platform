@@ -1774,22 +1774,31 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
       // 5) API calls
       // =========================================================
 
-      async function loadRuntimeStatusMap(){
-        try{
-          const res = await fetch(apiUrl('/api/status'), { method:'GET' });
-          if(!res.ok) return new Map();
-          const data = await res.json().catch(()=> null);
-          const arr = (data && Array.isArray(data.boxes)) ? data.boxes : [];
-          const map = new Map();
-          arr.forEach(s=>{
-            const id = s && (s.boxId ?? s.id);
-            if(id) map.set(String(id), s);
-          });
-          return map;
-        } catch(_){
-          return new Map();
-        }
-      }
+  async function loadRuntimeStatusMap(){
+  try{
+    const res = await fetch(apiUrl('/api/status'), { method:'GET' });
+    if(!res.ok) return new Map();
+
+    const data = await res.json().catch(()=> null);
+
+    // Verwacht: { ok:true, boxes:[ ... ] }
+    // Of soms: { boxes:[ ... ] }
+    // Of soms: [ ... ]
+    const arr =
+      Array.isArray(data) ? data :
+      (data && Array.isArray(data.boxes)) ? data.boxes :
+      [];
+
+    const map = new Map();
+    arr.forEach(s=>{
+      const id = s && (s.boxId ?? s.id);
+      if(id) map.set(String(id), s);
+    });
+    return map;
+  } catch(_){
+    return new Map();
+  }
+}
 
       async function loadBoxes(){
         const res = await fetch(apiUrl('/api/boxes'), { method:'GET' });
