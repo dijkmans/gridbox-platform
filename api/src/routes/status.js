@@ -1,6 +1,6 @@
 // api/src/routes/status.js
 import { Router } from "express";
-import { db } from "../db.js";
+import { db } from "../firebase.js";
 
 const router = Router();
 
@@ -9,18 +9,23 @@ const router = Router();
  * Extra: we bewaren status ook persistent in Firestore:
  * boxes/<boxId>.status
  */
-const STATUS = {};
+const STATUS = Object.create(null);
 
 function normalizeState(v) {
   const s = String(v ?? "").trim().toLowerCase();
   if (!s) return null;
+
   if (s === "close") return "closed";
   if (s === "closed") return "closed";
+
   if (s === "opened") return "open";
   if (s === "open") return "open";
+
   if (s === "opening") return "opening";
   if (s === "closing") return "closing";
+
   if (s === "error") return "error";
+
   return s;
 }
 
@@ -36,6 +41,11 @@ function toIso(v) {
   }
 }
 
+function safeString(v, fallback) {
+  const s = String(v ?? "").trim();
+  return s ? s : fallback;
+}
+
 /**
  * POST /api/status/:boxId
  * Ontvang statusupdates en heartbeats van agent.
@@ -44,6 +54,11 @@ function toIso(v) {
  */
 router.post("/:boxId", async (req, res) => {
   const { boxId } = req.params;
+
+  if (!boxId) {
+    return res.status(400).json({ ok: false, message: "boxId ontbreekt" });
+  }
+
   const body = req.body || {};
 
   const shutterStateRaw =
@@ -54,13 +69,14 @@ router.post("/:boxId", async (req, res) => {
 
   const shutterState = normalizeState(shutterStateRaw);
 
-  const type = String(body.type ?? "heartbeat"); // heartbeat | state | startup
-  const source = String(body.source ?? "agent"); // agent | simulator
+  const type = safeString(body.type, "heartbeat");     // heartbeat | state | startup
+  const source = safeString(body.source, "agent");     // agent | simulator
   const uptime = body.uptime ?? null;
   const temperature = body.temperature ?? null;
 
   const nowDate = new Date();
   const nowIso = nowDate.toISOString();
+  const nowMs = nowDate.getTime();
 
   // Runtime cache
   STATUS[boxId] = {
@@ -72,7 +88,8 @@ router.post("/:boxId", async (req, res) => {
     source,
     uptime,
     temperature,
-    lastSeen: nowIso
+    lastSeen: nowIso,
+    lastSeenMs: nowMs
   };
 
   // Persist naar Firestore (zodat status niet verdwijnt na restart)
@@ -84,7 +101,8 @@ router.post("/:boxId", async (req, res) => {
           shutterState,
           state: shutterState, // compat
           updatedAt: nowDate,
-          lastSeen: nowDate, // compat
+          lastSeen: nowDate,   // compat
+          lastSeenMs: nowMs,   // handig om later lastSeenMinutes te berekenen
           type,
           source,
           uptime,
@@ -96,8 +114,6 @@ router.post("/:boxId", async (req, res) => {
   } catch (err) {
     console.error("STATUS persist fout:", err);
   }
-
-  console.log("[STATUS]", boxId, STATUS[boxId]);
 
   res.json({
     ok: true,
