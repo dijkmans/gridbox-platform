@@ -5,17 +5,21 @@ import { db } from "../firebase.js";
 const router = Router();
 
 /**
- * In-memory runtime cache
- * Mag verdwijnen bij restart
+ * In-memory runtime status
+ * Verliest inhoud bij restart, maar is leidend zolang recent
  */
 const RUNTIME = Object.create(null);
 
-/* =========================
+/* =========================================================
    Helpers
-   ========================= */
+   ========================================================= */
+
+function norm(v) {
+  return String(v ?? "").trim().toLowerCase();
+}
 
 function normalizeShutter(v) {
-  const s = String(v ?? "").trim().toLowerCase();
+  const s = norm(v);
   if (!s) return null;
   if (s === "open" || s === "opened") return "open";
   if (s === "close" || s === "closed") return "closed";
@@ -25,14 +29,8 @@ function normalizeShutter(v) {
   return null;
 }
 
-function toLegacy(v) {
-  if (v === "open") return "open";
-  if (v === "closed") return "close";
-  return null;
-}
-
 function normalizeDoor(v) {
-  const s = String(v ?? "").trim().toLowerCase();
+  const s = norm(v);
   if (!s) return null;
   if (s === "open" || s === "opened") return "open";
   if (s === "close" || s === "closed") return "closed";
@@ -40,16 +38,26 @@ function normalizeDoor(v) {
 }
 
 function normalizeLock(v) {
-  const s = String(v ?? "").trim().toLowerCase();
+  const s = norm(v);
   if (!s) return null;
   if (s === "locked") return "locked";
   if (s === "unlocked") return "unlocked";
   return null;
 }
 
-/* =========================
+/**
+ * Legacy box.state waarde
+ * (portal verwacht open / close)
+ */
+function toLegacyState(shutter) {
+  if (shutter === "open") return "open";
+  if (shutter === "closed") return "close";
+  return null;
+}
+
+/* =========================================================
    POST /api/status/:boxId
-   ========================= */
+   ========================================================= */
 
 router.post("/:boxId", async (req, res) => {
   const { boxId } = req.params;
@@ -59,6 +67,7 @@ router.post("/:boxId", async (req, res) => {
 
   const body = req.body || {};
 
+  // 1️⃣ bepaal shutterState (orde is belangrijk)
   const shutter =
     normalizeShutter(body.shutterState) ??
     normalizeShutter(body.state) ??
@@ -67,40 +76,51 @@ router.post("/:boxId", async (req, res) => {
   if (!shutter) {
     return res.status(400).json({
       ok: false,
-      message: "Geen geldige shutterState ontvangen"
+      message: "Geen geldige shutterState / state ontvangen"
     });
   }
 
+  // 2️⃣ extra velden
   const door = normalizeDoor(body.door);
   const lock = normalizeLock(body.lock);
 
   const source = typeof body.source === "string" ? body.source : "agent";
   const type = typeof body.type === "string" ? body.type : "state";
 
+  // 3️⃣ timing is ALTIJD server-side
   const now = new Date();
   const nowMs = now.getTime();
 
-  /* ---------- Runtime ---------- */
+  const legacyState = toLegacyState(shutter);
+
+  /* =======================================================
+     Runtime cache (leidend voor portal)
+     ======================================================= */
+
+  const prev = RUNTIME[boxId] || {};
 
   RUNTIME[boxId] = {
     boxId,
     shutterState: shutter,
-    state: toLegacy(shutter),
-    door,
-    lock,
+    state: legacyState,
+    door: door ?? prev.door ?? null,
+    lock: lock ?? prev.lock ?? null,
     source,
     type,
     online: true,
-    lastSeenMs: nowMs
+    lastSeenMs: nowMs,
+    updatedAt: nowMs
   };
 
-  /* ---------- Firestore (bron van waarheid) ---------- */
+  /* =======================================================
+     Firestore (persistente status)
+     ======================================================= */
 
   const statusDoc = {
     shutterState: shutter,
-    state: toLegacy(shutter),
-    door: door ?? null,
-    lock: lock ?? null,
+    state: legacyState,
+    door: door ?? prev.door ?? null,
+    lock: lock ?? prev.lock ?? null,
     source,
     type,
     online: true,
@@ -113,8 +133,13 @@ router.post("/:boxId", async (req, res) => {
     await db.collection("boxes").doc(boxId).set(
       {
         status: statusDoc,
-        box: { state: toLegacy(shutter) },
-        lastSeenMinutes: null
+
+        // BELANGRIJK:
+        // box.state wordt enkel gezet op basis van echte status,
+        // niet meer door het portal overschreven
+        box: {
+          state: legacyState
+        }
       },
       { merge: true }
     );
@@ -126,13 +151,13 @@ router.post("/:boxId", async (req, res) => {
   return res.json({
     ok: true,
     boxId,
-    status: statusDoc
+    status: RUNTIME[boxId]
   });
 });
 
-/* =========================
+/* =========================================================
    GET /api/status/:boxId
-   ========================= */
+   ========================================================= */
 
 router.get("/:boxId", async (req, res) => {
   const { boxId } = req.params;
@@ -143,8 +168,9 @@ router.get("/:boxId", async (req, res) => {
       return res.status(404).json({ ok: false, message: "Box niet gevonden" });
     }
 
-    const box = snap.data();
+    const box = snap.data() || {};
 
+    // Runtime heeft altijd voorrang als die bestaat
     const status = RUNTIME[boxId] ?? box.status ?? null;
 
     return res.json({
@@ -158,14 +184,14 @@ router.get("/:boxId", async (req, res) => {
       status
     });
   } catch (err) {
-    console.error("GET /api/status fout:", err);
+    console.error("GET /api/status/:boxId fout:", err);
     return res.status(500).json({ ok: false });
   }
 });
 
-/* =========================
+/* =========================================================
    GET /api/status
-   ========================= */
+   ========================================================= */
 
 router.get("/", (req, res) => {
   return res.json({
