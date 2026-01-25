@@ -51,6 +51,62 @@ function warnIfMissing(id, data) {
   );
 }
 
+function toMillis(v) {
+  try {
+    if (!v) return null;
+
+    // Firestore Timestamp
+    if (typeof v.toDate === "function") {
+      const d = v.toDate();
+      return d instanceof Date ? d.getTime() : null;
+    }
+
+    // Date
+    if (v instanceof Date) return v.getTime();
+
+    // ISO string
+    if (typeof v === "string") {
+      const t = Date.parse(v);
+      return Number.isNaN(t) ? null : t;
+    }
+
+    // seconds/nanoseconds object (soms)
+    if (typeof v === "object") {
+      const sec = v.seconds ?? v._seconds ?? null;
+      const nsec = v.nanoseconds ?? v._nanoseconds ?? 0;
+      if (sec !== null && sec !== undefined) {
+        const ms = Number(sec) * 1000 + Math.floor(Number(nsec || 0) / 1e6);
+        return Number.isFinite(ms) ? ms : null;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function computeLastSeenMinutes(data) {
+  // 1) als er al een directe waarde bestaat, laat die winnen
+  const direct =
+    data?.lastSeenMinutes ??
+    data?.last_seen_minutes ??
+    data?.lastSeen ??
+    null;
+
+  if (direct !== null && direct !== undefined && direct !== "") return direct;
+
+  // 2) anders afleiden uit status timestamps
+  const ls = data?.status?.updatedAt ?? data?.status?.lastSeen ?? null;
+  const ms = toMillis(ls);
+  if (!ms) return null;
+
+  const diff = Date.now() - ms;
+  if (!Number.isFinite(diff)) return null;
+
+  return Math.max(0, Math.round(diff / 60000));
+}
+
 export function toBoxDto(id, data) {
   warnIfMissing(id, data);
 
@@ -74,11 +130,7 @@ export function toBoxDto(id, data) {
     Agent: data?.Agent ?? data?.agent ?? null,
     Profile: data?.Profile ?? data?.profile ?? null,
 
-    lastSeenMinutes:
-      data?.lastSeenMinutes ??
-      data?.last_seen_minutes ??
-      data?.lastSeen ??
-      null,
+    lastSeenMinutes: computeLastSeenMinutes(data),
 
     // Command intent (desired)
     desired: pickFirst(data, ["desired", "data.desired", "box.desired", "Portal.desired", "portal.desired"]) ?? null,
