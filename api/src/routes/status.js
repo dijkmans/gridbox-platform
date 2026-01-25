@@ -127,7 +127,8 @@ router.post("/:boxId", async (req, res) => {
     // lastSeenMinutes staat top-level in jouw dto
     const topLevelUpdate = {
       status: statusUpdate,
-      lastSeenMinutes: 0
+      // lastSeenMinutes niet meer hardcoderen (bleef anders voor altijd 0)
+      lastSeenMinutes: null
     };
 
     // legacy: sommige UI kijkt naar box.state ("open"/"close")

@@ -1223,11 +1223,17 @@
 
       function pickMotionSince(box){
         return pick(box, [
+          'statusObj.updatedAt',
+          'statusObj.lastSeen',
+          'statusObj.lastSeenMs',
+          'statusObj.timestamp',
+          'status.updatedAt',
+          'status.lastSeen',
+          'status.lastSeenMs',
+          'status.timestamp',
           'state.since',
           'lifecycle.since',
-          'status.timestamp',
           'state.timestamp',
-          'status.updatedAt',
           'updatedAt'
         ]) ?? null;
       }
@@ -1251,6 +1257,10 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
       // Bewegingsstatus (meestal "opening/closing") komt typisch uit state.state
       function pickMotionState(box){
         return pick(box, [
+          'statusObj.shutterState',
+          'statusObj.state',
+          'statusObj.door',
+          'status',
           'state.state',
           'lifecycle.state',
           'lifecycle.status',
@@ -1263,6 +1273,10 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
       // Deurstatus (meestal "open/closed") komt typisch uit status.door of status.state
       function pickDoorState(box){
         return pick(box, [
+          'statusObj.door',
+          'statusObj.shutterState',
+          'statusObj.state',
+          'status',
           'status.door',
           'status.state',
           'lifecycle.door',
@@ -2551,18 +2565,11 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
             btn.textContent = 'VERZENDEN...';
 
             try{
-              // Probeer eerst dedicated endpoint (als het bestaat)
-              let sent = false;
-              try{
-                await sendCommand(boxId, next); // /open of /close
-                sent = true;
-              } catch(_){
-                // fallback
-              }
+              // Always set desired first (agent leest desired)
+              await setDesired(boxId, next);
 
-              if(!sent){
-                await setDesired(boxId, next);
-              }
+              // Optioneel: legacy endpoint (mag falen)
+              try{ await sendCommand(boxId, next); } catch(_){}
 
               card.setAttribute('data-desired', next);
 
