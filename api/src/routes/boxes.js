@@ -5,9 +5,7 @@ import { toBoxDto } from "../dto/boxDto.js";
 import { buildShareSms } from "../utils/shareMessages.js";
 import { sendBirdSms } from "../services/birdSmsService.js";
 
-
 const router = Router();
-
 
 /*
 =====================================================
@@ -65,6 +63,14 @@ function pickLegacyHardwareProfile(dto) {
 }
 
 function withLegacyFields(dto) {
+  const statusObj = dto?.status ?? null;
+
+  // legacy status string voor frontend
+  const statusText =
+    statusObj?.shutterState ??
+    statusObj?.state ??
+    null;
+
   return {
     ...dto,
 
@@ -73,8 +79,11 @@ function withLegacyFields(dto) {
     site: dto?.Portal?.Site ?? null,
     boxNumber: dto?.Portal?.BoxNumber ?? null,
 
-    // ENIGE statusbron (legacy)
-    status: dto?.status?.state ?? null,
+    // nieuw: behoud het volledige status object
+    statusObj,
+
+    // legacy: status als simpele string
+    status: statusText,
 
     online: dto?.online ?? computeOnlineFromLastSeen(dto?.lastSeenMinutes),
     agentVersion: dto?.agentVersion ?? pickLegacyAgentVersion(dto),
@@ -252,7 +261,7 @@ router.get("/:id/pictures/latest", async (req, res) => {
     const sessions = prefixes
       .map(p => p.slice(sessionsPrefix.length).replace(/\/$/, ""))
       .filter(Boolean)
-      .sort((a, b) => b.localeCompare(a)); // newest eerst
+      .sort((a, b) => b.localeCompare(a));
 
     if (!sessions.length) {
       return res.json({
@@ -315,7 +324,10 @@ router.get("/:id/pictures", async (req, res) => {
     // 1. Haal de box-status op uit Firestore
     const boxSnap = await db.collection("boxes").doc(boxId).get();
     const boxData = boxSnap.exists ? boxSnap.data() : null;
-    const currentState = boxData?.status?.state || "onbekend";
+    const currentState =
+      boxData?.status?.shutterState ??
+      boxData?.status?.state ??
+      "onbekend";
 
     // 2. Setup Storage
     const storage = new Storage();
@@ -335,7 +347,7 @@ router.get("/:id/pictures", async (req, res) => {
     const sessions = prefixes
       .map(p => p.slice(sessionsPrefix.length).replace(/\/$/, ""))
       .filter(Boolean)
-      .sort((a, b) => b.localeCompare(a)); // newest eerst
+      .sort((a, b) => b.localeCompare(a));
 
     if (!sessions.length) {
       res.setHeader("content-type", "text/html; charset=utf-8");
@@ -356,7 +368,7 @@ router.get("/:id/pictures", async (req, res) => {
 
     const jpgs = (files || [])
       .filter(f => f.name.endsWith(".jpg"))
-      .sort((a, b) => b.name.localeCompare(a.name)); // nieuwste eerst
+      .sort((a, b) => b.name.localeCompare(a.name));
 
     const items = jpgs.map(f => {
       const object = f.name;
@@ -665,7 +677,6 @@ router.get("/:id/pictures", async (req, res) => {
         takePicBtn.disabled = true;
         takePicBtn.textContent = "⏳ Verzoek verstuurd...";
 
-        // neem een "before" snapshot zodat we kunnen zien wanneer er iets nieuws bijkomt
         const before = await getLatestPictureInfo();
 
         try {
@@ -695,7 +706,6 @@ router.get("/:id/pictures", async (req, res) => {
               const sessionChanged = beforeSession && now.sessionId && now.sessionId !== beforeSession;
               const objectChanged = beforeObj && now.lastObject && now.lastObject !== beforeObj;
 
-              // als er geen before was, is "nieuw" zodra we een lastObject zien
               const becameAvailable = (!before || !beforeObj) && !!now.lastObject;
 
               if (sessionChanged || objectChanged || becameAvailable) {
@@ -1155,28 +1165,25 @@ router.post("/:id/capture", async (req, res) => {
 
 /* =====================================================
    SHARES ROUTES (Fix voor frontend v19)
-   ===================================================== 
+   =====================================================
 */
 
 // 1. Ophalen van shares voor deze box (VEILIGE VERSIE ZONDER INDEX-FOUT)
 router.get("/:id/shares", async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // We halen ze op ZONDER orderBy om de Firestore Index fout te voorkomen
+
     const snap = await db.collection("shares")
       .where("boxId", "==", id)
       .where("active", "==", true)
       .get();
 
-    // We maken er een lijst van
     const shares = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    // We sorteren ze HIER in de code (nieuwste bovenaan)
     shares.sort((a, b) => {
-        const dateA = new Date(a.createdAt || 0);
-        const dateB = new Date(b.createdAt || 0);
-        return dateB - dateA; 
+      const dateA = new Date(a.createdAt || 0);
+      const dateB = new Date(b.createdAt || 0);
+      return dateB - dateA;
     });
 
     res.json(shares);
@@ -1186,7 +1193,6 @@ router.get("/:id/shares", async (req, res) => {
   }
 });
 
-// 2. Nieuwe share toevoegen (MET SMS)
 // 2. Nieuwe share toevoegen (MET SMS via Bird)
 router.post("/:id/shares", async (req, res) => {
   try {
@@ -1221,10 +1227,8 @@ router.post("/:id/shares", async (req, res) => {
 
     const ref = await db.collection("shares").add(newShare);
 
-    // SMS versturen (Bird)
     const smsText = buildShareSms({ boxNumber, expiresAt: newShare.expiresAt });
     const smsResult = await sendBirdSms({ to: newShare.phone, body: smsText });
-
 
     await db.collection("shares").doc(ref.id).set(
       {
@@ -1246,8 +1250,7 @@ router.post("/:id/shares", async (req, res) => {
 router.delete("/:id/shares/:shareId", async (req, res) => {
   try {
     const { shareId } = req.params;
-    // We verwijderen niet echt, maar zetten active op false (soft delete)
-    await db.collection("shares").doc(shareId).update({ 
+    await db.collection("shares").doc(shareId).update({
       active: false,
       deactivatedAt: new Date().toISOString()
     });
