@@ -1774,6 +1774,23 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
       // 5) API calls
       // =========================================================
 
+      async function loadRuntimeStatusMap(){
+        try{
+          const res = await fetch(apiUrl('/api/status'), { method:'GET' });
+          if(!res.ok) return new Map();
+          const data = await res.json().catch(()=> null);
+          const arr = (data && Array.isArray(data.boxes)) ? data.boxes : [];
+          const map = new Map();
+          arr.forEach(s=>{
+            const id = s && (s.boxId ?? s.id);
+            if(id) map.set(String(id), s);
+          });
+          return map;
+        } catch(_){
+          return new Map();
+        }
+      }
+
       async function loadBoxes(){
         const res = await fetch(apiUrl('/api/boxes'), { method:'GET' });
         if (!res.ok){
@@ -1782,11 +1799,37 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         }
         const data = await res.json().catch(()=> null);
 
-        if (Array.isArray(data)) return data;
-        if (data && Array.isArray(data.boxes)) return data.boxes;
-        if (data && Array.isArray(data.items)) return data.items;
+        let items = [];
+        if (Array.isArray(data)) items = data;
+        else if (data && Array.isArray(data.boxes)) items = data.boxes;
+        else if (data && Array.isArray(data.items)) items = data.items;
 
-        return [];
+        // Merge live runtime status (in-memory) over persisted statusObj
+        // Dit voorkomt "springen" als Firestore status nog achterloopt.
+        const rtMap = await loadRuntimeStatusMap();
+        if (rtMap && rtMap.size){
+          const now = Date.now();
+          items.forEach(b=>{
+            const id = String(b?.id ?? b?.boxId ?? '');
+            if(!id) return;
+            const rt = rtMap.get(id);
+            if(!rt) return;
+
+            b.statusObj = { ...(b.statusObj || {}), ...rt };
+
+            // legacy string status (open/close/opening/closing) up-to-date
+            if (typeof rt.shutterState === 'string' && rt.shutterState) b.status = rt.shutterState;
+            else if (typeof rt.state === 'string' && rt.state) b.status = rt.state;
+
+            // lastSeenMinutes up-to-date (voor heartbeat/online kleuren)
+            if (rt.lastSeenMs && Number.isFinite(Number(rt.lastSeenMs))){
+              const min = Math.max(0, Math.floor((now - Number(rt.lastSeenMs)) / 60000));
+              b.lastSeenMinutes = min;
+            }
+          });
+        }
+
+        return items;
       }
 
       async function setDesired(boxId, desired){
