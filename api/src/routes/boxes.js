@@ -1082,39 +1082,17 @@ ACTIONS (open / close, legacy, blijven werken)
 */
 
 router.post("/:id/open", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    await db.collection("boxCommands").doc(id).set({
-      commandId: `cmd-${Date.now()}`,
-      type: "open",
-      status: "pending",
-      createdAt: new Date()
-    });
-
-    res.json({ ok: true, command: "open", boxId: id });
-  } catch (err) {
-    console.error("Open command error:", err);
-    res.status(500).json({ error: "Interne serverfout" });
-  }
+  req.url = `/${req.params.id}/desired`;
+  req.method = "POST";
+  req.body = { desired: "open", desiredBy: "legacy-open" };
+  return router.handle(req, res);
 });
 
 router.post("/:id/close", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    await db.collection("boxCommands").doc(id).set({
-      commandId: `cmd-${Date.now()}`,
-      type: "close",
-      status: "pending",
-      createdAt: new Date()
-    });
-
-    res.json({ ok: true, command: "close", boxId: id });
-  } catch (err) {
-    console.error("Close command error:", err);
-    res.status(500).json({ error: "Interne serverfout" });
-  }
+  req.url = `/${req.params.id}/desired`;
+  req.method = "POST";
+  req.body = { desired: "close", desiredBy: "legacy-close" };
+  return router.handle(req, res);
 });
 
 /*
