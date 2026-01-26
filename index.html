@@ -1621,9 +1621,9 @@ const doorState =
   card.classList.remove('is-open');
 }
 
-        card.setAttribute('data-motion-state', motionState);
-        card.setAttribute('data-door-state', doorState);
-        card.setAttribute('data-shutter-state', doorState || motionState);
+        card.setAttribute('data-shutter-state', shutterState);
+card.setAttribute('data-motion-state', motionState);
+card.setAttribute('data-door-state', doorState);
         
         card.setAttribute('data-id', id);
         card.setAttribute('data-site', site === '-' ? '' : site);
