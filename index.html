@@ -2330,22 +2330,18 @@ card.setAttribute('data-door-state', doorState);
         kvAlert.className = 'alert ' + (level || 'warn');
       }
 
-      function computeNowInfo(card){
-        const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
-        const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || '');
+     function computeNowInfo(card){
+  const shutter = normalizeShutterStateDetailed(
+    card.getAttribute('data-shutter-state') || ''
+  );
 
-        if(motion === 'opening') return { label:'Bezig (openen)', base:'opening' };
-        if(motion === 'closing') return { label:'Bezig (sluiten)', base:'closing' };
+  if (shutter === 'opening') return { label:'Bezig (openen)', base:'opening' };
+  if (shutter === 'closing') return { label:'Bezig (sluiten)', base:'closing' };
+  if (shutter === 'open') return { label:'Open', base:'open' };
+  if (shutter === 'closed') return { label:'Dicht', base:'closed' };
 
-        if(door === 'open') return { label:'Open', base:'open' };
-        if(door === 'closed') return { label:'Dicht', base:'closed' };
-
-        if(card.classList.contains('is-open')) return { label:'Open', base:'open' };
-        if(card.classList.contains('is-closed')) return { label:'Dicht', base:'closed' };
-
-        // fallback
-        return { label:'Onbekend', base:'' };
-      }
+  return { label:'Onbekend', base:'' };
+}
 
       function updateSummaryFromCard(card){
         if(!card) return;
