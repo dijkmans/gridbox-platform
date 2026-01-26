@@ -1,104 +1,105 @@
-// api/src/routes/status.js
-import { Router } from "express";
-import { db } from "../db.js";
+﻿import { Router } from "express";
+import { db } from "../firebase.js";
 
 const router = Router();
 
-/**
- * Tijdelijke in-memory status
- * Alleen runtime info van agent (heartbeat / state)
- * Wordt bewust NIET persistent opgeslagen
- */
-const STATUS = {};
+function norm(v) {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (!s) return null;
 
-/**
- * POST /api/status/:boxId
- * Ontvang statusupdates en heartbeats van agent
- * Agent is de enige schrijver van state
- */
-router.post("/:boxId", (req, res) => {
-  const { boxId } = req.params;
+  if (s === "close") return "closed";
+  if (s === "closed") return "closed";
 
-  const {
-    shutterState = null,   // open | closed | opening | closing | error
-    type = "heartbeat",    // heartbeat | state | startup
-    source = "agent",      // agent | simulator
-    uptime = null,
-    temperature = null
-  } = req.body || {};
+  if (s === "opened") return "open";
+  if (s === "open") return "open";
 
-  const now = new Date().toISOString();
+  if (s === "opening") return "opening";
+  if (s === "closing") return "closing";
 
-  STATUS[boxId] = {
-    boxId,
-    online: true,
-    shutterState,
-    type,
-    source,
-    uptime,
-    temperature,
-    lastSeen: now
-  };
+  if (s === "error") return "error";
 
-  console.log("[STATUS]", boxId, STATUS[boxId]);
+  return s;
+}
 
-  res.json({
-    ok: true,
-    boxId,
-    status: STATUS[boxId]
-  });
-});
-
-/**
- * GET /api/status/:boxId
- * Geeft gecombineerde view voor UI en agent:
- * - status: runtime toestand (agent)
- * - box.desired: intent (Firestore)
- */
-router.get("/:boxId", async (req, res) => {
-  const { boxId } = req.params;
-
-  const status = STATUS[boxId] ?? null;
-
+// POST /api/status/:boxId
+router.post("/:boxId", async (req, res) => {
   try {
-    const boxSnap = await db.collection("boxes").doc(boxId).get();
-    const box = boxSnap.exists ? boxSnap.data() : null;
+    const { boxId } = req.params;
+    const body = req.body || {};
 
-    if (!box) {
-      return res.status(404).json({
-        ok: false,
-        message: "Box niet gevonden"
-      });
-    }
+    const stateObj = (body.state && typeof body.state === "object") ? body.state : null;
+    const statusObj = (body.status && typeof body.status === "object") ? body.status : null;
 
-    res.json({
-      ok: true,
-      boxId,
-      box: {
-        desired: box.desired ?? null,
-        desiredAt: box.desiredAt ?? null,
-        desiredBy: box.desiredBy ?? null
-      },
-      status
-    });
-  } catch (err) {
-    console.error("GET /api/status/:boxId fout:", err);
-    res.status(500).json({
-      ok: false,
-      message: "Interne serverfout"
-    });
+    const doorRaw =
+      body.door ??
+      stateObj?.door ??
+      statusObj?.door ??
+      statusObj?.state ??     // legacy
+      body.state ??           // legacy: state is string
+      null;
+
+    const shutterRaw =
+      body.shutterState ??
+      body.motion ??
+      stateObj?.motion ??
+      stateObj?.shutterState ??
+      statusObj?.shutterState ??
+      null;
+
+    const shutterState = norm(shutterRaw ?? doorRaw ?? null);
+
+    let door = norm(doorRaw ?? shutterState ?? null);
+    if (door !== "open" && door !== "closed") door = null;
+
+    const statusPatch = {
+      door,
+      shutterState,
+      online: true,
+      source: String(body.source ?? "agent"),
+
+      lastSeenMs: Date.now(),
+      lastSeen: new Date(),
+      updatedAt: new Date(),
+
+      type: body.type ?? "heartbeat",
+      moving: typeof body.moving === "boolean"
+        ? body.moving
+        : (shutterState === "opening" || shutterState === "closing"),
+
+      uptime: Number.isFinite(Number(body.uptime)) ? Number(body.uptime) : null,
+      temperature: Number.isFinite(Number(body.temperature)) ? Number(body.temperature) : null,
+
+      agentVersion: body.agentVersion ?? null,
+      deviceId: body.deviceId ?? null,
+      agentName: body.agentName ?? null,
+      hardwareProfile: body.hardwareProfile ?? null,
+
+      lastError: body.lastError ?? null
+    };
+
+    await db.collection("boxes").doc(String(boxId)).set(
+      { status: statusPatch },
+      { merge: true }
+    );
+
+    return res.json({ ok: true, boxId, status: statusPatch });
+  } catch (e) {
+    console.error("POST /api/status/:boxId error:", e);
+    return res.status(500).json({ ok: false, message: "Interne serverfout" });
   }
 });
 
-/**
- * GET /api/status
- * Overzicht van alle bekende boxen (debug / admin)
- */
-router.get("/", (req, res) => {
-  res.json({
-    ok: true,
-    boxes: Object.values(STATUS)
-  });
+// GET /api/status/:boxId (handig om te debuggen)
+router.get("/:boxId", async (req, res) => {
+  try {
+    const { boxId } = req.params;
+    const snap = await db.collection("boxes").doc(String(boxId)).get();
+    if (!snap.exists) return res.status(404).json({ ok: false, message: "Box niet gevonden" });
+    return res.json({ ok: true, boxId, status: (snap.data() || {}).status || null });
+  } catch (e) {
+    console.error("GET /api/status/:boxId error:", e);
+    return res.status(500).json({ ok: false, message: "Interne serverfout" });
+  }
 });
 
 export default router;
