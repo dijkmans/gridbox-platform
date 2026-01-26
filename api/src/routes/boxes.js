@@ -68,7 +68,7 @@ function withLegacyFields(dto) {
 
     // legacy frontend velden
     customer: dto?.Portal?.Customer ?? dto?.organisation?.name ?? null,
-    site: dto?.Portal?.Site ?? dto?.site?.name ?? dto?.location?.city ?? null,
+    legacyStatus: dto?.status?.door ?? dto?.status?.shutterState ?? dto?.status?.state ?? null,
     boxNumber: dto?.Portal?.BoxNumber ?? dto?.box?.number ?? null,
 
     // ENIGE statusbron (legacy)
