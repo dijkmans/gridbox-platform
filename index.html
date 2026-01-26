@@ -1594,13 +1594,26 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         const card = document.createElement('article');
         card.className = 'gb-card';
 
-        const rawMotionState = pickMotionState(box);
-        const rawDoorState = pickDoorState(box);
+        const rawShutterState =
+  pick(box, [
+    'status.shutterState',
+    'shutterState',
+    'state.shutterState'
+  ]) ??
+  pickMotionState(box) ??
+  pickDoorState(box);
 
-        const motionStateAll = normalizeShutterStateDetailed(rawMotionState);
-        const motionSince = pickMotionSince(box);
-        const motionState = (motionStateAll && isRecent(motionSince, 60000)) ? motionStateAll : '';
-        const doorState = normalizeShutterStateDetailed(rawDoorState);
+const shutterState = normalizeShutterStateDetailed(rawShutterState);
+
+const motionState =
+  shutterState === 'opening' || shutterState === 'closing'
+    ? shutterState
+    : '';
+
+const doorState =
+  shutterState === 'open' || shutterState === 'closed'
+    ? shutterState
+    : '';
 
         if (motionState === 'opening') {
           card.classList.add('is-open');
