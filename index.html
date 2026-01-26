@@ -635,13 +635,12 @@
       animation: heartPulse 1s infinite ease-in-out; /* 1s (1000ms) interval */
     }
 
-    
-
     .pulse-heart.warn{
       fill: #f59e0b; /* Orange warning */
       animation: none;
     }
-@keyframes heartPulse {
+
+    @keyframes heartPulse {
       0% { transform: scale(1); }
       15% { transform: scale(1.25); }
       30% { transform: scale(1); }
@@ -653,7 +652,7 @@
 </head>
 
 <body>
-    <div id="app" class="app is-collapsed">
+  <div id="app" class="app is-collapsed">
     <main class="main">
       <div class="toolbar">
         <div class="brand">Gridbox</div>
@@ -909,8 +908,6 @@
         return base + path;
       };
 
-      
-
       // =========================================================
       // 1b) Pending acties (geen fake open/close, wel "verzonden")
       // =========================================================
@@ -1042,7 +1039,8 @@
           if(box) replaceCardInDomFromBox(box);
         } catch(_){}
       }
-// =========================================================
+
+      // =========================================================
       // 2) DOM refs en state
       // =========================================================
 
@@ -1123,15 +1121,12 @@
       }, { passive:true });
 
       function computeOnlineStateFromMinutes(min){
-        // Als we geen lastSeen hebben, is de status niet per se 'slecht', 
-        // maar we weten het gewoon niet live. We geven 'unknown' terug (grijs).
         if (min === null || Number.isNaN(min)) return { label:'-', cls:'' };
         if (min <= 2) return { label:'Online', cls:'ok' };
         if (min <= 10) return { label:'Opgelet', cls:'warn' };
         return { label:'Offline', cls:'bad' };
       }
 
-      // Helper om tijdsverloop tekstueel te maken (bv "2 dagen geleden")
       function fmtTimeAgo(min) {
         if (min === null || Number.isNaN(min)) return '';
         if (min < 1) return 'zojuist';
@@ -1192,22 +1187,50 @@
         return 'UNKNOWN';
       }
 
-      
       // Tijd parsing voor "since/timestamp/updatedAt" velden (Firestore/ISO/ms)
       function parseAnyTime(v){
         try{
           if (v === null || v === undefined) return null;
           if (typeof v === 'number' && isFinite(v)){
-            // ms of seconds
             return v > 1e12 ? v : Math.round(v * 1000);
           }
           if (typeof v === 'string'){
-            // Probeer ISO string
-            const t = Date.parse(v);
-            return isNaN(t) ? null : t;
+            const s = String(v).trim();
+            if (!s) return null;
+
+            const t = Date.parse(s);
+            if (!isNaN(t)) return t;
+
+            // Extra: dd/mm/yyyy hh:mm (of dd/mm/yyyy)
+            let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/);
+            if (m){
+              const dd = Number(m[1]);
+              const mm = Number(m[2]) - 1;
+              const yyyy = Number(m[3]);
+              const hh = (m[4] !== undefined) ? Number(m[4]) : 0;
+              const mi = (m[5] !== undefined) ? Number(m[5]) : 0;
+              const d = new Date(yyyy, mm, dd, hh, mi, 0, 0);
+              const ms = d.getTime();
+              return isFinite(ms) ? ms : null;
+            }
+
+            // Extra: dd/mm hh:mm (neemt huidig jaar)
+            m = s.match(/^(\d{1,2})\/(\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?$/);
+            if (m){
+              const now = new Date();
+              const dd = Number(m[1]);
+              const mm = Number(m[2]) - 1;
+              const yyyy = now.getFullYear();
+              const hh = (m[3] !== undefined) ? Number(m[3]) : 0;
+              const mi = (m[4] !== undefined) ? Number(m[4]) : 0;
+              const d = new Date(yyyy, mm, dd, hh, mi, 0, 0);
+              const ms = d.getTime();
+              return isFinite(ms) ? ms : null;
+            }
+
+            return null;
           }
           if (typeof v === 'object'){
-            // Firestore Timestamp {seconds, nanoseconds} of {_seconds, _nanoseconds}
             const sec = (v.seconds !== undefined) ? v.seconds : (v._seconds !== undefined ? v._seconds : null);
             const nsec = (v.nanoseconds !== undefined) ? v.nanoseconds : (v._nanoseconds !== undefined ? v._nanoseconds : 0);
             if (sec !== null && sec !== undefined){
@@ -1238,17 +1261,15 @@
         return Math.abs(Date.now() - ms) <= maxMs;
       }
 
-function mainButtonLabel(doorState, motionState, fallbackIsOpen){
+      function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         const d =
           normalizeShutterStateDetailed(doorState) ||
           (fallbackIsOpen ? 'open' : 'closed');
 
-        // UI toont enkel acties, geen tussenstates
         if (d === 'open') return 'CLOSE';
         return 'OPEN';
       }
 
-      // Bewegingsstatus (meestal "opening/closing") komt typisch uit state.state
       function pickMotionState(box){
         return pick(box, [
           'state.state',
@@ -1260,7 +1281,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         ]) ?? null;
       }
 
-      // Deurstatus (meestal "open/closed") komt typisch uit status.door of status.state
       function pickDoorState(box){
         return pick(box, [
           'status.door',
@@ -1278,10 +1298,10 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           'portal.customer',
           'organisation.name',
           'organization.name',
-                    'Portal.Organisation',
-                    'Portal.Organization',
-                    'portal.organisation',
-                    'portal.organization',
+          'Portal.Organisation',
+          'Portal.Organization',
+          'portal.organisation',
+          'portal.organization',
           'customer'
         ]) ?? null;
       }
@@ -1496,24 +1516,19 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         const s = computeOnlineStateFromMinutes(lastSeenNum);
 
         // NIEUWE LOGICA: Bepaal de meest recente activiteit (Action)
-        // 1. Haal timestamps op
         const tOpen = parseAnyTime(pickLifecycleOpenedAt(box)) || 0;
         const tClose = parseAnyTime(pickLifecycleClosedAt(box)) || 0;
-        // Als lastSeenNum geldig is, rekenen we dat om naar een timestamp (ongeveer)
         const tSeen = (!isNaN(lastSeenNum) && lastSeenNum !== null) ? (Date.now() - lastSeenNum*60000) : 0;
 
-        // 2. Zoek de grootste (meest recente)
         let maxTs = Math.max(tOpen, tClose, tSeen);
         
         let lastActionText = 'Geen info';
         let lastSeenHeader = '-';
-        // ============================================================
 
         if (maxTs > 0) {
           const diffMin = Math.floor((Date.now() - maxTs) / 60000);
           const timeStr = fmtTimeAgo(diffMin);
 
-          // Voor de Pill (Actie)
           if (maxTs === tOpen) {
             lastActionText = 'Geopend ' + timeStr;
           } else if (maxTs === tClose) {
@@ -1521,33 +1536,23 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           } else if (maxTs === tSeen) {
             lastActionText = 'Gezien ' + timeStr;
           } else {
-            // Fallback (bv lokale actie of maxTs was updated)
-            // Als we lokaal hebben geupdate, is het meestal Open of Close
-            // Maar we weten de state niet 100% zeker hier zonder complexere logica
-            // We gebruiken de timeStr
-       } else {
-  lastActionText = timeStr;
-}
+            // Fallback
+            lastActionText = timeStr;
+          }
         }
         
         // Voor de Header (Laatst gezien)
-        // Alleen de ECHTE lastSeen gebruiken (geen open/close/local)
         if (lastSeenNum !== null && !isNaN(lastSeenNum)) {
-             lastSeenHeader = fmtLastSeen(lastSeenNum);
+          lastSeenHeader = fmtLastSeen(lastSeenNum);
         }
-
 
         // Pending actie (commando verzonden, wachten op box)
         const pending = getPending(id);
         if (pending){
           lastActionText = (pending.desired === 'open' ? 'Open gevraagd' : 'Dicht gevraagd') + ' zojuist';
         }
-        // ===========================================================
-        // HEADER HEARTBEAT (Kloppend hartje)
-        // Enkel op basis van lastSeen (echte verbinding)
-        // - alive: <= 2 min
-        // - warn : 2-10 min
-        // - dead : > 10 min of onbekend
+
+        // HEADER HEARTBEAT
         let heartClass = '';
 
         if (lastSeenNum !== null && !isNaN(lastSeenNum)) {
@@ -1591,35 +1596,35 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         card.className = 'gb-card';
 
         const rawShutterState =
-  pick(box, [
-    'status.shutterState',
-    'shutterState',
-    'state.shutterState'
-  ]) ??
-  pickMotionState(box) ??
-  pickDoorState(box);
+          pick(box, [
+            'status.shutterState',
+            'shutterState',
+            'state.shutterState'
+          ]) ??
+          pickMotionState(box) ??
+          pickDoorState(box);
 
-const shutterState = normalizeShutterStateDetailed(rawShutterState);
+        const shutterState = normalizeShutterStateDetailed(rawShutterState);
 
-const motionState =
-  shutterState === 'opening' || shutterState === 'closing'
-    ? shutterState
-    : '';
+        const motionState =
+          shutterState === 'opening' || shutterState === 'closing'
+            ? shutterState
+            : '';
 
-const doorState =
-  shutterState === 'open' || shutterState === 'closed'
-    ? shutterState
-    : '';
+        const doorState =
+          shutterState === 'open' || shutterState === 'closed'
+            ? shutterState
+            : '';
 
-       if (shutterState === 'opening' || shutterState === 'open') {
-  card.classList.add('is-open');
-} else if (shutterState === 'closing' || shutterState === 'closed') {
-  card.classList.remove('is-open');
-}
+        if (shutterState === 'opening' || shutterState === 'open') {
+          card.classList.add('is-open');
+        } else if (shutterState === 'closing' || shutterState === 'closed') {
+          card.classList.remove('is-open');
+        }
 
         card.setAttribute('data-shutter-state', shutterState);
-card.setAttribute('data-motion-state', motionState);
-card.setAttribute('data-door-state', doorState);
+        card.setAttribute('data-motion-state', motionState);
+        card.setAttribute('data-door-state', doorState);
         
         card.setAttribute('data-id', id);
         card.setAttribute('data-site', site === '-' ? '' : site);
@@ -1644,7 +1649,6 @@ card.setAttribute('data-door-state', doorState);
         card.setAttribute('data-source', lcSource ?? '');
         card.setAttribute('data-geo', geo ?? '');
 
-
         card.setAttribute('data-desired', desiredNorm || '');
         card.setAttribute('data-desired-at', desiredAt ?? '');
         card.setAttribute('data-desired-by', desiredBy ?? '');
@@ -1657,7 +1661,6 @@ card.setAttribute('data-door-state', doorState);
           ? `<span class="pill ghost" title="sharesCount">shares -</span>`
           : `<span class="pill ghost" title="sharesCount">shares ${escapeHtml(String(sharesCount))}</span>`;
 
-        // UPDATE: Header nu met hartje, geen tekst
         card.innerHTML = `
           <div class="gb-shutter" aria-hidden="true"><div class="gb-shutter__door"></div></div>
 
@@ -2003,24 +2006,19 @@ card.setAttribute('data-door-state', doorState);
       // 8) Shares UI
       // =========================================================
       
-      // NIEUW: Haal shares op van de server
       async function fetchShares(boxId) {
         try {
-          // Haal de echte data van de API
           const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/shares`));
-          if (!res.ok) return; // Geen ramp als het mislukt
+          if (!res.ok) return;
           
           const data = await res.json();
-          // Als de server een array teruggeeft, slaan we die op
           if (Array.isArray(data)) {
-              // We mappen de server-data naar het formaat van jouw tabel
               sharesStore[boxId] = data.map(s => ({
                   ts: s.createdAt ? new Date(s.createdAt).toLocaleString() : '-',
                   phone: s.phone,
                   comment: s.comment,
                   expires: s.expiresAt,
                   auth: s.type === 'authorized',
-                  // Bewaar ID voor delete acties
                   id: s.id 
               }));
               renderShares(boxId);
@@ -2055,7 +2053,6 @@ card.setAttribute('data-door-state', doorState);
 
       function updateSharesCountUiFromLocal(boxId){
         const rows = (sharesStore[boxId]||[]);
-        // Update de teller in het zijpaneel
         const badge = document.getElementById('kvSharesCount');
         if(badge) badge.textContent = 'shares ' + rows.length;
 
@@ -2085,7 +2082,7 @@ card.setAttribute('data-door-state', doorState);
           const exp = r ? r.expires : null;
           if(exp){
             const ms = parseAnyTime(exp);
-            if(ms && ms < now) return; // verlopen
+            if(ms && ms < now) return;
             active += 1;
             if(ms && (soonest === null || ms < soonest)) soonest = ms;
             return;
@@ -2111,27 +2108,22 @@ card.setAttribute('data-door-state', doorState);
         kvAccessSummary.textContent = s;
       }
 
-
-      sharesBody.addEventListener('click', async (e) => { // Let op: 'async' toegevoegd
+      sharesBody.addEventListener('click', async (e) => {
         const del = e.target.closest('button[data-del]');
         if (!del || !currentCard) return;
         
         const boxId = currentCard.getAttribute('data-id');
         const idx = Number(del.getAttribute('data-del'));
         
-        // Haal het juiste share-object op uit het geheugen om het ID te vinden
         const shareObj = sharesStore[boxId] && sharesStore[boxId][idx];
 
-        // Veiligheidscheck
         if (!shareObj || !shareObj.id) {
-            // Als er geen ID is (bv net lokaal aangemaakt), verwijder dan alleen lokaal
             if(sharesStore[boxId]) sharesStore[boxId].splice(idx, 1);
             renderShares(boxId);
             updateSharesCountUiFromLocal(boxId);
             return;
         }
 
-        // 1. Roep de server aan om te verwijderen (Soft delete)
         try {
             const res = await fetch(apiUrl(`/api/boxes/${encodeURIComponent(boxId)}/shares/${shareObj.id}`), {
                 method: 'DELETE'
@@ -2148,7 +2140,6 @@ card.setAttribute('data-door-state', doorState);
             return;
         }
 
-        // 2. Als de server OK zegt, verwijder dan ook uit het scherm
         sharesStore[boxId].splice(idx, 1);
         renderShares(boxId);
         updateSharesCountUiFromLocal(boxId);
@@ -2168,9 +2159,6 @@ card.setAttribute('data-door-state', doorState);
         kvSharesCount.textContent = 'shares ' + n;
       }
 
-      // =========================================================
-      // AANGEPASTE SHARE KNOP (Stuurt nu naar Server/API)
-      // =========================================================
       document.getElementById('shareAdd').addEventListener('click', async () => {
         if (!currentCard) return alert('Selecteer eerst een Gridbox links.');
 
@@ -2224,7 +2212,6 @@ card.setAttribute('data-door-state', doorState);
 
           const json = await res.json().catch(()=> ({}));
 
-          // UI bijwerken
           sharesStore[boxId] = sharesStore[boxId] || [];
 
           const now = new Date();
@@ -2243,7 +2230,6 @@ card.setAttribute('data-door-state', doorState);
           renderShares(boxId);
           updateSharesCountUiFromLocal(boxId);
 
-          // Velden leegmaken
           phoneInput.value = '';
           commentInput.value = '';
           expiresInput.value = '';
@@ -2326,18 +2312,18 @@ card.setAttribute('data-door-state', doorState);
         kvAlert.className = 'alert ' + (level || 'warn');
       }
 
-     function computeNowInfo(card){
-  const shutter = normalizeShutterStateDetailed(
-    card.getAttribute('data-shutter-state') || ''
-  );
+      function computeNowInfo(card){
+        const shutter = normalizeShutterStateDetailed(
+          card.getAttribute('data-shutter-state') || ''
+        );
 
-  if (shutter === 'opening') return { label:'Bezig (openen)', base:'opening' };
-  if (shutter === 'closing') return { label:'Bezig (sluiten)', base:'closing' };
-  if (shutter === 'open') return { label:'Open', base:'open' };
-  if (shutter === 'closed') return { label:'Dicht', base:'closed' };
+        if (shutter === 'opening') return { label:'Bezig (openen)', base:'opening' };
+        if (shutter === 'closing') return { label:'Bezig (sluiten)', base:'closing' };
+        if (shutter === 'open') return { label:'Open', base:'open' };
+        if (shutter === 'closed') return { label:'Dicht', base:'closed' };
 
-  return { label:'Onbekend', base:'' };
-}
+        return { label:'Onbekend', base:'' };
+      }
 
       function updateSummaryFromCard(card){
         if(!card) return;
@@ -2355,7 +2341,6 @@ card.setAttribute('data-door-state', doorState);
           kvNowSince.textContent = since ? (' ' + since) : '';
         }
 
-        const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || '');
         if(kvNowConfirm){
           kvNowConfirm.textContent = 'Timing (geen sensor)';
         }
@@ -2372,7 +2357,6 @@ card.setAttribute('data-door-state', doorState);
           kvDesiredMeta.textContent = meta ? (' (' + meta + ')') : '';
         }
 
-        // Laatste actie
         const openedBy = (card.getAttribute('data-opened-by') || '').trim();
         const closedBy = (card.getAttribute('data-closed-by') || '').trim();
         const source = (card.getAttribute('data-source') || '').trim();
@@ -2404,7 +2388,6 @@ card.setAttribute('data-door-state', doorState);
           kvLastActionMeta.textContent = meta ? (' (' + meta + ')') : '';
         }
 
-        // Verbinding
         const min = Number(card.getAttribute('data-lastseen-min'));
         const st = computeOnlineStateFromMinutes(min);
         if(kvConn) kvConn.textContent = st.label || '-';
@@ -2414,7 +2397,6 @@ card.setAttribute('data-door-state', doorState);
         }
 
         const boxId = card.getAttribute('data-id');
-        // Toegang: als shares nog niet geladen zijn, toon minstens de teller van de backend
         if(boxId && !(boxId in sharesStore)) {
           const raw = (card.getAttribute('data-shares-count') || '').trim();
           if(kvAccessSummary) kvAccessSummary.textContent = raw ? ('Shares: ' + raw) : '-';
@@ -2422,7 +2404,6 @@ card.setAttribute('data-door-state', doorState);
           updateAccessSummary(boxId);
         }
 
-        // Alert lijn
         const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
         if(st.cls === 'bad'){
           setAlertLine('Box is offline', 'bad');
@@ -2484,11 +2465,9 @@ card.setAttribute('data-door-state', doorState);
         const boxId = card.getAttribute('data-id');
         
         if(!opts.silent){
-        // Eerst lokale lege tabel tonen
-        renderShares(boxId);
-        // Dan ophalen van server
-        fetchShares(boxId);
-      }
+          renderShares(boxId);
+          fetchShares(boxId);
+        }
 
         updateSharesCountUiFromCard(card);
         updateSharesCountUiFromLocal(boxId);
@@ -2513,20 +2492,15 @@ card.setAttribute('data-door-state', doorState);
       // =========================================================
 
       document.addEventListener('click', async (e)=>{
-        // ---------------------------------------------------------
-        // KNOPPEN LOGICA
-        // ---------------------------------------------------------
         const btn = e.target.closest('button[data-action]');
         const card = e.target.closest('.gb-card');
         
-        if(!card) return; // Geen kaart? Stop.
+        if(!card) return;
 
-        // Als er op een knop is gedrukt
         if(btn){
           const action = btn.getAttribute('data-action');
           const boxId = card.getAttribute('data-id');
 
-          // --- ACTIE: TOGGLE (OPEN/CLOSE) ---
           if(action === 'toggle'){
             e.preventDefault(); e.stopPropagation();
 
@@ -2541,7 +2515,6 @@ card.setAttribute('data-door-state', doorState);
               return;
             }
 
-            // Toon alleen "verzonden", geen fake open/close
             setPending(boxId, next);
 
             const statusText = card.querySelector('.js-status-text');
@@ -2552,13 +2525,11 @@ card.setAttribute('data-door-state', doorState);
             btn.textContent = 'VERZENDEN...';
 
             try{
-              // Probeer eerst dedicated endpoint (als het bestaat)
               let sent = false;
               try{
-                await sendCommand(boxId, next); // /open of /close
+                await sendCommand(boxId, next);
                 sent = true;
               } catch(_){
-                // fallback
               }
 
               if(!sent){
@@ -2567,7 +2538,6 @@ card.setAttribute('data-door-state', doorState);
 
               card.setAttribute('data-desired', next);
 
-              // Fast follow-up voor snelle UI (tot 45s)
               startFastWatch(boxId);
 
             } catch(err){
@@ -2575,7 +2545,6 @@ card.setAttribute('data-door-state', doorState);
               await refreshOneBoxNow(boxId);
               alert('Actie mislukt: ' + (err.message || err));
             } finally {
-              // na korte tijd opnieuw klikbaar, echte label volgt via refresh
               setTimeout(()=>{
                 btn.disabled = false;
                 btn.textContent = prevLabel;
@@ -2585,8 +2554,6 @@ card.setAttribute('data-door-state', doorState);
             return;
           }
 
-
-          // --- ACTIE: SHARES ---
           if(action === 'shares'){
             e.preventDefault(); e.stopPropagation();
             updateSideFromCard(card, 'Toegang beheren');
@@ -2598,7 +2565,6 @@ card.setAttribute('data-door-state', doorState);
             return;
           }
 
-          // --- ACTIE: EVENTS ---
           if(action === 'events'){
             e.preventDefault(); e.stopPropagation();
             updateSideFromCard(card, 'Beheer en overzicht');
@@ -2608,7 +2574,6 @@ card.setAttribute('data-door-state', doorState);
             return;
           }
 
-          // --- ACTIE: PICTURES ---
           if(action === 'pictures'){
             e.preventDefault(); e.stopPropagation();
             updateSideFromCard(card, 'Beheer en overzicht');
@@ -2617,11 +2582,10 @@ card.setAttribute('data-door-state', doorState);
           }
         }
 
-        // Als er op de kaart geklikt is (maar niet op een specifieke knop), open zijpaneel
         updateSideFromCard(card, 'Beheer en overzicht');
       });
 
-     document.getElementById('btnEvents').addEventListener('click', ()=>{
+      document.getElementById('btnEvents').addEventListener('click', ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
         const boxId = currentCard.getAttribute('data-id');
         if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/events`);
@@ -2652,26 +2616,21 @@ card.setAttribute('data-door-state', doorState);
       // 11) AUTO REFRESH LOOP (Elke 15s)
       // =========================================================
       setInterval(async function() {
-        // 1. Onthoud welke kaart geselecteerd is (zodat het menu niet dichtklapt)
         const selected = document.querySelector('.gb-card.is-selected');
         const selectedId = selected ? selected.getAttribute('data-id') : null;
 
         try {
-          // 2. Haal de nieuwe data op
           const boxes = await loadBoxes();
           renderSectionsFromBoxes(boxes);
 
-          // 3. Zet de selectie terug
           if(selectedId){
              const newCard = document.querySelector(`.gb-card[data-id="${selectedId}"]`);
              if(newCard){
                  newCard.classList.add('is-selected');
                  
-                 // Als het zijpaneel open staat, update dan ook de tekst daar
                  const side = document.getElementById('side');
                  if(side && side.classList.contains('is-open')){
                      if(typeof updateSideFromCard === 'function') {
-                         // We behouden de titel (context) als die er is
                          const currentTitle = document.getElementById('sideSub').textContent;
                          updateSideFromCard(newCard, currentTitle, { silent:true }); 
                      }
@@ -2681,7 +2640,7 @@ card.setAttribute('data-door-state', doorState);
         } catch(e) {
           console.error("Auto-refresh mislukt (geen ramp, volgende keer beter)", e);
         }
-      }, 15000); // 15000 ms = 15 seconden
+      }, 15000);
 
     })();
   </script>
