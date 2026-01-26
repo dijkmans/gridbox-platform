@@ -62,22 +62,33 @@ function pickLegacyHardwareProfile(dto) {
   return String(dto.Profile);
 }
 
+/**
+ * Belangrijk:
+ * - dto.status moet een OBJECT blijven (bv { door:"open", online:true, ... })
+ * - we maken extra velden voor legacy / debug zonder dto.status te overschrijven
+ */
 function withLegacyFields(dto) {
+  const legacyStatus =
+    dto?.status?.door ??
+    dto?.status?.shutterState ??
+    dto?.status?.state ??
+    null;
+
+  const onlineFromStatus =
+    (typeof dto?.status?.online === "boolean" ? dto.status.online : null);
+
   return {
     ...dto,
 
     // legacy frontend velden
     customer: dto?.Portal?.Customer ?? dto?.organisation?.name ?? null,
-    legacyStatus: dto?.status?.door ?? dto?.status?.shutterState ?? dto?.status?.state ?? null,
+    legacyStatus,
+    statusText: legacyStatus, // extra alias (handig in debug / oude UI)
     boxNumber: dto?.Portal?.BoxNumber ?? dto?.box?.number ?? null,
-
-    // ENIGE statusbron (legacy)
-    // Belangrijk: nieuwe waarheid is status.door
-    status: dto?.status?.door ?? dto?.status?.shutterState ?? dto?.status?.state ?? null,
 
     // online eerst uit status.online, anders fallback
     online:
-      (typeof dto?.status?.online === "boolean" ? dto.status.online : null) ??
+      onlineFromStatus ??
       dto?.online ??
       computeOnlineFromLastSeen(dto?.lastSeenMinutes),
 
@@ -677,7 +688,6 @@ router.get("/:id/pictures", async (req, res) => {
         takePicBtn.disabled = true;
         takePicBtn.textContent = "⏳ Verzoek verstuurd...";
 
-        // neem een "before" snapshot zodat we kunnen zien wanneer er iets nieuws bijkomt
         const before = await getLatestPictureInfo();
 
         try {
@@ -706,8 +716,6 @@ router.get("/:id/pictures", async (req, res) => {
 
               const sessionChanged = beforeSession && now.sessionId && now.sessionId !== beforeSession;
               const objectChanged = beforeObj && now.lastObject && now.lastObject !== beforeObj;
-
-              // als er geen before was, is "nieuw" zodra we een lastObject zien
               const becameAvailable = (!before || !beforeObj) && !!now.lastObject;
 
               if (sessionChanged || objectChanged || becameAvailable) {
@@ -1152,21 +1160,18 @@ router.post("/:id/capture", async (req, res) => {
 router.get("/:id/shares", async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // We halen ze op ZONDER orderBy om de Firestore Index fout te voorkomen
+
     const snap = await db.collection("shares")
       .where("boxId", "==", id)
       .where("active", "==", true)
       .get();
 
-    // We maken er een lijst van
     const shares = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    // We sorteren ze HIER in de code (nieuwste bovenaan)
     shares.sort((a, b) => {
-        const dateA = new Date(a.createdAt || 0);
-        const dateB = new Date(b.createdAt || 0);
-        return dateB - dateA; 
+      const dateA = new Date(a.createdAt || 0);
+      const dateB = new Date(b.createdAt || 0);
+      return dateB - dateA;
     });
 
     res.json(shares);
@@ -1184,7 +1189,6 @@ router.post("/:id/shares", async (req, res) => {
 
     if (!phone) return res.status(400).json({ error: "Telefoonnummer verplicht" });
 
-    // BoxNumber nodig voor SMS-commando's (open 5)
     const boxSnap = await db.collection("boxes").doc(String(id)).get();
     const boxData = boxSnap.exists ? (boxSnap.data() || {}) : {};
     const boxNumberVal =
@@ -1210,7 +1214,6 @@ router.post("/:id/shares", async (req, res) => {
 
     const ref = await db.collection("shares").add(newShare);
 
-    // SMS versturen (Bird)
     const smsText = buildShareSms({ boxNumber, expiresAt: newShare.expiresAt });
     const smsResult = await sendBirdSms({ to: newShare.phone, body: smsText });
 
@@ -1234,8 +1237,7 @@ router.post("/:id/shares", async (req, res) => {
 router.delete("/:id/shares/:shareId", async (req, res) => {
   try {
     const { shareId } = req.params;
-    // We verwijderen niet echt, maar zetten active op false (soft delete)
-    await db.collection("shares").doc(shareId).update({ 
+    await db.collection("shares").doc(shareId).update({
       active: false,
       deactivatedAt: new Date().toISOString()
     });
