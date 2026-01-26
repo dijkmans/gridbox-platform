@@ -1525,13 +1525,9 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
             // Als we lokaal hebben geupdate, is het meestal Open of Close
             // Maar we weten de state niet 100% zeker hier zonder complexere logica
             // We gebruiken de timeStr
-             if (localRaw && JSON.parse(localRaw).ts === maxTs) {
-                 const state = JSON.parse(localRaw).state;
-                 lastActionText = (state === 'open' ? 'Geopend ' : 'Gesloten ') + timeStr;
-             } else {
-                 lastActionText = timeStr;
-             }
-          }
+       } else {
+  lastActionText = timeStr;
+}
         }
         
         // Voor de Header (Laatst gezien)
