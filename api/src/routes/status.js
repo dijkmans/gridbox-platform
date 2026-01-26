@@ -4,7 +4,7 @@ import { db } from "../firebase.js";
 
 const router = Router();
 
-// Kleine normalizer zodat we overal dezelfde strings gebruiken
+// Normalizer: we willen overal dezelfde strings
 function normDoor(v) {
   const s = String(v ?? "").trim().toLowerCase();
   if (!s) return null;
@@ -21,44 +21,65 @@ function normDoor(v) {
 
 // POST /api/status/:boxId
 // Agent stuurt heartbeat/state updates.
-// We bewaren dit WEL in Firestore onder boxes/<boxId>.status
+// We bewaren dit in Firestore onder boxes/<boxId>.status
 router.post("/:boxId", async (req, res) => {
   const { boxId } = req.params;
   const body = req.body || {};
 
-  const shutterState = normDoor(body.shutterState ?? body.state ?? null);
+  // Compat: oude agent stuurt state als object: {door, motion, since}
+  const stateObj = body.state && typeof body.state === "object" ? body.state : null;
 
-  const doorRaw = body.door ?? shutterState;
-  const door = (doorRaw === "open" || doorRaw === "closed") ? doorRaw : normDoor(doorRaw);
+  const doorRaw =
+    body.door ??
+    stateObj?.door ??
+    body.status?.door ??
+    null;
+
+  const motionRaw =
+    body.shutterState ??
+    body.motion ??
+    stateObj?.motion ??
+    stateObj?.shutterState ??
+    null;
+
+  // shutterState is: opening/closing/open/closed (voor UI animatie)
+  const shutterState = normDoor(motionRaw ?? doorRaw ?? null);
+
+  // door is: alleen open/closed (de waarheid voor "rolluik open/dicht")
+  const doorNorm = normDoor(doorRaw ?? shutterState ?? null);
+  const door = (doorNorm === "open" || doorNorm === "closed") ? doorNorm : null;
+
+  const deviceObj = body.device && typeof body.device === "object" ? body.device : null;
 
   const statusPatch = {
-    // hoofdvelden voor portal
-    door: (door === "open" || door === "closed") ? door : null,
+    door,
     shutterState,
     online: true,
     source: String(body.source ?? "agent"),
 
-    // timing
     lastSeenMs: Date.now(),
     lastSeen: new Date(),
     updatedAt: new Date(),
 
-    // optioneel (handig voor debug)
     type: body.type ?? "heartbeat",
-    moving: typeof body.moving === "boolean" ? body.moving : null,
+    moving: typeof body.moving === "boolean" ? body.moving : (shutterState === "opening" || shutterState === "closing"),
     uptime: Number.isFinite(Number(body.uptime)) ? Number(body.uptime) : null,
     temperature: Number.isFinite(Number(body.temperature)) ? Number(body.temperature) : null,
-    agentVersion: body.agentVersion ?? null,
-    deviceId: body.deviceId ?? null,
-    agentName: body.agentName ?? null,
+
+    // Device info (compat oud en nieuw)
+    agentVersion: body.agentVersion ?? deviceObj?.version ?? null,
+    deviceId: body.deviceId ?? deviceObj?.deviceId ?? null,
+    agentName: body.agentName ?? deviceObj?.agentName ?? null,
+    hardwareProfile: body.hardwareProfile ?? deviceObj?.hardwareProfile ?? null,
+
     lastError: body.lastError ?? null
   };
 
   try {
-    await db
-      .collection("boxes")
-      .doc(String(boxId))
-      .set({ status: statusPatch }, { merge: true });
+    await db.collection("boxes").doc(String(boxId)).set(
+      { status: statusPatch },
+      { merge: true }
+    );
 
     return res.json({ ok: true, boxId, status: statusPatch });
   } catch (e) {
@@ -67,8 +88,7 @@ router.post("/:boxId", async (req, res) => {
   }
 });
 
-// GET /api/status/:boxId
-// Debug view: Firestore status + huidige desired
+// GET /api/status/:boxId (debug)
 router.get("/:boxId", async (req, res) => {
   const { boxId } = req.params;
 
