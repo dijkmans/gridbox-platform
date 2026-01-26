@@ -1615,15 +1615,11 @@ const doorState =
     ? shutterState
     : '';
 
-        if (motionState === 'opening') {
-          card.classList.add('is-open');
-        } else if (motionState === 'closing') {
-          card.classList.remove('is-open');
-        } else if (doorState === 'open') {
-          card.classList.add('is-open');
-        } else if (doorState === 'closed') {
-          card.classList.remove('is-open');
-        }
+       if (shutterState === 'opening' || shutterState === 'open') {
+  card.classList.add('is-open');
+} else if (shutterState === 'closing' || shutterState === 'closed') {
+  card.classList.remove('is-open');
+}
 
         card.setAttribute('data-motion-state', motionState);
         card.setAttribute('data-door-state', doorState);
