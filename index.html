@@ -2386,14 +2386,8 @@ else if (motion === 'closing') kind = 'Bezig met sluiten';
 else if (door === 'open') kind = 'Open';
 else if (door === 'closed') kind = 'Dicht';
 
-        if(kvLastAction) kvLastAction.textContent = kind;
-        if(kvLastActionMeta){
-          let meta = '';
-          if(at) meta += fmtLocalDateTime(at);
-          if(by) meta += (meta ? ' door ' : 'door ') + by;
-          if(source) meta += (meta ? ' via ' : 'via ') + source;
-          kvLastActionMeta.textContent = meta ? (' (' + meta + ')') : '';
-        }
+        if (kvLastAction) kvLastAction.textContent = kind;
+if (kvLastActionMeta) kvLastActionMeta.textContent = ' (status via agent)';
 
         // Verbinding
         const min = Number(card.getAttribute('data-lastseen-min'));
