@@ -1594,27 +1594,36 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         const card = document.createElement('article');
         card.className = 'gb-card';
 
-        const rawMotionState = pickMotionState(box);
-        const rawDoorState = pickDoorState(box);
+        const rawShutterState =
+  pick(box, [
+    'status.shutterState',
+    'shutterState',
+    'state.shutterState'
+  ]) ??
+  pickMotionState(box) ??
+  pickDoorState(box);
 
-        const motionStateAll = normalizeShutterStateDetailed(rawMotionState);
-        const motionSince = pickMotionSince(box);
-        const motionState = (motionStateAll && isRecent(motionSince, 60000)) ? motionStateAll : '';
-        const doorState = normalizeShutterStateDetailed(rawDoorState);
+const shutterState = normalizeShutterStateDetailed(rawShutterState);
 
-        if (motionState === 'opening') {
-          card.classList.add('is-open');
-        } else if (motionState === 'closing') {
-          card.classList.remove('is-open');
-        } else if (doorState === 'open') {
-          card.classList.add('is-open');
-        } else if (doorState === 'closed') {
-          card.classList.remove('is-open');
-        }
+const motionState =
+  shutterState === 'opening' || shutterState === 'closing'
+    ? shutterState
+    : '';
 
-        card.setAttribute('data-motion-state', motionState);
-        card.setAttribute('data-door-state', doorState);
-        card.setAttribute('data-shutter-state', doorState || motionState);
+const doorState =
+  shutterState === 'open' || shutterState === 'closed'
+    ? shutterState
+    : '';
+
+       if (shutterState === 'opening' || shutterState === 'open') {
+  card.classList.add('is-open');
+} else if (shutterState === 'closing' || shutterState === 'closed') {
+  card.classList.remove('is-open');
+}
+
+        card.setAttribute('data-shutter-state', shutterState);
+card.setAttribute('data-motion-state', motionState);
+card.setAttribute('data-door-state', doorState);
         
         card.setAttribute('data-id', id);
         card.setAttribute('data-site', site === '-' ? '' : site);
@@ -2321,22 +2330,18 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         kvAlert.className = 'alert ' + (level || 'warn');
       }
 
-      function computeNowInfo(card){
-        const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
-        const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || '');
+     function computeNowInfo(card){
+  const shutter = normalizeShutterStateDetailed(
+    card.getAttribute('data-shutter-state') || ''
+  );
 
-        if(motion === 'opening') return { label:'Bezig (openen)', base:'opening' };
-        if(motion === 'closing') return { label:'Bezig (sluiten)', base:'closing' };
+  if (shutter === 'opening') return { label:'Bezig (openen)', base:'opening' };
+  if (shutter === 'closing') return { label:'Bezig (sluiten)', base:'closing' };
+  if (shutter === 'open') return { label:'Open', base:'open' };
+  if (shutter === 'closed') return { label:'Dicht', base:'closed' };
 
-        if(door === 'open') return { label:'Open', base:'open' };
-        if(door === 'closed') return { label:'Dicht', base:'closed' };
-
-        if(card.classList.contains('is-open')) return { label:'Open', base:'open' };
-        if(card.classList.contains('is-closed')) return { label:'Dicht', base:'closed' };
-
-        // fallback
-        return { label:'Onbekend', base:'' };
-      }
+  return { label:'Onbekend', base:'' };
+}
 
       function updateSummaryFromCard(card){
         if(!card) return;
@@ -2371,23 +2376,37 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           kvDesiredMeta.textContent = meta ? (' (' + meta + ')') : '';
         }
 
-// Huidige toestand (Firestore: status.shutterState via agent)
-const motion = normalizeShutterStateDetailed(
-  card.getAttribute('data-motion-state') || ''
-);
-const door = normalizeShutterStateDetailed(
-  card.getAttribute('data-door-state') || ''
-);
+        // Laatste actie
+        const openedBy = (card.getAttribute('data-opened-by') || '').trim();
+        const closedBy = (card.getAttribute('data-closed-by') || '').trim();
+        const source = (card.getAttribute('data-source') || '').trim();
 
-let kind = '-';
+        const tOpen = parseAnyTime(openedAt) || 0;
+        const tClose = parseAnyTime(closedAt) || 0;
 
-if (motion === 'opening') kind = 'Bezig met openen';
-else if (motion === 'closing') kind = 'Bezig met sluiten';
-else if (door === 'open') kind = 'Open';
-else if (door === 'closed') kind = 'Dicht';
+        let kind = '-';
+        let at = '';
+        let by = '';
+        if(tOpen == 0 && tClose == 0){
+          kind = '-';
+        } else if(tOpen >= tClose){
+          kind = 'Geopend';
+          at = openedAt;
+          by = openedBy;
+        } else {
+          kind = 'Gesloten';
+          at = closedAt;
+          by = closedBy;
+        }
 
-        if (kvLastAction) kvLastAction.textContent = kind;
-if (kvLastActionMeta) kvLastActionMeta.textContent = ' (status via agent)';
+        if(kvLastAction) kvLastAction.textContent = kind;
+        if(kvLastActionMeta){
+          let meta = '';
+          if(at) meta += fmtLocalDateTime(at);
+          if(by) meta += (meta ? ' door ' : 'door ') + by;
+          if(source) meta += (meta ? ' via ' : 'via ') + source;
+          kvLastActionMeta.textContent = meta ? (' (' + meta + ')') : '';
+        }
 
         // Verbinding
         const min = Number(card.getAttribute('data-lastseen-min'));
