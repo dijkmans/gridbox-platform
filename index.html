@@ -1584,6 +1584,29 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         const closedAt = fmtMaybe(pickLifecycleClosedAt(box));
         const closedBy = fmtMaybe(pickLifecycleClosedBy(box));
         const lcSource = fmtMaybe(pickLifecycleSource(box));
+
+        // Status uit Firestore (agent): status.shutterState + status.updatedAt
+        const statusUpdatedAtRaw = pick(box, [
+          'status.updatedAt',
+          'status.updated_at',
+          'status.timestamp',
+          'status.ts',
+          'status.updatedAtMs',
+          'status.updatedAtISO',
+          'status.updatedAtIso'
+        ]) ?? null;
+
+        const statusUpdatedAtMs = parseAnyTime(statusUpdatedAtRaw);
+        const statusUpdatedAtIso = statusUpdatedAtMs ? new Date(statusUpdatedAtMs).toISOString() : '';
+
+        const statusSourceRaw = pick(box, [
+          'status.source',
+          'status.updatedBy',
+          'status.by',
+          'status.origin'
+        ]) ?? null;
+
+        const statusSource = (statusSourceRaw === null || statusSourceRaw === undefined) ? '' : String(statusSourceRaw);
         const geo = fmtMaybe(pickGeo(box));
 
         const desiredRaw = pickDesired(box);
@@ -1646,6 +1669,8 @@ card.setAttribute('data-door-state', doorState);
         card.setAttribute('data-closed-at', closedAt ?? '');
         card.setAttribute('data-closed-by', closedBy ?? '');
         card.setAttribute('data-source', lcSource ?? '');
+        card.setAttribute('data-status-updated-at', statusUpdatedAtIso || '');
+        card.setAttribute('data-status-source', statusSource || '');
         card.setAttribute('data-geo', geo ?? '');
 
 
@@ -2376,27 +2401,56 @@ card.setAttribute('data-door-state', doorState);
           kvDesiredMeta.textContent = meta ? (' (' + meta + ')') : '';
         }
 
-        // Laatste actie
-        const openedBy = (card.getAttribute('data-opened-by') || '').trim();
-        const closedBy = (card.getAttribute('data-closed-by') || '').trim();
-        const source = (card.getAttribute('data-source') || '').trim();
 
-        const tOpen = parseAnyTime(openedAt) || 0;
-        const tClose = parseAnyTime(closedAt) || 0;
+        // Laatste actie (status uit Firestore heeft voorrang)
+        const statusAt = (card.getAttribute('data-status-updated-at') || '').trim();
+        const statusSrc = (card.getAttribute('data-status-source') || '').trim();
+        const statusShutter = normalizeShutterStateDetailed(card.getAttribute('data-shutter-state') || '');
+
+        const tStatus = parseAnyTime(statusAt) || 0;
 
         let kind = '-';
         let at = '';
         let by = '';
-        if(tOpen == 0 && tClose == 0){
-          kind = '-';
-        } else if(tOpen >= tClose){
-          kind = 'Geopend';
-          at = openedAt;
-          by = openedBy;
+        let src = '';
+
+        const hasStatus = tStatus > 0 && (
+          statusShutter === 'open' ||
+          statusShutter === 'closed' ||
+          statusShutter === 'opening' ||
+          statusShutter === 'closing'
+        );
+
+        if(hasStatus){
+          if(statusShutter === 'open') kind = 'Geopend';
+          else if(statusShutter === 'closed') kind = 'Gesloten';
+          else if(statusShutter === 'opening') kind = 'Bezig (openen)';
+          else if(statusShutter === 'closing') kind = 'Bezig (sluiten)';
+
+          at = statusAt;
+          src = statusSrc || 'agent';
         } else {
-          kind = 'Gesloten';
-          at = closedAt;
-          by = closedBy;
+          // Fallback naar lifecycle open/close
+          const openedBy = (card.getAttribute('data-opened-by') || '').trim();
+          const closedBy = (card.getAttribute('data-closed-by') || '').trim();
+          const lifecycleSource = (card.getAttribute('data-source') || '').trim();
+
+          const tOpen = parseAnyTime(openedAt) || 0;
+          const tClose = parseAnyTime(closedAt) || 0;
+
+          if(tOpen == 0 && tClose == 0){
+            kind = '-';
+          } else if(tOpen >= tClose){
+            kind = 'Geopend';
+            at = openedAt;
+            by = openedBy;
+          } else {
+            kind = 'Gesloten';
+            at = closedAt;
+            by = closedBy;
+          }
+
+          src = lifecycleSource;
         }
 
         if(kvLastAction) kvLastAction.textContent = kind;
@@ -2404,7 +2458,7 @@ card.setAttribute('data-door-state', doorState);
           let meta = '';
           if(at) meta += fmtLocalDateTime(at);
           if(by) meta += (meta ? ' door ' : 'door ') + by;
-          if(source) meta += (meta ? ' via ' : 'via ') + source;
+          if(src) meta += (meta ? ' via ' : 'via ') + src;
           kvLastActionMeta.textContent = meta ? (' (' + meta + ')') : '';
         }
 
