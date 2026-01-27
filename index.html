@@ -2371,28 +2371,20 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
           kvDesiredMeta.textContent = meta ? (' (' + meta + ')') : '';
         }
 
-        // Laatste actie
-        const openedBy = (card.getAttribute('data-opened-by') || '').trim();
-        const closedBy = (card.getAttribute('data-closed-by') || '').trim();
-        const source = (card.getAttribute('data-source') || '').trim();
+// Huidige toestand (Firestore: status.shutterState via agent)
+const motion = normalizeShutterStateDetailed(
+  card.getAttribute('data-motion-state') || ''
+);
+const door = normalizeShutterStateDetailed(
+  card.getAttribute('data-door-state') || ''
+);
 
-        const tOpen = parseAnyTime(openedAt) || 0;
-        const tClose = parseAnyTime(closedAt) || 0;
+let kind = '-';
 
-        let kind = '-';
-        let at = '';
-        let by = '';
-        if(tOpen == 0 && tClose == 0){
-          kind = '-';
-        } else if(tOpen >= tClose){
-          kind = 'Geopend';
-          at = openedAt;
-          by = openedBy;
-        } else {
-          kind = 'Gesloten';
-          at = closedAt;
-          by = closedBy;
-        }
+if (motion === 'opening') kind = 'Bezig met openen';
+else if (motion === 'closing') kind = 'Bezig met sluiten';
+else if (door === 'open') kind = 'Open';
+else if (door === 'closed') kind = 'Dicht';
 
         if(kvLastAction) kvLastAction.textContent = kind;
         if(kvLastActionMeta){
