@@ -2584,20 +2584,61 @@ card.setAttribute('data-door-state', doorState);
           const action = btn.getAttribute('data-action');
           const boxId = card.getAttribute('data-id');
 
-          // --- ACTIE: TOGGLE (OPEN/CLOSE) ---
+           // --- ACTIE: TOGGLE (OPEN/CLOSE) ---
           if(action === 'toggle'){
             e.preventDefault(); e.stopPropagation();
 
-            const label = String(btn.textContent || '').trim().toUpperCase();
-            let next = '';
-            if(label === 'OPEN') next = 'open';
-            else if(label === 'CLOSE') next = 'close';
-            else next = card.classList.contains('is-open') ? 'close' : 'open';
-
+            const boxId = card.getAttribute('data-id');
             if (!boxId || boxId === '-'){
               alert('Box id ontbreekt.');
               return;
             }
+
+            // 1. BEPAAL DIRECT DE STATUS (Vóórdat we de tekst aanpassen!)
+            const currentLabel = btn.textContent.trim().toUpperCase(); // "OPEN" of "CLOSE"
+            const next = (currentLabel === 'OPEN') ? 'open' : 'close';
+            const futureLabel = (next === 'open') ? 'CLOSE' : 'OPEN';
+
+            // 2. DIRECTE UI-WISSEL (Geen "Verzenden..." meer)
+            btn.textContent = futureLabel; 
+            btn.disabled = true; // Voorkom dubbelklikken
+
+            // Update de tekst in de kleine status-pill
+            const statusText = card.querySelector('.js-status-text');
+            if(statusText) {
+              statusText.textContent = (next === 'open') ? 'Openen gevraagd...' : 'Sluiten gevraagd...';
+            }
+
+            setPending(boxId, next);
+
+            try {
+              // 3. VERZEND NAAR API
+              let sent = false;
+              try {
+                await sendCommand(boxId, next); 
+                sent = true;
+              } catch(_) { /* fallback */ }
+
+              if(!sent){
+                await setDesired(boxId, next);
+              }
+
+              card.setAttribute('data-desired', next);
+              startFastWatch(boxId);
+
+            } catch(err) {
+              // Bij een echte fout: zet de knop terug naar hoe hij was
+              btn.textContent = currentLabel;
+              clearPending(boxId);
+              alert('Actie mislukt: ' + (err.message || err));
+            } finally {
+              // Maak de knop na 1.2 seconden weer klikbaar
+              setTimeout(() => {
+                btn.disabled = false;
+              }, 1200);
+            }
+            return;
+          }
 
             // Toon alleen "verzonden", geen fake open/close
             setPending(boxId, next);
