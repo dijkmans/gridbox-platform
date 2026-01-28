@@ -2557,11 +2557,11 @@ card.setAttribute('data-door-state', doorState);
             const statusText = card.querySelector('.js-status-text');
             if(statusText) statusText.textContent = (next === 'open') ? 'Open gevraagd (wachten op box)' : 'Dicht gevraagd (wachten op box)';
 
-            const prevLabel = btn.textContent;
-const newLabel = (next === 'open') ? 'CLOSE' : 'OPEN';
-
-btn.disabled = true;
-btn.textContent = newLabel;
+            } finally {
+  setTimeout(()=>{
+    btn.disabled = false;
+  }, 600);
+}
 
             return;
           }
