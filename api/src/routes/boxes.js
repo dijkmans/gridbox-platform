@@ -5,9 +5,7 @@ import { toBoxDto } from "../dto/boxDto.js";
 import { buildShareSms } from "../utils/shareMessages.js";
 import { sendBirdSms } from "../services/birdSmsService.js";
 
-
 const router = Router();
-
 
 /*
 =====================================================
@@ -64,19 +62,36 @@ function pickLegacyHardwareProfile(dto) {
   return String(dto.Profile);
 }
 
+/**
+ * Belangrijk:
+ * - dto.status moet een OBJECT blijven (bv { door:"open", online:true, ... })
+ * - we maken extra velden voor legacy / debug zonder dto.status te overschrijven
+ */
 function withLegacyFields(dto) {
+  const legacyStatus =
+    dto?.status?.door ??
+    dto?.status?.shutterState ??
+    dto?.status?.state ??
+    null;
+
+  const onlineFromStatus =
+    (typeof dto?.status?.online === "boolean" ? dto.status.online : null);
+
   return {
     ...dto,
 
     // legacy frontend velden
     customer: dto?.Portal?.Customer ?? dto?.organisation?.name ?? null,
-    site: dto?.Portal?.Site ?? null,
-    boxNumber: dto?.Portal?.BoxNumber ?? null,
+    legacyStatus,
+    statusText: legacyStatus, // extra alias (handig in debug / oude UI)
+    boxNumber: dto?.Portal?.BoxNumber ?? dto?.box?.number ?? null,
 
-    // ENIGE statusbron (legacy)
-    status: dto?.status?.state ?? null,
+    // online eerst uit status.online, anders fallback
+    online:
+      onlineFromStatus ??
+      dto?.online ??
+      computeOnlineFromLastSeen(dto?.lastSeenMinutes),
 
-    online: dto?.online ?? computeOnlineFromLastSeen(dto?.lastSeenMinutes),
     agentVersion: dto?.agentVersion ?? pickLegacyAgentVersion(dto),
     hardwareProfile: dto?.hardwareProfile ?? pickLegacyHardwareProfile(dto),
     sharesCount: dto?.sharesCount ?? null
@@ -315,7 +330,13 @@ router.get("/:id/pictures", async (req, res) => {
     // 1. Haal de box-status op uit Firestore
     const boxSnap = await db.collection("boxes").doc(boxId).get();
     const boxData = boxSnap.exists ? boxSnap.data() : null;
-    const currentState = boxData?.status?.state || "onbekend";
+
+    // BELANGRIJK: nieuwe waarheid is status.door
+    const currentState =
+      boxData?.status?.door ??
+      boxData?.status?.shutterState ??
+      boxData?.status?.state ??
+      "onbekend";
 
     // 2. Setup Storage
     const storage = new Storage();
@@ -381,6 +402,8 @@ router.get("/:id/pictures", async (req, res) => {
         </div>
       `)
       .join("");
+
+    const currentStateEsc = esc(currentState);
 
     res.setHeader("content-type", "text/html; charset=utf-8");
     return res.send(`<!doctype html>
@@ -577,7 +600,7 @@ router.get("/:id/pictures", async (req, res) => {
     <div class="topbar">
       <div class="title">
         <h2>Pictures</h2>
-        <div class="muted">Box: ${esc(boxId)} <span class="status-badge">${esc(currentState)}</span></div>
+        <div class="muted">Box: ${esc(boxId)} <span class="status-badge">${currentStateEsc}</span></div>
       </div>
 
       <button id="takePic" class="camera" type="button">📸 Neem foto</button>
@@ -665,7 +688,6 @@ router.get("/:id/pictures", async (req, res) => {
         takePicBtn.disabled = true;
         takePicBtn.textContent = "⏳ Verzoek verstuurd...";
 
-        // neem een "before" snapshot zodat we kunnen zien wanneer er iets nieuws bijkomt
         const before = await getLatestPictureInfo();
 
         try {
@@ -694,8 +716,6 @@ router.get("/:id/pictures", async (req, res) => {
 
               const sessionChanged = beforeSession && now.sessionId && now.sessionId !== beforeSession;
               const objectChanged = beforeObj && now.lastObject && now.lastObject !== beforeObj;
-
-              // als er geen before was, is "nieuw" zodra we een lastObject zien
               const becameAvailable = (!before || !beforeObj) && !!now.lastObject;
 
               if (sessionChanged || objectChanged || becameAvailable) {
@@ -1070,39 +1090,17 @@ ACTIONS (open / close, legacy, blijven werken)
 */
 
 router.post("/:id/open", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    await db.collection("boxCommands").doc(id).set({
-      commandId: `cmd-${Date.now()}`,
-      type: "open",
-      status: "pending",
-      createdAt: new Date()
-    });
-
-    res.json({ ok: true, command: "open", boxId: id });
-  } catch (err) {
-    console.error("Open command error:", err);
-    res.status(500).json({ error: "Interne serverfout" });
-  }
+  req.url = `/${req.params.id}/desired`;
+  req.method = "POST";
+  req.body = { desired: "open", desiredBy: "legacy-open" };
+  return router.handle(req, res);
 });
 
 router.post("/:id/close", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    await db.collection("boxCommands").doc(id).set({
-      commandId: `cmd-${Date.now()}`,
-      type: "close",
-      status: "pending",
-      createdAt: new Date()
-    });
-
-    res.json({ ok: true, command: "close", boxId: id });
-  } catch (err) {
-    console.error("Close command error:", err);
-    res.status(500).json({ error: "Interne serverfout" });
-  }
+  req.url = `/${req.params.id}/desired`;
+  req.method = "POST";
+  req.body = { desired: "close", desiredBy: "legacy-close" };
+  return router.handle(req, res);
 });
 
 /*
@@ -1162,21 +1160,18 @@ router.post("/:id/capture", async (req, res) => {
 router.get("/:id/shares", async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // We halen ze op ZONDER orderBy om de Firestore Index fout te voorkomen
+
     const snap = await db.collection("shares")
       .where("boxId", "==", id)
       .where("active", "==", true)
       .get();
 
-    // We maken er een lijst van
     const shares = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    // We sorteren ze HIER in de code (nieuwste bovenaan)
     shares.sort((a, b) => {
-        const dateA = new Date(a.createdAt || 0);
-        const dateB = new Date(b.createdAt || 0);
-        return dateB - dateA; 
+      const dateA = new Date(a.createdAt || 0);
+      const dateB = new Date(b.createdAt || 0);
+      return dateB - dateA;
     });
 
     res.json(shares);
@@ -1186,7 +1181,6 @@ router.get("/:id/shares", async (req, res) => {
   }
 });
 
-// 2. Nieuwe share toevoegen (MET SMS)
 // 2. Nieuwe share toevoegen (MET SMS via Bird)
 router.post("/:id/shares", async (req, res) => {
   try {
@@ -1195,7 +1189,6 @@ router.post("/:id/shares", async (req, res) => {
 
     if (!phone) return res.status(400).json({ error: "Telefoonnummer verplicht" });
 
-    // BoxNumber nodig voor SMS-commando's (open 5)
     const boxSnap = await db.collection("boxes").doc(String(id)).get();
     const boxData = boxSnap.exists ? (boxSnap.data() || {}) : {};
     const boxNumberVal =
@@ -1221,10 +1214,8 @@ router.post("/:id/shares", async (req, res) => {
 
     const ref = await db.collection("shares").add(newShare);
 
-    // SMS versturen (Bird)
     const smsText = buildShareSms({ boxNumber, expiresAt: newShare.expiresAt });
     const smsResult = await sendBirdSms({ to: newShare.phone, body: smsText });
-
 
     await db.collection("shares").doc(ref.id).set(
       {
@@ -1246,8 +1237,7 @@ router.post("/:id/shares", async (req, res) => {
 router.delete("/:id/shares/:shareId", async (req, res) => {
   try {
     const { shareId } = req.params;
-    // We verwijderen niet echt, maar zetten active op false (soft delete)
-    await db.collection("shares").doc(shareId).update({ 
+    await db.collection("shares").doc(shareId).update({
       active: false,
       deactivatedAt: new Date().toISOString()
     });

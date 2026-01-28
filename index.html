@@ -1238,15 +1238,20 @@
         return Math.abs(Date.now() - ms) <= maxMs;
       }
 
-function mainButtonLabel(doorState, motionState, fallbackIsOpen){
-        const d =
-          normalizeShutterStateDetailed(doorState) ||
-          (fallbackIsOpen ? 'open' : 'closed');
+      function mainButtonLabel(desiredNorm, doorState, fallbackIsOpen){
+  // Primair: desired (instructie)
+  const des = String(desiredNorm || '').trim().toLowerCase();
+  if (des === 'open') return 'CLOSE';
+  if (des === 'close') return 'OPEN';
 
-        // UI toont enkel acties, geen tussenstates
-        if (d === 'open') return 'CLOSE';
-        return 'OPEN';
-      }
+  // Fallback: echte deurstatus
+  const d =
+    normalizeShutterStateDetailed(doorState) ||
+    (fallbackIsOpen ? 'open' : 'closed');
+
+  if (d === 'open') return 'CLOSE';
+  return 'OPEN';
+}
 
       // Bewegingsstatus (meestal "opening/closing") komt typisch uit state.state
       function pickMotionState(box){
@@ -1594,27 +1599,36 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         const card = document.createElement('article');
         card.className = 'gb-card';
 
-        const rawMotionState = pickMotionState(box);
-        const rawDoorState = pickDoorState(box);
+        const rawShutterState =
+  pick(box, [
+    'status.shutterState',
+    'shutterState',
+    'state.shutterState'
+  ]) ??
+  pickMotionState(box) ??
+  pickDoorState(box);
 
-        const motionStateAll = normalizeShutterStateDetailed(rawMotionState);
-        const motionSince = pickMotionSince(box);
-        const motionState = (motionStateAll && isRecent(motionSince, 60000)) ? motionStateAll : '';
-        const doorState = normalizeShutterStateDetailed(rawDoorState);
+const shutterState = normalizeShutterStateDetailed(rawShutterState);
 
-        if (motionState === 'opening') {
-          card.classList.add('is-open');
-        } else if (motionState === 'closing') {
-          card.classList.remove('is-open');
-        } else if (doorState === 'open') {
-          card.classList.add('is-open');
-        } else if (doorState === 'closed') {
-          card.classList.remove('is-open');
-        }
+const motionState =
+  shutterState === 'opening' || shutterState === 'closing'
+    ? shutterState
+    : '';
 
-        card.setAttribute('data-motion-state', motionState);
-        card.setAttribute('data-door-state', doorState);
-        card.setAttribute('data-shutter-state', doorState || motionState);
+const doorState =
+  shutterState === 'open' || shutterState === 'closed'
+    ? shutterState
+    : '';
+
+       if (shutterState === 'opening' || shutterState === 'open') {
+  card.classList.add('is-open');
+} else if (shutterState === 'closing' || shutterState === 'closed') {
+  card.classList.remove('is-open');
+}
+
+        card.setAttribute('data-shutter-state', shutterState);
+card.setAttribute('data-motion-state', motionState);
+card.setAttribute('data-door-state', doorState);
         
         card.setAttribute('data-id', id);
         card.setAttribute('data-site', site === '-' ? '' : site);
@@ -1646,7 +1660,8 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
 
         card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
 
-        const toggleLabel = mainButtonLabel(doorState, motionState, card.classList.contains('is-open'));
+        const effectiveDesired = pending ? pending.desired : desiredNorm;
+        const toggleLabel = mainButtonLabel(effectiveDesired, doorState, card.classList.contains('is-open'));
 
         const sharesPill = (sharesCount === null || Number.isNaN(sharesCount))
           ? `<span class="pill ghost" title="sharesCount">shares -</span>`
@@ -2321,22 +2336,18 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         kvAlert.className = 'alert ' + (level || 'warn');
       }
 
-      function computeNowInfo(card){
-        const motion = normalizeShutterStateDetailed(card.getAttribute('data-motion-state') || '');
-        const door = normalizeShutterStateDetailed(card.getAttribute('data-door-state') || '');
+     function computeNowInfo(card){
+  const shutter = normalizeShutterStateDetailed(
+    card.getAttribute('data-shutter-state') || ''
+  );
 
-        if(motion === 'opening') return { label:'Bezig (openen)', base:'opening' };
-        if(motion === 'closing') return { label:'Bezig (sluiten)', base:'closing' };
+  if (shutter === 'opening') return { label:'Bezig (openen)', base:'opening' };
+  if (shutter === 'closing') return { label:'Bezig (sluiten)', base:'closing' };
+  if (shutter === 'open') return { label:'Open', base:'open' };
+  if (shutter === 'closed') return { label:'Dicht', base:'closed' };
 
-        if(door === 'open') return { label:'Open', base:'open' };
-        if(door === 'closed') return { label:'Dicht', base:'closed' };
-
-        if(card.classList.contains('is-open')) return { label:'Open', base:'open' };
-        if(card.classList.contains('is-closed')) return { label:'Dicht', base:'closed' };
-
-        // fallback
-        return { label:'Onbekend', base:'' };
-      }
+  return { label:'Onbekend', base:'' };
+}
 
       function updateSummaryFromCard(card){
         if(!card) return;
@@ -2512,119 +2523,120 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
       // =========================================================
 
       document.addEventListener('click', async (e)=>{
-        // ---------------------------------------------------------
-        // KNOPPEN LOGICA
-        // ---------------------------------------------------------
-        const btn = e.target.closest('button[data-action]');
-        const card = e.target.closest('.gb-card');
-        
-        if(!card) return; // Geen kaart? Stop.
+  const btn = e.target.closest('button[data-action]');
+  const card = e.target.closest('.gb-card');
+  if(!card) return;
 
-        // Als er op een knop is gedrukt
-        if(btn){
-          const action = btn.getAttribute('data-action');
-          const boxId = card.getAttribute('data-id');
+  // Als er op een knop is gedrukt
+  if(btn){
+    const action = btn.getAttribute('data-action');
+    const boxId = card.getAttribute('data-id');
 
-          // --- ACTIE: TOGGLE (OPEN/CLOSE) ---
-          if(action === 'toggle'){
-            e.preventDefault(); e.stopPropagation();
+    // OPEN/CLOSE toggle
+    if(action === 'toggle'){
+      e.preventDefault(); 
+      e.stopPropagation();
 
-            const label = String(btn.textContent || '').trim().toUpperCase();
-            let next = '';
-            if(label === 'OPEN') next = 'open';
-            else if(label === 'CLOSE') next = 'close';
-            else next = card.classList.contains('is-open') ? 'close' : 'open';
+      if (!boxId || boxId === '-') {
+        alert('Box id ontbreekt.');
+        return;
+      }
 
-            if (!boxId || boxId === '-'){
-              alert('Box id ontbreekt.');
-              return;
-            }
+      btn.disabled = true;
 
-            // Toon alleen "verzonden", geen fake open/close
-            setPending(boxId, next);
+      const prevDesired = card.getAttribute('data-desired') || '';
 
-            const statusText = card.querySelector('.js-status-text');
-            if(statusText) statusText.textContent = (next === 'open') ? 'Open gevraagd (wachten op box)' : 'Dicht gevraagd (wachten op box)';
+      try{
+        const label = String(btn.textContent || '').trim().toUpperCase();
+        let next = '';
+        if(label === 'OPEN') next = 'open';
+        else if(label === 'CLOSE') next = 'close';
+        else next = card.classList.contains('is-open') ? 'close' : 'open';
 
-            const prevLabel = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = 'VERZENDEN...';
+        // UI direct omschakelen (zoals jij wil)
+        setPending(boxId, next);
+        card.setAttribute('data-desired', next);
 
-            try{
-              // Probeer eerst dedicated endpoint (als het bestaat)
-              let sent = false;
-              try{
-                await sendCommand(boxId, next); // /open of /close
-                sent = true;
-              } catch(_){
-                // fallback
-              }
+        // Belangrijk: knoptekst direct omdraaien
+        btn.textContent = (next === 'open') ? 'CLOSE' : 'OPEN';
 
-              if(!sent){
-                await setDesired(boxId, next);
-              }
-
-              card.setAttribute('data-desired', next);
-
-              // Fast follow-up voor snelle UI (tot 45s)
-              startFastWatch(boxId);
-
-            } catch(err){
-              clearPending(boxId);
-              await refreshOneBoxNow(boxId);
-              alert('Actie mislukt: ' + (err.message || err));
-            } finally {
-              // na korte tijd opnieuw klikbaar, echte label volgt via refresh
-              setTimeout(()=>{
-                btn.disabled = false;
-                btn.textContent = prevLabel;
-              }, 1200);
-            }
-
-            return;
-          }
-
-
-          // --- ACTIE: SHARES ---
-          if(action === 'shares'){
-            e.preventDefault(); e.stopPropagation();
-            updateSideFromCard(card, 'Toegang beheren');
-            side.classList.add('is-wide');
-            app.classList.remove('is-collapsed');
-            app.classList.add('is-expanded');
-            setDetailsOpen(true);
-            setTimeout(()=>scrollSideToBlock('blockShares'), 0);
-            return;
-          }
-
-          // --- ACTIE: EVENTS ---
-          if(action === 'events'){
-            e.preventDefault(); e.stopPropagation();
-            updateSideFromCard(card, 'Beheer en overzicht');
-            setDetailsOpen(true);
-            if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/events`);
-            setTimeout(()=>scrollSideToBlock('blockEvents'), 0);
-            return;
-          }
-
-          // --- ACTIE: PICTURES ---
-          if(action === 'pictures'){
-            e.preventDefault(); e.stopPropagation();
-            updateSideFromCard(card, 'Beheer en overzicht');
-            if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/pictures`);
-            return;
-          }
+        const statusText = card.querySelector('.js-status-text');
+        if(statusText){
+          statusText.textContent =
+            (next === 'open')
+              ? 'Open gevraagd (wachten op box)'
+              : 'Dicht gevraagd (wachten op box)';
         }
 
-        // Als er op de kaart geklikt is (maar niet op een specifieke knop), open zijpaneel
-        updateSideFromCard(card, 'Beheer en overzicht');
-      });
+        // Side panel meteen mee updaten als deze kaart geselecteerd is
+        if(currentCard && currentCard.getAttribute('data-id') === boxId){
+          updateSummaryFromCard(card);
+        }
 
-     document.getElementById('btnEvents').addEventListener('click', ()=>{
-        if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
-        const boxId = currentCard.getAttribute('data-id');
-        if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/events`);
-      });
+        // Echte actie naar backend sturen
+        await setDesired(boxId, next).catch(()=>{});
+        await sendCommand(boxId, next === 'open' ? 'open' : 'close');
+
+        // Sneller refreshen zodat je snel bevestiging ziet
+        startFastWatch(boxId);
+
+      } catch(err){
+        clearPending(boxId);
+        card.setAttribute('data-desired', prevDesired);
+
+        // Herstel UI vanuit backend
+        await refreshOneBoxNow(boxId);
+
+        alert('Fout bij commando: ' + (err && err.message ? err.message : err));
+      } finally {
+        btn.disabled = false;
+      }
+
+      return;
+    }
+
+    // SHARES
+    if(action === 'shares'){
+      e.preventDefault(); 
+      e.stopPropagation();
+
+      updateSideFromCard(card, 'Toegang beheren');
+      side.classList.add('is-wide');
+      app.classList.remove('is-collapsed');
+      app.classList.add('is-expanded');
+
+      setDetailsOpen(true);
+      setTimeout(()=>scrollSideToBlock('blockShares'), 0);
+      return;
+    }
+
+    // EVENTS
+    if(action === 'events'){
+      e.preventDefault(); 
+      e.stopPropagation();
+
+      updateSideFromCard(card, 'Beheer en overzicht');
+      setDetailsOpen(true);
+
+      if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/events`);
+      setTimeout(()=>scrollSideToBlock('blockEvents'), 0);
+      return;
+    }
+
+    // PICTURES
+    if(action === 'pictures'){
+      e.preventDefault(); 
+      e.stopPropagation();
+
+      updateSideFromCard(card, 'Beheer en overzicht');
+      if (boxId && boxId !== '-') openLink(`/api/boxes/${encodeURIComponent(boxId)}/pictures`);
+      return;
+    }
+  }
+
+  // Klik op de kaart zelf
+  updateSideFromCard(card, 'Beheer en overzicht');
+});
 
       document.getElementById('btnPictures').addEventListener('click', ()=>{
         if(!currentCard) return alert('Selecteer eerst een Gridbox links.');
