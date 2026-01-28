@@ -5,84 +5,52 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title id="pageTitle">Gridbox Dashboard</title>
 
-  <!-- Bestaande styles -->
+  <!-- Branding (kan door klant worden vervangen) -->
   <link id="brandStyles" rel="stylesheet" href="css/styles.css">
 
-  <!-- Rolluik styles -->
-  <link rel="stylesheet" href="css/rolluik.css">
+  <!-- DEMO MODE auto-login -->
+  <script>
+    localStorage.setItem("token", "demo");
+    localStorage.setItem("tenant", JSON.stringify({ brandName: "Gridbox DEMO" }));
+  </script>
 </head>
 
 <body>
   <div class="container">
 
     <!-- Bovenbalk -->
-    <header class="toolbar">
+    <div class="toolbar">
       <div class="brand" id="brandName">Gridbox</div>
 
       <div class="toolbar__right">
-        <select id="filter">
-          <option value="all">Alle groepen</option>
-        </select>
+        <select id="filter"><option value="all">Alle groepen</option></select>
         <input id="search" type="search" placeholder="Zoek op box, site of telefoon…">
         <button id="logoutBtn" class="gb-btn--ghost">Uitloggen</button>
       </div>
-    </header>
+    </div>
 
-    <!-- Hoofdinhoud -->
-    <main id="sections" aria-live="polite">
-
-      <!-- Voorbeeldkaart met rolluik -->
-      <section class="gb-card">
-
-        <div class="gb-card-header">
-          <h2 class="gb-card-title">Gridbox voorbeeld</h2>
-        </div>
-
-        <div class="gb-card-body">
-
-          <!-- Rolluik visual -->
-          <div class="gb-rolluik-wrapper">
-            <div class="gb-rolluik"></div>
-          </div>
-          <div class="gb-rolluik-label">Gesloten</div>
-
-          <!-- Actieknoppen -->
-          <div class="gb-actions">
-            <button class="gb-btn" onclick="setRolluikState('open')">OPEN</button>
-            <button class="gb-btn gb-btn--ghost" onclick="setRolluikState('closed')">CLOSE</button>
-          </div>
-
-        </div>
-
-      </section>
-
-    </main>
+    <!-- Dynamische secties worden door app.js ingevoegd -->
+    <div id="sections" aria-live="polite"></div>
   </div>
 
-  <!-- Shares panel -->
+  <!-- ========================================= -->
+  <!-- SHARES PANEL -->
+  <!-- ========================================= -->
   <aside id="shares" class="panel" aria-hidden="true" role="dialog">
     <header>
       <button id="sharesClose" class="gb-btn--ghost">Sluiten</button>
-      <h3>Toegang beheren</h3>
+      <h3 id="sharesTitle">Shares</h3>
+      <div style="margin-left:auto; display:flex; gap:8px;">
+        <button id="sharesRefresh" class="gb-btn--ghost">Refresh</button>
+      </div>
     </header>
 
     <div class="body">
-      <div class="formrow">
-        <label>Box ID</label>
-        <input id="shareBox" type="text" readonly>
-      </div>
+      <div class="formrow"><label>Box</label><input id="shareBox" type="text" readonly></div>
+      <div class="formrow"><label>Telefoonnummer</label><input id="sharePhone" type="tel" placeholder="+32…"></div>
+      <div class="formrow"><label>Comment</label><input id="shareComment" type="text"></div>
 
-      <div class="formrow">
-        <label>Telefoonnummer</label>
-        <input id="sharePhone" type="tel" placeholder="+32…">
-      </div>
-
-      <div class="formrow">
-        <label>Commentaar</label>
-        <input id="shareComment" type="text" placeholder="Naam of reden">
-      </div>
-
-      <label class="checkbox-row">
+      <label style="display:flex; align-items:center; gap:6px;">
         <input id="shareAuth" type="checkbox"> Gemachtigd
       </label>
 
@@ -97,7 +65,7 @@
             <th>Telefoon</th>
             <th>Comment</th>
             <th>Status</th>
-            <th>Actie</th>
+            <th></th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -105,39 +73,37 @@
     </div>
   </aside>
 
-  <!-- Planning panel -->
+  <!-- ========================================= -->
+  <!-- PLANNER PANEL -->
+  <!-- ========================================= -->
   <aside id="planner" class="panel" aria-hidden="true" role="dialog">
     <header>
       <button id="plannerClose" class="gb-btn--ghost">Sluiten</button>
-      <h3>Planning</h3>
+      <h3 id="plannerTitle">Planning</h3>
+      <div style="margin-left:auto; display:flex; gap:8px;">
+        <button id="plannerRefresh" class="gb-btn--ghost">Refresh</button>
+      </div>
     </header>
 
     <div class="body">
-      <div class="formrow">
-        <label>Groep</label>
-        <input id="planGroup" type="text" readonly>
-      </div>
-
-      <div class="formrow">
-        <label>Telefoonnummer</label>
-        <input id="planPhone" type="tel">
-      </div>
-
-      <div class="formrow">
-        <label>Datum</label>
-        <input id="planDate" type="date">
-      </div>
+      <div class="formrow"><label>Groep</label><input id="planGroup" type="text" readonly></div>
+      <div class="formrow"><label>Telefoonnummer</label><input id="planPhone" type="tel"></div>
+      <div class="formrow"><label>Datum (gewenst)</label><input id="planDate" type="date"></div>
+      <div class="formrow"><label>Voorkeursbox</label><input id="planBox" type="text"></div>
+      <div class="formrow"><label>Comment</label><textarea id="planNote" rows="2"></textarea></div>
 
       <div class="actions">
         <button id="planAdd" class="gb-btn">Planning toevoegen</button>
       </div>
 
+      <h4>Openstaande planningen</h4>
       <table id="planTable">
         <thead>
           <tr>
             <th>Datum</th>
             <th>Telefoon</th>
             <th>Box</th>
+            <th>Comment</th>
             <th>Status</th>
             <th></th>
           </tr>
@@ -147,20 +113,39 @@
     </div>
   </aside>
 
-  <!-- Foto modal -->
+  <!-- ========================================= -->
+  <!-- EVENTS PANEL -->
+  <!-- ========================================= -->
+  <aside id="eventsPanel" class="panel" aria-hidden="true" role="dialog">
+    <header>
+      <button id="eventsClose" class="gb-btn--ghost">Sluiten</button>
+      <h3 id="eventsTitle">Events</h3>
+      <div style="margin-left:auto; display:flex; gap:8px;">
+        <button id="eventsRefresh" class="gb-btn--ghost">Refresh</button>
+      </div>
+    </header>
+
+    <div class="body">
+      <div id="eventsList" class="events-list"></div>
+    </div>
+  </aside>
+
+  <!-- ========================================= -->
+  <!-- FULLSCREEN PICTURE VIEWER -->
+  <!-- ========================================= -->
   <div id="pictureModal" class="picture-modal" hidden>
     <div class="pm-backdrop"></div>
+
     <button class="pm-close" id="pmClose">×</button>
     <button class="pm-prev" id="pmPrev">‹</button>
     <button class="pm-next" id="pmNext">›</button>
-    <img id="pmImage" src="" alt="Camerabeeld">
+
+    <img id="pmImage" src="" alt="Camerabeeld" />
   </div>
 
-  <!-- Rolluik logica -->
-  <script src="js/rolluik.js"></script>
-
-  <!-- Bestaande app logica -->
+  <!-- ========================================= -->
+  <!-- SCRIPTS -->
+  <!-- ========================================= -->
   <script type="module" src="js/app.js"></script>
-
 </body>
 </html>
