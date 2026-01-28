@@ -1,10 +1,12 @@
 /**
- * Zet de visuele staat van het rolluik
- * Verwachte states:
+ * Zet de visuele staat van het rolluik in de UI.
+ *
+ * Mogelijke states:
  * - "open"
  * - "opening"
  * - "closing"
- * - "closed" (of null / undefined)
+ * - "closed"
+ * - null / undefined
  */
 function setRolluikState(state) {
   const rolluik = document.querySelector(".gb-rolluik");
@@ -12,16 +14,19 @@ function setRolluikState(state) {
 
   if (!rolluik) return;
 
-  // alles resetten
+  // Normaliseer input
+  const s = (state || "").toString().toLowerCase();
+
+  // Reset alle rolluik-states
   rolluik.classList.remove(
     "is-open",
     "is-opening",
     "is-closing"
   );
 
-  let labelText = "Onbekend";
+  let labelText;
 
-  switch (state) {
+  switch (s) {
     case "open":
       rolluik.classList.add("is-open");
       labelText = "Open";
@@ -38,8 +43,9 @@ function setRolluikState(state) {
       break;
 
     case "closed":
+    case "":
     default:
-      // gesloten = geen class nodig
+      // Gesloten = geen extra class nodig
       labelText = "Gesloten";
       break;
   }
