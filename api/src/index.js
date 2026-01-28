@@ -10,114 +10,110 @@ import statusRouter from "./routes/status.js";
 import smsRouter from "./routes/smsWebhook.js";
 import sharesRouter from "./routes/shares.js";
 import internalJobsRouter from "./routes/internalJobs.js";
-
-// NEW: capture endpoints (camera frames)
 import captureRouter from "./routes/capture.js";
-
-// device endpoints (poll commands + result + status)
 import orgBoxDeviceRouter from "./routes/orgBoxDevice.js";
 
+// --------------------------------------------------
+// App + port (VERPLICHT voor Cloud Run)
+// --------------------------------------------------
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = Number(process.env.PORT) || 8080;
 
 // --------------------------------------------------
-// middleware
+// Startup logging (belangrijk voor Cloud Run logs)
 // --------------------------------------------------
-app.use(
-  cors({
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Seq",
-      "X-Phase",
-      "X-Timestamp"
-    ]
-  })
-);
+console.log("🚀 Gridbox API starting...");
+console.log("🌍 Environment:", process.env.NODE_ENV || "unknown");
+console.log("🔌 Listening port:", PORT);
 
-app.use(express.json());
+// --------------------------------------------------
+// Middleware
+// --------------------------------------------------
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Seq",
+    "X-Phase",
+    "X-Timestamp"
+  ]
+}));
+
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false }));
 
 // --------------------------------------------------
-// healthcheck
+// Healthcheck (MOET supersnel antwoorden)
 // --------------------------------------------------
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, service: "gridbox-api" });
+  res.status(200).json({
+    ok: true,
+    service: "gridbox-api",
+    ts: Date.now()
+  });
 });
 
 // --------------------------------------------------
-// DEBUG
+// Debug Firestore
 // --------------------------------------------------
 app.get("/api/_debug/firestore", async (req, res) => {
   try {
     const snap = await db.collection("boxes").limit(1).get();
     res.json({ ok: true, count: snap.size });
-  } catch (e) {
-    console.error("DEBUG firestore error:", e);
-    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  } catch (err) {
+    console.error("❌ Firestore debug error:", err);
+    res.status(500).json({ ok: false, error: String(err?.message || err) });
   }
 });
 
 // --------------------------------------------------
-// BIRD WEBHOOK (NIEUW)
+// Bird webhook
 // --------------------------------------------------
 app.post("/webhooks/bird", async (req, res) => {
   try {
     console.log("📩 Bird webhook ontvangen");
     console.log(JSON.stringify(req.body, null, 2));
 
-    const text =
-      req.body?.body?.text?.text?.trim() || "";
-
+    const text = req.body?.body?.text?.text?.trim() || "";
     const from =
       req.body?.receiver?.contacts?.[0]?.identifierValue || "unknown";
 
-    console.log("Van:", from);
-    console.log("Tekst:", text);
+    if (!text) {
+      return res.json({ ok: true, action: "empty" });
+    }
 
-    // Verwacht: OPEN 5
     const match = text.match(/open\s+(\d+)/i);
-
     if (!match) {
       return res.json({ ok: true, action: "ignored" });
     }
 
     const boxId = match[1];
-
-    // Zoek box
-    const boxRef = db.collection("boxes").doc(boxId);
+    const boxRef = db.collection("boxes").doc(String(boxId));
     const snap = await boxRef.get();
 
     if (!snap.exists) {
-      console.warn("Box niet gevonden:", boxId);
+      console.warn("⚠️ Box niet gevonden:", boxId);
       return res.json({ ok: false, message: "Box niet gevonden", boxId });
     }
 
-    // Zet desired = open
-    await boxRef.set(
-      {
-        box: {
-          desired: "open",
-          desiredAt: new Date()
-        },
-        lastCommand: {
-          source: "sms",
-          from,
-          text
-        }
+    await boxRef.set({
+      box: {
+        desired: "open",
+        desiredAt: new Date()
       },
-      { merge: true }
-    );
+      lastCommand: {
+        source: "sms",
+        from,
+        text,
+        at: new Date()
+      }
+    }, { merge: true });
 
-    console.log(`✅ Box ${boxId} op OPEN gezet`);
+    console.log(`✅ Box ${boxId} -> OPEN`);
 
-    return res.json({
-      ok: true,
-      action: "open",
-      boxId
-    });
+    res.json({ ok: true, action: "open", boxId });
 
   } catch (err) {
     console.error("❌ Bird webhook fout:", err);
@@ -126,7 +122,7 @@ app.post("/webhooks/bird", async (req, res) => {
 });
 
 // --------------------------------------------------
-// helpers
+// Helpers
 // --------------------------------------------------
 function normAction(v) {
   if (!v) return null;
@@ -149,36 +145,8 @@ function toMillis(v) {
   return null;
 }
 
-function pickBox(data) {
-  const b = data?.box;
-  return b && typeof b === "object" ? b : {};
-}
-
-function computeDesiredForPi(data) {
-  const box = pickBox(data);
-
-  const target = normAction(box.desired);
-  const state = normAction(box.state);
-
-  if (!target) return { target: null, state, desired: null, reason: "no_target" };
-
-  if (state && state === target) {
-    return { target, state, desired: null, reason: "already_in_state" };
-  }
-
-  const desiredAtMs = toMillis(box.desiredAt);
-  const lastAppliedAtMs =
-    toMillis(box.lastAppliedAt) ?? toMillis(data?.lastAckAt);
-
-  if (desiredAtMs && lastAppliedAtMs && desiredAtMs <= lastAppliedAtMs) {
-    return { target, state, desired: null, reason: "already_applied_by_time" };
-  }
-
-  return { target, state, desired: target, reason: "pending" };
-}
-
 // --------------------------------------------------
-// routes
+// Routes
 // --------------------------------------------------
 app.use("/api/boxes", boxesRouter);
 app.use("/api/status", statusRouter);
@@ -194,12 +162,20 @@ app.use("/api/orgs/:orgId/boxes/:boxId/capture", captureRouter);
 app.use("/api/boxes/:boxId/device", orgBoxDeviceRouter);
 app.use("/api/orgs/:orgId/boxes/:boxId/device", orgBoxDeviceRouter);
 
-// fallback
+// --------------------------------------------------
+// 404 fallback
+// --------------------------------------------------
 app.use((req, res) => {
-  res.status(404).json({ ok: false, message: "Route niet gevonden" });
+  res.status(404).json({
+    ok: false,
+    message: "Route niet gevonden",
+    path: req.originalUrl
+  });
 });
 
-// start
-app.listen(PORT, () => {
-  console.log("🚀 Gridbox API gestart op poort", PORT);
+// --------------------------------------------------
+// START SERVER (CRUCIAAL VOOR CLOUD RUN)
+// --------------------------------------------------
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Gridbox API live op poort ${PORT}`);
 });
