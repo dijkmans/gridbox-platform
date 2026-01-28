@@ -29,11 +29,8 @@
   transform: translateY(-100%);
 }
 
-/* half open tijdens beweging */
-.gb-rolluik.is-opening {
-  transform: translateY(-50%);
-}
-
+/* beweging */
+.gb-rolluik.is-opening,
 .gb-rolluik.is-closing {
   transform: translateY(-50%);
 }
