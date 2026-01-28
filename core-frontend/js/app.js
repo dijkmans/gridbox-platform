@@ -1,5 +1,5 @@
 // =====================================================
-// APP.JS - Gridbox Dashboard (Optimized Version)
+// APP.JS - Gridbox Dashboard (Direct Response Versie)
 // =====================================================
 
 import { api } from "./api.js";
@@ -115,8 +115,8 @@ function createBoxCard(box, groupName) {
   card.dataset.boxId = box.id;
   card.dataset.boxNumber = box.boxNumber;
 
-  // We bepalen de initiële tekst op basis van de status van de box
-  const initialAction = (box.shutterState === 'open') ? 'CLOSE' : 'OPEN';
+  // Bepaal de knoptekst op basis van de huidige status van de shutter
+  const actionText = (box.shutterState === "open") ? "CLOSE" : "OPEN";
 
   card.innerHTML = `
     <div class="gb-head">
@@ -128,7 +128,7 @@ function createBoxCard(box, groupName) {
     <ul class="gb-phones" data-phones></ul>
 
     <div class="gb-actions">
-      <button class="gb-btn" data-action="toggle">${initialAction}</button>
+      <button class="gb-btn" data-action="toggle">${actionText}</button>
       <div class="gb-row">
         <button class="gb-btn--ghost" data-action="events">EVENTS</button>
         <button class="gb-btn--ghost" data-action="shares">SHARES</button>
@@ -142,47 +142,50 @@ function createBoxCard(box, groupName) {
 }
 
 // -----------------------------------------------------
-// 4. BOX ACTIES (Aangepast voor directe feedback)
+// 4. BOX ACTIES (GEOPTIMALISEERD VOOR DIRECTE FEEDBACK)
 // -----------------------------------------------------
 
 function setupCardActions(card, box, groupName) {
   const btnToggle = card.querySelector('[data-action="toggle"]');
-  const btnEvents = card.querySelector('[data-action="events"]');
-  const btnShares = card.querySelector('[data-action="shares"]');
-  const btnPictures = card.querySelector('[data-action="pictures"]');
 
   btnToggle.addEventListener("click", async () => {
-    // 1. Bewaar de huidige staat en bepaal de nieuwe tekst
-    const currentStatus = btnToggle.textContent.trim().toUpperCase();
-    const nextStatus = (currentStatus === 'OPEN') ? 'CLOSE' : 'OPEN';
+    // 1. Wat is de status NU op het scherm?
+    const currentText = btnToggle.textContent.trim().toUpperCase();
+    
+    // 2. Wissel de tekst onmiddellijk om (Optimistic UI)
+    if (currentText === "OPEN") {
+      btnToggle.textContent = "CLOSE";
+    } else {
+      btnToggle.textContent = "OPEN";
+    }
 
-    // 2. Directe visuele feedback (Optimistic UI)
-    btnToggle.textContent = "..."; // Kort tonen dat er actie is
+    // Geef visuele indicatie dat de actie verwerkt wordt
+    btnToggle.style.backgroundColor = "#ddd"; 
     btnToggle.disabled = true;
 
     try {
-      // 3. Stuur de instructie naar de API
+      // 3. Stuur de opdracht naar de achtergrond (API)
       await api.toggleBox(box.id);
       
-      // 4. Update de knop direct naar de volgende gewenste actie
-      btnToggle.textContent = nextStatus;
+      // Actie geslaagd: knop weer actief maken met de nieuwe status
+      btnToggle.style.backgroundColor = ""; 
       btnToggle.disabled = false;
-      
-      // Optioneel: subtiele melding in console
-      console.log(`Gridbox ${box.id} opdracht verzonden: ${currentStatus}`);
+      console.log(`Instructie '${currentText}' verzonden voor ${box.id}`);
 
     } catch (error) {
-      // 5. Herstel bij fout (Rollback)
-      console.error("Fout bij aansturen box:", error);
-      btnToggle.textContent = currentStatus; 
+      // 4. Foutafhandeling: zet de knop terug naar de oude status
+      console.error("Fout bij aansturen:", error);
+      btnToggle.textContent = currentText; 
+      btnToggle.style.backgroundColor = "";
       btnToggle.disabled = false;
-      alert("Fout: Kon de Gridbox niet bereiken. Controleer de verbinding.");
+      alert("Kon de Gridbox niet bereiken. Probeer het later opnieuw.");
     }
   });
 
-  btnEvents.addEventListener("click", () => openEventsPanel(box.id));
-  btnShares.addEventListener("click", () => openSharesPanel(box.id));
-  btnPictures.addEventListener("click", () => openPicturesPanel(box.id));
+  // Overige knoppen
+  card.querySelector('[data-action="events"]').onclick = () => openEventsPanel(box.id);
+  card.querySelector('[data-action="shares"]').onclick = () => openSharesPanel(box.id);
+  card.querySelector('[data-action="pictures"]').onclick = () => openPicturesPanel(box.id);
 }
 
 // -----------------------------------------------------
@@ -264,11 +267,11 @@ async function openSharesPanel(boxId) {
 }
 
 // -----------------------------------------------------
-// 8. EVENTS PANEL
+// 8. EVENTS PANEL (placeholder)
 // -----------------------------------------------------
 
 async function openEventsPanel(boxId) {
-  alert("Events worden geladen voor box: " + boxId);
+  alert("Events worden geladen voor: " + boxId);
 }
 
 // -----------------------------------------------------
@@ -280,7 +283,7 @@ async function openPicturesPanel(boxId) {
   pictureIndex = 0;
 
   if (!pictureList || !pictureList.length) {
-    alert("Geen foto's beschikbaar voor deze box.");
+    alert("Geen foto's beschikbaar");
     return;
   }
 
