@@ -1,21 +1,18 @@
 // =====================================================
-// APP.JS - Gridbox Dashboard (Direct Response Versie)
+// APP.JS - Gridbox Dashboard (ULTRA-RESPONSIVE)
 // =====================================================
 
 import { api } from "./api.js";
 import { getTenant, logout } from "./auth.js";
 
-// HTML-elementen
 const sectionsContainer = document.getElementById("sections");
 const filterDropdown = document.getElementById("filter");
 const searchInput = document.getElementById("search");
 const logoutBtn = document.getElementById("logoutBtn");
 
-// Panels
 const panelShares = document.getElementById("shares");
 const panelPlanner = document.getElementById("planner");
 
-// Pictures modal
 const pm = document.getElementById("pictureModal");
 const pmImg = document.getElementById("pmImage");
 const pmPrev = document.getElementById("pmPrev");
@@ -24,10 +21,6 @@ const pmClose = document.getElementById("pmClose");
 
 let pictureList = [];
 let pictureIndex = 0;
-
-// -----------------------------------------------------
-// INITIALISATIE
-// -----------------------------------------------------
 
 init();
 
@@ -38,7 +31,6 @@ async function init() {
   const groups = await api.getBoxes();
   renderGroups(groups);
 
-  // Planner knoppen automatisch koppelen
   document.querySelectorAll("[data-plan-group]").forEach(btn => {
     btn.onclick = () => openPlannerForGroup(btn.dataset.planGroup);
   });
@@ -50,27 +42,17 @@ async function init() {
   setupPictureModal();
 }
 
-// -----------------------------------------------------
-// 1. TENANT BRANDING
-// -----------------------------------------------------
-
 function applyTenantBranding() {
   const tenant = getTenant();
   if (!tenant) return;
-
   if (tenant.brandName) {
     document.getElementById("brandName").textContent = tenant.brandName;
     document.getElementById("pageTitle").textContent = tenant.brandName + " Dashboard";
   }
-
   if (tenant.stylesheet) {
     document.getElementById("brandStyles").href = tenant.stylesheet;
   }
 }
-
-// -----------------------------------------------------
-// 2. GROEPEN RENDEREN
-// -----------------------------------------------------
 
 function renderGroups(groups) {
   sectionsContainer.innerHTML = "";
@@ -81,9 +63,7 @@ function renderGroups(groups) {
     opt.value = group.group;
     opt.textContent = group.group;
     filterDropdown.appendChild(opt);
-  });
 
-  groups.forEach(group => {
     const section = document.createElement("section");
     section.classList.add("gb-section");
     section.dataset.group = group.group;
@@ -99,23 +79,16 @@ function renderGroups(groups) {
 
     const list = section.querySelector(".gb-list");
     group.boxes.forEach(box => list.appendChild(createBoxCard(box, group.group)));
-
     sectionsContainer.appendChild(section);
   });
 }
 
-// -----------------------------------------------------
-// 3. BOX-CARD AANMAKEN
-// -----------------------------------------------------
-
 function createBoxCard(box, groupName) {
   const card = document.createElement("article");
   card.classList.add("gb-card");
-  card.dataset.site = groupName;
   card.dataset.boxId = box.id;
-  card.dataset.boxNumber = box.boxNumber;
 
-  // Bepaal de knoptekst op basis van de huidige status van de shutter
+  // Bepaal start-tekst op basis van huidige status in Firestore
   const actionText = (box.shutterState === "open") ? "CLOSE" : "OPEN";
 
   card.innerHTML = `
@@ -124,9 +97,6 @@ function createBoxCard(box, groupName) {
       <div class="gb-box"># ${box.boxNumber}</div>
       <div class="gb-time">${box.lastOpenedText || ""}</div>
     </div>
-
-    <ul class="gb-phones" data-phones></ul>
-
     <div class="gb-actions">
       <button class="gb-btn" data-action="toggle">${actionText}</button>
       <div class="gb-row">
@@ -137,156 +107,75 @@ function createBoxCard(box, groupName) {
     </div>
   `;
 
-  setupCardActions(card, box, groupName);
+  setupCardActions(card, box);
   return card;
 }
 
-// -----------------------------------------------------
-// 4. BOX ACTIES (GEOPTIMALISEERD VOOR DIRECTE FEEDBACK)
-// -----------------------------------------------------
-
-function setupCardActions(card, box, groupName) {
+// ⭐ DE BELANGRIJKSTE WIJZIGING HIERONDER ⭐
+function setupCardActions(card, box) {
   const btnToggle = card.querySelector('[data-action="toggle"]');
 
   btnToggle.addEventListener("click", async () => {
-    // 1. Wat is de status NU op het scherm?
-    const currentText = btnToggle.textContent.trim().toUpperCase();
-    
-    // 2. Wissel de tekst onmiddellijk om (Optimistic UI)
-    if (currentText === "OPEN") {
-      btnToggle.textContent = "CLOSE";
-    } else {
-      btnToggle.textContent = "OPEN";
-    }
+    const oldText = btnToggle.textContent.trim().toUpperCase();
+    const newText = (oldText === "OPEN") ? "CLOSE" : "OPEN";
 
-    // Geef visuele indicatie dat de actie verwerkt wordt
-    btnToggle.style.backgroundColor = "#ddd"; 
-    btnToggle.disabled = true;
+    // 1. Directe visuele wissel (geen "Verzenden..." tekst meer)
+    btnToggle.textContent = newText;
+    btnToggle.classList.add("loading"); // Optioneel: voeg een class toe voor een subtiel effect
 
     try {
-      // 3. Stuur de opdracht naar de achtergrond (API)
+      // 2. Stuur opdracht naar de cloud
       await api.toggleBox(box.id);
-      
-      // Actie geslaagd: knop weer actief maken met de nieuwe status
-      btnToggle.style.backgroundColor = ""; 
-      btnToggle.disabled = false;
-      console.log(`Instructie '${currentText}' verzonden voor ${box.id}`);
-
+      console.log(`Succes: Instructie ${oldText} -> ${newText} gestuurd.`);
     } catch (error) {
-      // 4. Foutafhandeling: zet de knop terug naar de oude status
-      console.error("Fout bij aansturen:", error);
-      btnToggle.textContent = currentText; 
-      btnToggle.style.backgroundColor = "";
-      btnToggle.disabled = false;
-      alert("Kon de Gridbox niet bereiken. Probeer het later opnieuw.");
+      // 3. Alleen bij echte fout terugzetten naar oude tekst
+      btnToggle.textContent = oldText;
+      alert("Gridbox kon niet worden bereikt.");
+    } finally {
+      btnToggle.classList.remove("loading");
     }
   });
 
-  // Overige knoppen
-  card.querySelector('[data-action="events"]').onclick = () => openEventsPanel(box.id);
+  card.querySelector('[data-action="events"]').onclick = () => alert("Events voor " + box.id);
   card.querySelector('[data-action="shares"]').onclick = () => openSharesPanel(box.id);
   card.querySelector('[data-action="pictures"]').onclick = () => openPicturesPanel(box.id);
 }
 
-// -----------------------------------------------------
-// 5. FILTER / ZOEKEN
-// -----------------------------------------------------
-
 function filterGroups(groups) {
   const selected = filterDropdown.value;
   const search = searchInput.value.toLowerCase();
-
   document.querySelectorAll(".gb-section").forEach(section => {
     const group = section.dataset.group;
-    let visible = true;
-
-    if (selected !== "all" && group !== selected) visible = false;
-
-    if (visible && search.length > 0) {
-      const text = section.textContent.toLowerCase();
-      if (!text.includes(search)) visible = false;
-    }
-
+    let visible = (selected === "all" || group === selected);
+    if (visible && search.length > 0 && !section.textContent.toLowerCase().includes(search)) visible = false;
     section.style.display = visible ? "" : "none";
   });
 }
 
-// -----------------------------------------------------
-// 6. PANEL MANAGEMENT
-// -----------------------------------------------------
-
 function setupPanelClosers() {
-  document.getElementById("sharesClose").onclick = () => closePanel(panelShares);
-  document.getElementById("plannerClose").onclick = () => closePanel(panelPlanner);
+  document.getElementById("sharesClose").onclick = () => panelShares.classList.remove("open");
+  document.getElementById("plannerClose").onclick = () => panelPlanner.classList.remove("open");
 }
-
-function openPanel(panel) {
-  panel.classList.add("open");
-}
-
-function closePanel(panel) {
-  panel.classList.remove("open");
-}
-
-// -----------------------------------------------------
-// 7. SHARES PANEL
-// -----------------------------------------------------
 
 async function openSharesPanel(boxId) {
-  openPanel(panelShares);
-  document.getElementById("shareBox").value = boxId;
-
+  panelShares.classList.add("open");
   const tableBody = document.querySelector("#sharesTable tbody");
-  tableBody.innerHTML = "<tr><td colspan='5'>Laden...</td></tr>";
-
+  tableBody.innerHTML = "<tr><td>Laden...</td></tr>";
   const shares = await api.getShares(boxId);
-  tableBody.innerHTML = "";
-
-  shares.forEach(s => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
+  tableBody.innerHTML = shares.map(s => `
+    <tr>
       <td>${s.time}</td>
       <td>${s.phone}</td>
       <td>${s.comment || ""}</td>
       <td>${s.status}</td>
       <td>×</td>
-    `;
-    tableBody.appendChild(tr);
-  });
-
-  document.getElementById("shareAdd").onclick = async () => {
-    const body = {
-      phone: document.getElementById("sharePhone").value,
-      comment: document.getElementById("shareComment").value,
-      authorized: document.getElementById("shareAuth").checked
-    };
-
-    await api.addShare(boxId, body);
-    openSharesPanel(boxId); 
-  };
+    </tr>
+  `).join("");
 }
-
-// -----------------------------------------------------
-// 8. EVENTS PANEL (placeholder)
-// -----------------------------------------------------
-
-async function openEventsPanel(boxId) {
-  alert("Events worden geladen voor: " + boxId);
-}
-
-// -----------------------------------------------------
-// 9. PICTURES FULLSCREEN VIEWER
-// -----------------------------------------------------
 
 async function openPicturesPanel(boxId) {
   pictureList = await api.getPictures(boxId);
-  pictureIndex = 0;
-
-  if (!pictureList || !pictureList.length) {
-    alert("Geen foto's beschikbaar");
-    return;
-  }
-
+  if (!pictureList.length) return alert("Geen foto's");
   showPicture(0);
   pm.hidden = false;
 }
@@ -298,34 +187,16 @@ function setupPictureModal() {
 }
 
 function showPicture(index) {
-  if (index < 0 || index >= pictureList.length) return;
-  pictureIndex = index;
-  pmImg.src = pictureList[pictureIndex].url;
+  if (index >= 0 && index < pictureList.length) {
+    pictureIndex = index;
+    pmImg.src = pictureList[pictureIndex].url;
+  }
 }
 
-// -----------------------------------------------------
-// 10. PLANNER PANEL
-// -----------------------------------------------------
-
 async function openPlannerForGroup(groupName) {
-  document.getElementById("planGroup").value = groupName;
-  openPanel(panelPlanner);
-
+  panelPlanner.classList.add("open");
   const rows = await api.getPlanning(groupName);
-
-  const tbody = document.querySelector("#planTable tbody");
-  tbody.innerHTML = "";
-
-  rows.forEach(r => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${r.date}</td>
-      <td>${r.phone}</td>
-      <td>${r.box || ""}</td>
-      <td>${r.comment || ""}</td>
-      <td>${r.status}</td>
-      <td>×</td>
-    `;
-    tbody.appendChild(tr);
-  });
+  document.querySelector("#planTable tbody").innerHTML = rows.map(r => `
+    <tr><td>${r.date}</td><td>${r.phone}</td><td>${r.box || ""}</td><td>${r.status}</td><td>×</td></tr>
+  `).join("");
 }
