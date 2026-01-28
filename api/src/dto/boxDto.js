@@ -1,31 +1,5 @@
 // api/src/dto/boxDto.js
 
-function toMillis(v) {
-  if (!v) return null;
-  if (typeof v?.toMillis === "function") return v.toMillis(); // Firestore Timestamp
-  if (v instanceof Date) return v.getTime();
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (typeof v === "string") {
-    const t = Date.parse(v);
-    return Number.isFinite(t) ? t : null;
-  }
-  return null;
-}
-
-function computeLastSeenMinutes(data) {
-  const ms =
-    (typeof data?.status?.lastSeenMs === "number" ? data.status.lastSeenMs : null) ??
-    toMillis(data?.status?.updatedAt) ??
-    toMillis(data?.status?.lastSeen) ??
-    toMillis(data?.hardware?.hardwareUpdatedAt) ??
-    null;
-
-  if (!ms) return null;
-  const diff = Date.now() - ms;
-  if (!Number.isFinite(diff) || diff < 0) return 0;
-  return Math.floor(diff / 60000);
-}
-
 function get(obj, path) {
   if (!obj || !path) return undefined;
   const parts = path.split(".");
@@ -82,10 +56,8 @@ export function toBoxDto(id, data) {
 
   const Portal = normalizeKeys(data?.Portal ?? data?.portal ?? {});
   const box = normalizeKeys(data?.box ?? {});
-  const site = normalizeKeys(data?.site ?? {});
   const location = normalizeKeys(data?.location ?? {});
   const lifecycle = normalizeKeys(data?.lifecycle ?? {});
-  const ui = normalizeKeys(data?.ui ?? {});
   const organisation = normalizeKeys(data?.organisation ?? data?.organization ?? {});
 
   return {
@@ -95,10 +67,8 @@ export function toBoxDto(id, data) {
 
     Portal,
     box,
-    site,
     location,
     lifecycle,
-    ui,
     organisation,
 
     Agent: data?.Agent ?? data?.agent ?? null,
@@ -108,7 +78,6 @@ export function toBoxDto(id, data) {
       data?.lastSeenMinutes ??
       data?.last_seen_minutes ??
       data?.lastSeen ??
-      computeLastSeenMinutes(data) ??
       null,
 
     // Command intent (desired)
