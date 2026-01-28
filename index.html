@@ -1584,29 +1584,6 @@ function mainButtonLabel(doorState, motionState, fallbackIsOpen){
         const closedAt = fmtMaybe(pickLifecycleClosedAt(box));
         const closedBy = fmtMaybe(pickLifecycleClosedBy(box));
         const lcSource = fmtMaybe(pickLifecycleSource(box));
-
-        // Status uit Firestore (agent): status.shutterState + status.updatedAt
-        const statusUpdatedAtRaw = pick(box, [
-          'status.updatedAt',
-          'status.updated_at',
-          'status.timestamp',
-          'status.ts',
-          'status.updatedAtMs',
-          'status.updatedAtISO',
-          'status.updatedAtIso'
-        ]) ?? null;
-
-        const statusUpdatedAtMs = parseAnyTime(statusUpdatedAtRaw);
-        const statusUpdatedAtIso = statusUpdatedAtMs ? new Date(statusUpdatedAtMs).toISOString() : '';
-
-        const statusSourceRaw = pick(box, [
-          'status.source',
-          'status.updatedBy',
-          'status.by',
-          'status.origin'
-        ]) ?? null;
-
-        const statusSource = (statusSourceRaw === null || statusSourceRaw === undefined) ? '' : String(statusSourceRaw);
         const geo = fmtMaybe(pickGeo(box));
 
         const desiredRaw = pickDesired(box);
@@ -1669,8 +1646,6 @@ card.setAttribute('data-door-state', doorState);
         card.setAttribute('data-closed-at', closedAt ?? '');
         card.setAttribute('data-closed-by', closedBy ?? '');
         card.setAttribute('data-source', lcSource ?? '');
-        card.setAttribute('data-status-updated-at', statusUpdatedAtIso || '');
-        card.setAttribute('data-status-source', statusSource || '');
         card.setAttribute('data-geo', geo ?? '');
 
 
@@ -2401,56 +2376,27 @@ card.setAttribute('data-door-state', doorState);
           kvDesiredMeta.textContent = meta ? (' (' + meta + ')') : '';
         }
 
+        // Laatste actie
+        const openedBy = (card.getAttribute('data-opened-by') || '').trim();
+        const closedBy = (card.getAttribute('data-closed-by') || '').trim();
+        const source = (card.getAttribute('data-source') || '').trim();
 
-        // Laatste actie (status uit Firestore heeft voorrang)
-        const statusAt = (card.getAttribute('data-status-updated-at') || '').trim();
-        const statusSrc = (card.getAttribute('data-status-source') || '').trim();
-        const statusShutter = normalizeShutterStateDetailed(card.getAttribute('data-shutter-state') || '');
-
-        const tStatus = parseAnyTime(statusAt) || 0;
+        const tOpen = parseAnyTime(openedAt) || 0;
+        const tClose = parseAnyTime(closedAt) || 0;
 
         let kind = '-';
         let at = '';
         let by = '';
-        let src = '';
-
-        const hasStatus = tStatus > 0 && (
-          statusShutter === 'open' ||
-          statusShutter === 'closed' ||
-          statusShutter === 'opening' ||
-          statusShutter === 'closing'
-        );
-
-        if(hasStatus){
-          if(statusShutter === 'open') kind = 'Geopend';
-          else if(statusShutter === 'closed') kind = 'Gesloten';
-          else if(statusShutter === 'opening') kind = 'Bezig (openen)';
-          else if(statusShutter === 'closing') kind = 'Bezig (sluiten)';
-
-          at = statusAt;
-          src = statusSrc || 'agent';
+        if(tOpen == 0 && tClose == 0){
+          kind = '-';
+        } else if(tOpen >= tClose){
+          kind = 'Geopend';
+          at = openedAt;
+          by = openedBy;
         } else {
-          // Fallback naar lifecycle open/close
-          const openedBy = (card.getAttribute('data-opened-by') || '').trim();
-          const closedBy = (card.getAttribute('data-closed-by') || '').trim();
-          const lifecycleSource = (card.getAttribute('data-source') || '').trim();
-
-          const tOpen = parseAnyTime(openedAt) || 0;
-          const tClose = parseAnyTime(closedAt) || 0;
-
-          if(tOpen == 0 && tClose == 0){
-            kind = '-';
-          } else if(tOpen >= tClose){
-            kind = 'Geopend';
-            at = openedAt;
-            by = openedBy;
-          } else {
-            kind = 'Gesloten';
-            at = closedAt;
-            by = closedBy;
-          }
-
-          src = lifecycleSource;
+          kind = 'Gesloten';
+          at = closedAt;
+          by = closedBy;
         }
 
         if(kvLastAction) kvLastAction.textContent = kind;
@@ -2458,7 +2404,7 @@ card.setAttribute('data-door-state', doorState);
           let meta = '';
           if(at) meta += fmtLocalDateTime(at);
           if(by) meta += (meta ? ' door ' : 'door ') + by;
-          if(src) meta += (meta ? ' via ' : 'via ') + src;
+          if(source) meta += (meta ? ' via ' : 'via ') + source;
           kvLastActionMeta.textContent = meta ? (' (' + meta + ')') : '';
         }
 
@@ -2566,69 +2512,83 @@ card.setAttribute('data-door-state', doorState);
         setTimeout(()=>scrollSideToBlock('blockShares'), 0);
       });
 
- // =========================================================
-      // 9) Card acties - OPGESCHOONDE VERSIE (V21)
       // =========================================================
+      // 9) Card acties
+      // =========================================================
+
       document.addEventListener('click', async (e)=>{
+        // ---------------------------------------------------------
+        // KNOPPEN LOGICA
+        // ---------------------------------------------------------
         const btn = e.target.closest('button[data-action]');
         const card = e.target.closest('.gb-card');
         
-        if(!card) return; 
+        if(!card) return; // Geen kaart? Stop.
 
+        // Als er op een knop is gedrukt
         if(btn){
           const action = btn.getAttribute('data-action');
           const boxId = card.getAttribute('data-id');
 
-          // --- ACTIE: TOGGLE (RAZENDSNEL) ---
+          // --- ACTIE: TOGGLE (OPEN/CLOSE) ---
           if(action === 'toggle'){
             e.preventDefault(); e.stopPropagation();
+
+            const label = String(btn.textContent || '').trim().toUpperCase();
+            let next = '';
+            if(label === 'OPEN') next = 'open';
+            else if(label === 'CLOSE') next = 'close';
+            else next = card.classList.contains('is-open') ? 'close' : 'open';
 
             if (!boxId || boxId === '-'){
               alert('Box id ontbreekt.');
               return;
             }
 
-            // 1. BEPAAL DIRECT DE VOLGENDE STATUS
-            const currentLabel = btn.textContent.trim().toUpperCase(); // "OPEN" of "CLOSE"
-            const next = (currentLabel === 'OPEN') ? 'open' : 'close';
-            const futureLabel = (next === 'open') ? 'CLOSE' : 'OPEN';
-
-            // 2. DIRECTE UI-WISSEL (Geen "Verzenden..." vertraging)
-            btn.textContent = futureLabel; 
-            btn.disabled = true; // Voorkom spamming
-
-            // Update statustekst
-            const statusText = card.querySelector('.js-status-text');
-            if(statusText) statusText.textContent = (next === 'open') ? 'Openen gevraagd...' : 'Sluiten gevraagd...';
-
+            // Toon alleen "verzonden", geen fake open/close
             setPending(boxId, next);
 
-            try {
-              // 3. VERZEND NAAR API
+            const statusText = card.querySelector('.js-status-text');
+            if(statusText) statusText.textContent = (next === 'open') ? 'Open gevraagd (wachten op box)' : 'Dicht gevraagd (wachten op box)';
+
+            const prevLabel = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'VERZENDEN...';
+
+            try{
+              // Probeer eerst dedicated endpoint (als het bestaat)
               let sent = false;
-              try {
-                await sendCommand(boxId, next); 
+              try{
+                await sendCommand(boxId, next); // /open of /close
                 sent = true;
-              } catch(_) { /* fallback */ }
+              } catch(_){
+                // fallback
+              }
 
               if(!sent){
                 await setDesired(boxId, next);
               }
 
               card.setAttribute('data-desired', next);
+
+              // Fast follow-up voor snelle UI (tot 45s)
               startFastWatch(boxId);
 
-            } catch(err) {
-              // Bij fout: herstel oude label
-              btn.textContent = currentLabel;
+            } catch(err){
               clearPending(boxId);
+              await refreshOneBoxNow(boxId);
               alert('Actie mislukt: ' + (err.message || err));
             } finally {
-              // Na 1.2 seconden weer klikbaar
-              setTimeout(() => { btn.disabled = false; }, 1200);
+              // na korte tijd opnieuw klikbaar, echte label volgt via refresh
+              setTimeout(()=>{
+                btn.disabled = false;
+                btn.textContent = prevLabel;
+              }, 1200);
             }
+
             return;
           }
+
 
           // --- ACTIE: SHARES ---
           if(action === 'shares'){
@@ -2661,7 +2621,7 @@ card.setAttribute('data-door-state', doorState);
           }
         }
 
-        // Klik op de kaart (niet op een knop)
+        // Als er op de kaart geklikt is (maar niet op een specifieke knop), open zijpaneel
         updateSideFromCard(card, 'Beheer en overzicht');
       });
 
