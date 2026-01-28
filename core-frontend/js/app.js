@@ -1,6 +1,5 @@
 // =====================================================
-// APP.JS
-// Dynamische frontend voor Gridbox Dashboard (DEMO MODE)
+// APP.JS - Gridbox Dashboard (Optimized Version)
 // =====================================================
 
 import { api } from "./api.js";
@@ -39,7 +38,7 @@ async function init() {
   const groups = await api.getBoxes();
   renderGroups(groups);
 
-  // ⭐ planner knoppen automatisch koppelen
+  // Planner knoppen automatisch koppelen
   document.querySelectorAll("[data-plan-group]").forEach(btn => {
     btn.onclick = () => openPlannerForGroup(btn.dataset.planGroup);
   });
@@ -75,7 +74,6 @@ function applyTenantBranding() {
 
 function renderGroups(groups) {
   sectionsContainer.innerHTML = "";
-
   filterDropdown.innerHTML = `<option value="all">Alle groepen</option>`;
 
   groups.forEach(group => {
@@ -117,6 +115,9 @@ function createBoxCard(box, groupName) {
   card.dataset.boxId = box.id;
   card.dataset.boxNumber = box.boxNumber;
 
+  // We bepalen de initiële tekst op basis van de status van de box
+  const initialAction = (box.shutterState === 'open') ? 'CLOSE' : 'OPEN';
+
   card.innerHTML = `
     <div class="gb-head">
       <div class="gb-site">${groupName}</div>
@@ -127,7 +128,7 @@ function createBoxCard(box, groupName) {
     <ul class="gb-phones" data-phones></ul>
 
     <div class="gb-actions">
-      <button class="gb-btn" data-action="toggle">OPEN</button>
+      <button class="gb-btn" data-action="toggle">${initialAction}</button>
       <div class="gb-row">
         <button class="gb-btn--ghost" data-action="events">EVENTS</button>
         <button class="gb-btn--ghost" data-action="shares">SHARES</button>
@@ -141,7 +142,7 @@ function createBoxCard(box, groupName) {
 }
 
 // -----------------------------------------------------
-// 4. BOX ACTIES
+// 4. BOX ACTIES (Aangepast voor directe feedback)
 // -----------------------------------------------------
 
 function setupCardActions(card, box, groupName) {
@@ -151,8 +152,32 @@ function setupCardActions(card, box, groupName) {
   const btnPictures = card.querySelector('[data-action="pictures"]');
 
   btnToggle.addEventListener("click", async () => {
-    await api.toggleBox(box.id);
-    alert("Box geopend of gesloten");
+    // 1. Bewaar de huidige staat en bepaal de nieuwe tekst
+    const currentStatus = btnToggle.textContent.trim().toUpperCase();
+    const nextStatus = (currentStatus === 'OPEN') ? 'CLOSE' : 'OPEN';
+
+    // 2. Directe visuele feedback (Optimistic UI)
+    btnToggle.textContent = "..."; // Kort tonen dat er actie is
+    btnToggle.disabled = true;
+
+    try {
+      // 3. Stuur de instructie naar de API
+      await api.toggleBox(box.id);
+      
+      // 4. Update de knop direct naar de volgende gewenste actie
+      btnToggle.textContent = nextStatus;
+      btnToggle.disabled = false;
+      
+      // Optioneel: subtiele melding in console
+      console.log(`Gridbox ${box.id} opdracht verzonden: ${currentStatus}`);
+
+    } catch (error) {
+      // 5. Herstel bij fout (Rollback)
+      console.error("Fout bij aansturen box:", error);
+      btnToggle.textContent = currentStatus; 
+      btnToggle.disabled = false;
+      alert("Fout: Kon de Gridbox niet bereiken. Controleer de verbinding.");
+    }
   });
 
   btnEvents.addEventListener("click", () => openEventsPanel(box.id));
@@ -209,9 +234,10 @@ async function openSharesPanel(boxId) {
   document.getElementById("shareBox").value = boxId;
 
   const tableBody = document.querySelector("#sharesTable tbody");
-  tableBody.innerHTML = "";
+  tableBody.innerHTML = "<tr><td colspan='5'>Laden...</td></tr>";
 
   const shares = await api.getShares(boxId);
+  tableBody.innerHTML = "";
 
   shares.forEach(s => {
     const tr = document.createElement("tr");
@@ -233,16 +259,16 @@ async function openSharesPanel(boxId) {
     };
 
     await api.addShare(boxId, body);
-    openSharesPanel(boxId); // vernieuwen
+    openSharesPanel(boxId); 
   };
 }
 
 // -----------------------------------------------------
-// 8. EVENTS PANEL (placeholder)
+// 8. EVENTS PANEL
 // -----------------------------------------------------
 
 async function openEventsPanel(boxId) {
-  alert("Events komen hier (tijdlijn, iconen, geschiedenis)");
+  alert("Events worden geladen voor box: " + boxId);
 }
 
 // -----------------------------------------------------
@@ -253,8 +279,8 @@ async function openPicturesPanel(boxId) {
   pictureList = await api.getPictures(boxId);
   pictureIndex = 0;
 
-  if (!pictureList.length) {
-    alert("Geen foto's beschikbaar");
+  if (!pictureList || !pictureList.length) {
+    alert("Geen foto's beschikbaar voor deze box.");
     return;
   }
 
