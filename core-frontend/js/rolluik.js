@@ -1,30 +1,45 @@
 function setRolluikState(state) {
-  const r = document.querySelector('.gb-rolluik');
-  const label = document.querySelector('.gb-rolluik-label');
-  if (!r) return;
+  const rolluik = document.querySelector(".gb-rolluik");
+  const label = document.querySelector(".gb-rolluik-label");
 
-  // reset alles
-  r.classList.remove('is-open', 'is-opening', 'is-closing');
+  if (!rolluik) {
+    console.warn("Rolluik element niet gevonden");
+    return;
+  }
 
-  switch (state) {
-    case 'open':
-      r.classList.add('is-open');
-      if (label) label.textContent = 'Open';
+  // alles resetten
+  rolluik.classList.remove("is-open", "is-opening", "is-closing");
+
+  let labelText = "Onbekend";
+
+  switch (String(state).toLowerCase()) {
+    case "open":
+      rolluik.classList.add("is-open");
+      labelText = "Open";
       break;
 
-    case 'opening':
-      r.classList.add('is-opening');
-      if (label) label.textContent = 'Bezig met openen';
+    case "opening":
+      rolluik.classList.add("is-opening");
+      labelText = "Bezig met openen";
       break;
 
-    case 'closing':
-      r.classList.add('is-closing');
-      if (label) label.textContent = 'Bezig met sluiten';
+    case "closing":
+      rolluik.classList.add("is-closing");
+      labelText = "Bezig met sluiten";
       break;
 
-    case 'closed':
+    case "closed":
+      // geen class nodig, default positie = gesloten
+      labelText = "Gesloten";
+      break;
+
     default:
-      if (label) label.textContent = 'Gesloten';
+      console.warn("Onbekende rolluik state:", state);
+      labelText = "Onbekende status";
       break;
+  }
+
+  if (label) {
+    label.textContent = labelText;
   }
 }
