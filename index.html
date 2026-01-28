@@ -1238,15 +1238,20 @@
         return Math.abs(Date.now() - ms) <= maxMs;
       }
 
-function mainButtonLabel(doorState, motionState, fallbackIsOpen){
-        const d =
-          normalizeShutterStateDetailed(doorState) ||
-          (fallbackIsOpen ? 'open' : 'closed');
+      function mainButtonLabel(desiredNorm, doorState, fallbackIsOpen){
+  // Primair: desired (instructie)
+  const des = String(desiredNorm || '').trim().toLowerCase();
+  if (des === 'open') return 'CLOSE';
+  if (des === 'close') return 'OPEN';
 
-        // UI toont enkel acties, geen tussenstates
-        if (d === 'open') return 'CLOSE';
-        return 'OPEN';
-      }
+  // Fallback: echte deurstatus
+  const d =
+    normalizeShutterStateDetailed(doorState) ||
+    (fallbackIsOpen ? 'open' : 'closed');
+
+  if (d === 'open') return 'CLOSE';
+  return 'OPEN';
+}
 
       // Bewegingsstatus (meestal "opening/closing") komt typisch uit state.state
       function pickMotionState(box){
@@ -1655,7 +1660,8 @@ card.setAttribute('data-door-state', doorState);
 
         card.setAttribute('data-shares-count', (sharesCount === null || Number.isNaN(sharesCount)) ? '' : String(sharesCount));
 
-        const toggleLabel = mainButtonLabel(doorState, motionState, card.classList.contains('is-open'));
+        const effectiveDesired = pending ? pending.desired : desiredNorm;
+        const toggleLabel = mainButtonLabel(effectiveDesired, doorState, card.classList.contains('is-open'));
 
         const sharesPill = (sharesCount === null || Number.isNaN(sharesCount))
           ? `<span class="pill ghost" title="sharesCount">shares -</span>`
@@ -2552,39 +2558,10 @@ card.setAttribute('data-door-state', doorState);
             if(statusText) statusText.textContent = (next === 'open') ? 'Open gevraagd (wachten op box)' : 'Dicht gevraagd (wachten op box)';
 
             const prevLabel = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = 'VERZENDEN...';
+const newLabel = (next === 'open') ? 'CLOSE' : 'OPEN';
 
-            try{
-              // Probeer eerst dedicated endpoint (als het bestaat)
-              let sent = false;
-              try{
-                await sendCommand(boxId, next); // /open of /close
-                sent = true;
-              } catch(_){
-                // fallback
-              }
-
-              if(!sent){
-                await setDesired(boxId, next);
-              }
-
-              card.setAttribute('data-desired', next);
-
-              // Fast follow-up voor snelle UI (tot 45s)
-              startFastWatch(boxId);
-
-            } catch(err){
-              clearPending(boxId);
-              await refreshOneBoxNow(boxId);
-              alert('Actie mislukt: ' + (err.message || err));
-            } finally {
-              // na korte tijd opnieuw klikbaar, echte label volgt via refresh
-              setTimeout(()=>{
-                btn.disabled = false;
-                btn.textContent = prevLabel;
-              }, 1200);
-            }
+btn.disabled = true;
+btn.textContent = newLabel;
 
             return;
           }
@@ -2596,7 +2573,7 @@ card.setAttribute('data-door-state', doorState);
             updateSideFromCard(card, 'Toegang beheren');
             side.classList.add('is-wide');
             app.classList.remove('is-collapsed');
-            app.classList.add('is-expanded');
+            app.classList.add('is-expanded');} finally {
             setDetailsOpen(true);
             setTimeout(()=>scrollSideToBlock('blockShares'), 0);
             return;
