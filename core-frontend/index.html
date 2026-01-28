@@ -5,12 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title id="pageTitle">Gridbox Dashboard</title>
 
+  <!-- Bestaande styles -->
   <link id="brandStyles" rel="stylesheet" href="css/styles.css">
+
+  <!-- Rolluik styles -->
+  <link rel="stylesheet" href="css/rolluik.css">
 </head>
 
 <body>
   <div class="container">
 
+    <!-- Bovenbalk -->
     <header class="toolbar">
       <div class="brand" id="brandName">Gridbox</div>
 
@@ -23,13 +28,42 @@
       </div>
     </header>
 
-    <main id="sections" aria-live="polite"></main>
+    <!-- Hoofdinhoud -->
+    <main id="sections" aria-live="polite">
+
+      <!-- Voorbeeldkaart met rolluik -->
+      <section class="gb-card">
+
+        <div class="gb-card-header">
+          <h2 class="gb-card-title">Gridbox voorbeeld</h2>
+        </div>
+
+        <div class="gb-card-body">
+
+          <!-- Rolluik visual -->
+          <div class="gb-rolluik-wrapper">
+            <div class="gb-rolluik"></div>
+          </div>
+          <div class="gb-rolluik-label">Gesloten</div>
+
+          <!-- Actieknoppen -->
+          <div class="gb-actions">
+            <button class="gb-btn" onclick="setRolluikState('open')">OPEN</button>
+            <button class="gb-btn gb-btn--ghost" onclick="setRolluikState('closed')">CLOSE</button>
+          </div>
+
+        </div>
+
+      </section>
+
+    </main>
   </div>
 
+  <!-- Shares panel -->
   <aside id="shares" class="panel" aria-hidden="true" role="dialog">
     <header>
       <button id="sharesClose" class="gb-btn--ghost">Sluiten</button>
-      <h3>Toegang Beheren</h3>
+      <h3>Toegang beheren</h3>
     </header>
 
     <div class="body">
@@ -37,10 +71,12 @@
         <label>Box ID</label>
         <input id="shareBox" type="text" readonly>
       </div>
+
       <div class="formrow">
         <label>Telefoonnummer</label>
         <input id="sharePhone" type="tel" placeholder="+32…">
       </div>
+
       <div class="formrow">
         <label>Commentaar</label>
         <input id="shareComment" type="text" placeholder="Naam of reden">
@@ -51,7 +87,7 @@
       </label>
 
       <div class="actions">
-        <button id="shareAdd" class="gb-btn">Share Toevoegen</button>
+        <button id="shareAdd" class="gb-btn">Share toevoegen</button>
       </div>
 
       <table id="sharesTable">
@@ -64,12 +100,12 @@
             <th>Actie</th>
           </tr>
         </thead>
-        <tbody>
-          </tbody>
+        <tbody></tbody>
       </table>
     </div>
   </aside>
 
+  <!-- Planning panel -->
   <aside id="planner" class="panel" aria-hidden="true" role="dialog">
     <header>
       <button id="plannerClose" class="gb-btn--ghost">Sluiten</button>
@@ -81,17 +117,19 @@
         <label>Groep</label>
         <input id="planGroup" type="text" readonly>
       </div>
+
       <div class="formrow">
         <label>Telefoonnummer</label>
         <input id="planPhone" type="tel">
       </div>
+
       <div class="formrow">
         <label>Datum</label>
         <input id="planDate" type="date">
       </div>
-      
+
       <div class="actions">
-        <button id="planAdd" class="gb-btn">Planning Toevoegen</button>
+        <button id="planAdd" class="gb-btn">Planning toevoegen</button>
       </div>
 
       <table id="planTable">
@@ -104,20 +142,25 @@
             <th></th>
           </tr>
         </thead>
-        <tbody>
-          </tbody>
+        <tbody></tbody>
       </table>
     </div>
   </aside>
 
+  <!-- Foto modal -->
   <div id="pictureModal" class="picture-modal" hidden>
     <div class="pm-backdrop"></div>
     <button class="pm-close" id="pmClose">×</button>
     <button class="pm-prev" id="pmPrev">‹</button>
     <button class="pm-next" id="pmNext">›</button>
-    <img id="pmImage" src="" alt="Camerabeeld" />
+    <img id="pmImage" src="" alt="Camerabeeld">
   </div>
 
+  <!-- Rolluik logica -->
+  <script src="js/rolluik.js"></script>
+
+  <!-- Bestaande app logica -->
   <script type="module" src="js/app.js"></script>
+
 </body>
 </html>
