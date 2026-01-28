@@ -2605,9 +2605,12 @@ card.setAttribute('data-door-state', doorState);
             const statusText = card.querySelector('.js-status-text');
             if(statusText) statusText.textContent = (next === 'open') ? 'Open gevraagd (wachten op box)' : 'Dicht gevraagd (wachten op box)';
 
-            const prevLabel = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = 'VERZENDEN...';
+            const currentLabel = btn.textContent.trim().toUpperCase();
+            const nextState = (currentLabel === 'OPEN') ? 'open' : 'close';
+            const futureLabel = (nextState === 'open') ? 'CLOSE' : 'OPEN';
+
+            btn.textContent = futureLabel; // De wissel gebeurt nu DIRECT
+            btn.disabled = true; // Voorkom spamming
 
             try{
               // Probeer eerst dedicated endpoint (als het bestaat)
